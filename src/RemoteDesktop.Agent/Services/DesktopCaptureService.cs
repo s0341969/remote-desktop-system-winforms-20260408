@@ -1,0 +1,69 @@
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.Versioning;
+using System.Windows.Forms;
+using Microsoft.Extensions.Options;
+using RemoteDesktop.Agent.Models;
+using RemoteDesktop.Agent.Options;
+
+namespace RemoteDesktop.Agent.Services;
+
+[SupportedOSPlatform("windows")]
+public sealed class DesktopCaptureService
+{
+    private readonly AgentOptions _options;
+
+    public DesktopCaptureService(IOptions<AgentOptions> options)
+    {
+        _options = options.Value;
+    }
+
+    public DesktopFrame Capture()
+    {
+        var bounds = SystemInformation.VirtualScreen;
+        using var source = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(source))
+        {
+            graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);
+        }
+
+        var outputSize = CalculateOutputSize(bounds.Width, bounds.Height, _options.MaxFrameWidth);
+        using var resized = outputSize.Width == bounds.Width
+            ? new Bitmap(source)
+            : ResizeBitmap(source, outputSize.Width, outputSize.Height);
+
+        return new DesktopFrame(EncodeJpeg(resized, _options.JpegQuality), bounds.Width, bounds.Height);
+    }
+
+    private static Size CalculateOutputSize(int width, int height, int maxWidth)
+    {
+        if (width <= maxWidth)
+        {
+            return new Size(width, height);
+        }
+
+        var ratio = maxWidth / (double)width;
+        return new Size(maxWidth, Math.Max((int)Math.Round(height * ratio), 1));
+    }
+
+    private static Bitmap ResizeBitmap(Bitmap original, int width, int height)
+    {
+        var resized = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+        using var graphics = Graphics.FromImage(resized);
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        graphics.SmoothingMode = SmoothingMode.HighQuality;
+        graphics.DrawImage(original, 0, 0, width, height);
+        return resized;
+    }
+
+    private static byte[] EncodeJpeg(Image image, long quality)
+    {
+        var codec = ImageCodecInfo.GetImageEncoders().First(encoder => encoder.MimeType == "image/jpeg");
+        using var encoderParameters = new EncoderParameters(1);
+        encoderParameters.Param[0] = new EncoderParameter(Encoder.Quality, quality);
+        using var stream = new MemoryStream();
+        image.Save(stream, codec, encoderParameters);
+        return stream.ToArray();
+    }
+}

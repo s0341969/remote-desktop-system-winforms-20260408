@@ -1,0 +1,58 @@
+@page
+@model RemoteDesktop.Host.Pages.ViewerModel
+@{
+    ViewData["Title"] = "遠端控制";
+}
+
+<div id="viewer-app"
+     class="viewer-app"
+     data-device-id="@Model.DeviceId"
+     data-ws-url="@Model.ViewerWebSocketUrl">
+    <section class="hero-panel compact">
+        <div>
+            <p class="eyebrow">Single Operator Session</p>
+            <h1>@Model.DeviceName</h1>
+            <p class="subtitle">透過二進位 WebSocket relay 串流 JPEG 畫面，避免在伺服器端做額外轉碼，將延遲控制在內網可接受範圍。</p>
+        </div>
+        <div class="hero-stats">
+            <div class="stat-card">
+                <span>主機</span>
+                <strong>@Model.HostName</strong>
+            </div>
+            <div class="stat-card">
+                <span>Agent</span>
+                <strong>@Model.AgentVersion</strong>
+            </div>
+            <div class="stat-card">
+                <span>解析度</span>
+                <strong>@Model.ScreenWidth x @Model.ScreenHeight</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="stream-panel">
+        <div class="panel-header">
+            <div>
+                <h2>遠端畫面</h2>
+                <p>點擊畫面後即可接收鍵盤事件，滾輪與左右鍵也會直接回送給 Agent。</p>
+            </div>
+            <div class="stream-actions">
+                <button type="button" class="action-button" id="focusRemoteButton">取得控制焦點</button>
+                <button type="button" class="action-button" id="fullscreenButton">全螢幕</button>
+                <a class="action-link" asp-page="/Index">返回控制台</a>
+            </div>
+        </div>
+
+        <div class="stream-shell" id="streamShell" tabindex="0" aria-label="遠端桌面控制區">
+            <img id="desktopStream" alt="遠端桌面畫面" draggable="false" />
+            <div class="status-ribbon">
+                <span class="status-dot" id="connectionDot"></span>
+                <span id="connectionLabel">等待 Agent 連線</span>
+            </div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/viewer.js" asp-append-version="true"></script>
+}

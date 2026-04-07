@@ -1,0 +1,47 @@
+@page
+@model RemoteDesktop.Host.Pages.LogsModel
+@{
+    ViewData["Title"] = "上線紀錄";
+}
+
+<section class="logs-panel">
+    <p class="eyebrow">MSSQL Presence Logs</p>
+    <h1>Agent 上線紀錄</h1>
+    <p class="subtitle">此頁顯示每台裝置的實際上線時間、最後心跳與離線原因，可作為產品管理與 SLA 基礎審計資料。</p>
+
+    <div class="logs-table-wrap">
+        <table class="logs-table">
+            <thead>
+                <tr>
+                    <th>狀態</th>
+                    <th>裝置</th>
+                    <th>主機</th>
+                    <th>上線時間</th>
+                    <th>最後心跳</th>
+                    <th>離線時間</th>
+                    <th>在線秒數</th>
+                    <th>原因</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model.Records)
+            {
+                <tr>
+                    <td>
+                        <span class="@(item.DisconnectedAt is null ? "badge-live" : "badge-closed")">
+                            @(item.DisconnectedAt is null ? "在線" : "已離線")
+                        </span>
+                    </td>
+                    <td>@item.DeviceName</td>
+                    <td>@item.HostName</td>
+                    <td>@item.ConnectedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@item.LastSeenAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@(item.DisconnectedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                    <td>@item.OnlineSeconds</td>
+                    <td>@(item.DisconnectReason ?? "-")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

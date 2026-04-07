@@ -1,0 +1,107 @@
+@page
+@model RemoteDesktop.Host.Pages.IndexModel
+@{
+    ViewData["Title"] = "控制台";
+}
+
+<section class="hero-panel">
+    <div>
+        <p class="eyebrow">Commercial Foundation</p>
+        <h1>@Model.ConsoleName</h1>
+        <p class="subtitle">以產品化為前提的遠端桌面控制台。Control Server 集中裝置註冊、狀態管理、WebSocket 中繼與 MSSQL 上線審計；Windows Agent 負責桌面擷取與輸入執行。</p>
+    </div>
+    <div class="hero-stats">
+        <div class="stat-card">
+            <span>在線裝置</span>
+            <strong>@Model.OnlineDeviceCount</strong>
+        </div>
+        <div class="stat-card">
+            <span>總裝置數</span>
+            <strong>@Model.TotalDeviceCount</strong>
+        </div>
+        <div class="stat-card">
+            <span>管理帳號</span>
+            <strong>@User.Identity?.Name</strong>
+        </div>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <div class="devices-panel">
+        <div class="panel-header">
+            <div>
+                <h2>裝置管理</h2>
+                <p>單一裝置僅允許一位控制者連線，避免操作衝突。</p>
+            </div>
+            <a class="action-link" asp-page="/Logs">上線紀錄</a>
+        </div>
+
+        <div class="device-grid">
+            @foreach (var device in Model.Devices)
+            {
+                <article class="device-card">
+                    <div class="device-card-top">
+                        <div>
+                            <h3>@device.DeviceName</h3>
+                            <p>@device.DeviceId</p>
+                        </div>
+                        <span class="@(device.IsOnline ? "badge-live" : "badge-closed")">
+                            @(device.IsOnline ? "在線" : "離線")
+                        </span>
+                    </div>
+
+                    <dl class="info-grid">
+                        <div>
+                            <dt>主機</dt>
+                            <dd>@device.HostName</dd>
+                        </div>
+                        <div>
+                            <dt>解析度</dt>
+                            <dd>@device.ScreenWidth x @device.ScreenHeight</dd>
+                        </div>
+                        <div>
+                            <dt>最後心跳</dt>
+                            <dd>@device.LastSeenAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</dd>
+                        </div>
+                        <div>
+                            <dt>Agent</dt>
+                            <dd>@device.AgentVersion</dd>
+                        </div>
+                    </dl>
+
+                    <div class="device-card-actions">
+                        <a class="action-button @(device.IsOnline ? string.Empty : "is-disabled")"
+                           asp-page="/Viewer"
+                           asp-route-deviceId="@device.DeviceId"
+                           aria-disabled="@(!device.IsOnline)">
+                            連線控制
+                        </a>
+                    </div>
+                </article>
+            }
+        </div>
+    </div>
+
+    <aside class="side-panel">
+        <div class="side-card">
+            <h2>近期上線事件</h2>
+            <ul class="event-list">
+                @foreach (var log in Model.RecentPresenceLogs)
+                {
+                    <li>
+                        <strong>@log.DeviceName</strong>
+                        <span>@log.ConnectedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</span>
+                        <span>@(log.DisconnectedAt is null ? "目前在線" : $"已離線 {log.DisconnectReason}")</span>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="side-card">
+            <h2>工作階段</h2>
+            <form method="post" asp-page="/Login" asp-page-handler="Logout">
+                <button type="submit" class="danger-button">登出控制台</button>
+            </form>
+        </div>
+    </aside>
+</section>

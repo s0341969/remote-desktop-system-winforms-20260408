@@ -1,0 +1,16 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup>
+    <ProjectsToBuild Include="src\RemoteDesktop.Host\RemoteDesktop.Host.csproj" />
+    <ProjectsToBuild Include="src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj" />
+  </ItemGroup>
+
+  <Target Name="Restore">
+    <MSBuild Projects="@(ProjectsToBuild)" Targets="Restore" Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <Target Name="Build">
+    <MSBuild Projects="@(ProjectsToBuild)" Targets="Build" Properties="Configuration=$(Configuration)" />
+  </Target>
+
+</Project>
