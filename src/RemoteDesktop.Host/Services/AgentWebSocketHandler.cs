@@ -98,7 +98,7 @@ public sealed class AgentWebSocketHandler
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "處理 Agent WebSocket 時發生錯誤。");
+            _logger.LogError(exception, "處理 Agent WebSocket 連線時發生錯誤。");
         }
         finally
         {

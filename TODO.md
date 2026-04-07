@@ -1,7 +1,9 @@
 # TODO
 
-- [ ] 修正 Host 與 Razor Pages 內仍存在的亂碼文字，統一為 UTF-8 與繁體中文
-- [ ] 將 `AdminPassword` 與 `SharedAccessKey` 改為部署期機密注入，不再保留版本庫中的預設值
-- [ ] 將 `RemoteDesktop.Agent` 封裝為 Windows Service，補齊開機啟動與背景常駐流程
-- [ ] 補上正式環境部署文件，包含 HTTPS、反向代理、防火牆與憑證配置
-- [ ] 增加管理者審計紀錄與更完整的遠端操作追蹤能力
+- [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
+- [ ] 將 Host 的設定畫面表單化，支援直接在 UI 編輯連線字串與控制端參數
+- [ ] 強化遠端檢視表單，補上縮放比例切換、全螢幕與快捷鍵提示
+- [ ] 增加 Host 與 Agent 的操作日誌匯出功能
+- [ ] 清理已停用的 Razor Pages 舊檔，確認不再需要後再移除
+- [ ] 為 WinForms UI 與 WebSocket 核心補自動化測試

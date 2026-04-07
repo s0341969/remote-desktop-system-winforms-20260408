@@ -1,10 +1,12 @@
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 
 namespace RemoteDesktop.Host.Services;
 
 public sealed class ViewerWebSocketHandler
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DeviceBroker _broker;
 
     public ViewerWebSocketHandler(DeviceBroker broker)
@@ -35,12 +37,28 @@ public sealed class ViewerWebSocketHandler
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        var attached = await _broker.AttachViewerAsync(deviceId, context.User.Identity.Name ?? "viewer", socket, context.RequestAborted);
+        var attached = await _broker.AttachViewerAsync(
+            deviceId,
+            context.User.Identity.Name ?? "viewer",
+            async (payload, cancellationToken) =>
+            {
+                await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
+            },
+            context.RequestAborted);
+
         if (!attached)
         {
             await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Device unavailable or busy.", context.RequestAborted);
             return;
         }
+
+        var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            type = "viewer-ready",
+            deviceId
+        }, JsonOptions));
+
+        await socket.SendAsync(readyPayload, WebSocketMessageType.Text, true, context.RequestAborted);
 
         try
         {

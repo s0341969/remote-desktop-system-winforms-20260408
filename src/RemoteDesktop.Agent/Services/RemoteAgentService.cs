@@ -14,17 +14,20 @@ public sealed class RemoteAgentService : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly AgentOptions _options;
+    private readonly AgentRuntimeState _runtimeState;
     private readonly DesktopCaptureService _captureService;
     private readonly InputInjectionService _inputInjectionService;
     private readonly ILogger<RemoteAgentService> _logger;
 
     public RemoteAgentService(
         IOptions<AgentOptions> options,
+        AgentRuntimeState runtimeState,
         DesktopCaptureService captureService,
         InputInjectionService inputInjectionService,
         ILogger<RemoteAgentService> logger)
     {
         _options = options.Value;
+        _runtimeState = runtimeState;
         _captureService = captureService;
         _inputInjectionService = inputInjectionService;
         _logger = logger;
@@ -44,9 +47,11 @@ public sealed class RemoteAgentService : BackgroundService
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, "Agent 連線循環失敗，將於稍後重試。");
+                _runtimeState.MarkError(exception);
+                _logger.LogError(exception, "Agent 執行迴圈發生錯誤，稍後將重新連線。");
             }
 
+            _runtimeState.MarkDisconnected($"等待 {_options.ReconnectDelaySeconds} 秒後重連。");
             await Task.Delay(TimeSpan.FromSeconds(_options.ReconnectDelaySeconds), stoppingToken);
         }
     }
@@ -56,7 +61,9 @@ public sealed class RemoteAgentService : BackgroundService
         using var socket = new ClientWebSocket();
         using var sendLock = new SemaphoreSlim(1, 1);
         var serverUri = BuildAgentWebSocketUri(_options.ServerUrl);
+        _runtimeState.MarkConnecting(serverUri);
         await socket.ConnectAsync(serverUri, cancellationToken);
+        _runtimeState.MarkConnected();
         _logger.LogInformation("已連線到 Control Server: {ServerUri}", serverUri);
 
         var initialFrame = _captureService.Capture();
@@ -131,6 +138,7 @@ public sealed class RemoteAgentService : BackgroundService
             try
             {
                 await socket.SendAsync(frame.Payload, WebSocketMessageType.Binary, true, cancellationToken);
+                _runtimeState.MarkFrameSent();
             }
             finally
             {
@@ -172,9 +180,12 @@ public sealed class RemoteAgentService : BackgroundService
 
     private static Uri BuildAgentWebSocketUri(string serverUrl)
     {
-        var builder = new UriBuilder(serverUrl);
-        builder.Scheme = builder.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws";
-        builder.Path = "/ws/agent";
+        var builder = new UriBuilder(serverUrl)
+        {
+            Scheme = serverUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws",
+            Path = "/ws/agent"
+        };
+
         return builder.Uri;
     }
 }

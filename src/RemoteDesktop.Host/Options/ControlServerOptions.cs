@@ -7,6 +7,10 @@ public sealed class ControlServerOptions
     public const string SectionName = "ControlServer";
 
     [Required]
+    [Url]
+    public string ServerUrl { get; init; } = "http://localhost:5106";
+
+    [Required]
     [MinLength(3)]
     public string ConsoleName { get; init; } = "RemoteDesk Control";
 

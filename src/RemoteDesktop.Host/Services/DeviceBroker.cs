@@ -74,54 +74,67 @@ public sealed class DeviceBroker
 
     public async Task PublishFrameAsync(string deviceId, byte[] payload, CancellationToken cancellationToken)
     {
-        if (!_agents.TryGetValue(deviceId, out var session) || session.ViewerSocket is null)
+        if (!_agents.TryGetValue(deviceId, out var session))
         {
             return;
         }
 
-        if (session.ViewerSocket.State != WebSocketState.Open)
+        ViewerSession? viewerSession;
+        lock (session.SyncRoot)
         {
-            session.ViewerSocket = null;
+            viewerSession = session.ViewerSession;
+        }
+
+        if (viewerSession is null)
+        {
             return;
         }
 
-        await session.ViewerSocket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
-        session.LastHeartbeatAt = DateTimeOffset.UtcNow;
+        try
+        {
+            await viewerSession.PublishFrameAsync(payload, cancellationToken);
+            session.LastHeartbeatAt = DateTimeOffset.UtcNow;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Viewer disconnected unexpectedly for device {DeviceId}.", deviceId);
+            await DetachViewerAsync(deviceId);
+        }
     }
 
-    public async Task<bool> AttachViewerAsync(string deviceId, string userName, WebSocket viewerSocket, CancellationToken cancellationToken)
+    public Task<bool> AttachViewerAsync(
+        string deviceId,
+        string userName,
+        Func<byte[], CancellationToken, Task> publishFrameAsync,
+        CancellationToken cancellationToken)
     {
         if (!_agents.TryGetValue(deviceId, out var session))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
-        if (session.ViewerSocket is not null && session.ViewerSocket.State == WebSocketState.Open)
+        lock (session.SyncRoot)
         {
-            return false;
+            if (session.ViewerSession is not null)
+            {
+                return Task.FromResult(false);
+            }
+
+            session.ViewerSession = new ViewerSession(userName, publishFrameAsync);
         }
 
-        session.ViewerSocket = viewerSocket;
-        session.ViewerUserName = userName;
-
-        var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
-        {
-            type = "viewer-ready",
-            deviceId = session.DeviceId,
-            deviceName = session.DeviceName,
-            hostName = session.HostName
-        }, JsonOptions));
-
-        await viewerSocket.SendAsync(readyPayload, WebSocketMessageType.Text, true, cancellationToken);
-        return true;
+        _logger.LogInformation("Viewer attached: {DeviceId} by {UserName}", deviceId, userName);
+        return Task.FromResult(true);
     }
 
     public Task DetachViewerAsync(string deviceId)
     {
         if (_agents.TryGetValue(deviceId, out var session))
         {
-            session.ViewerSocket = null;
-            session.ViewerUserName = null;
+            lock (session.SyncRoot)
+            {
+                session.ViewerSession = null;
+            }
         }
 
         return Task.CompletedTask;
@@ -136,6 +149,12 @@ public sealed class DeviceBroker
 
         var bytes = Encoding.UTF8.GetBytes(jsonPayload);
         await session.AgentSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+    }
+
+    public Task ForwardViewerCommandAsync(string deviceId, ViewerCommandMessage command, CancellationToken cancellationToken)
+    {
+        var jsonPayload = JsonSerializer.Serialize(command, JsonOptions);
+        return ForwardViewerCommandAsync(deviceId, jsonPayload, cancellationToken);
     }
 
     public async Task DisconnectAgentAsync(string deviceId, string reason, CancellationToken cancellationToken)
@@ -207,6 +226,8 @@ public sealed class DeviceBroker
             LastHeartbeatAt = DateTimeOffset.UtcNow;
         }
 
+        public object SyncRoot { get; } = new();
+
         public WebSocket AgentSocket { get; }
 
         public Guid PresenceId { get; }
@@ -217,23 +238,34 @@ public sealed class DeviceBroker
 
         public string HostName { get; }
 
-        public WebSocket? ViewerSocket { get; set; }
-
-        public string? ViewerUserName { get; set; }
+        public ViewerSession? ViewerSession { get; set; }
 
         public DateTimeOffset LastHeartbeatAt { get; set; }
 
         public async Task CloseAsync(string reason, CancellationToken cancellationToken)
         {
-            if (ViewerSocket is { State: WebSocketState.Open })
-            {
-                await ViewerSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken);
-            }
-
             if (AgentSocket.State == WebSocketState.Open)
             {
                 await AgentSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken);
             }
+        }
+    }
+
+    public sealed class ViewerSession
+    {
+        private readonly Func<byte[], CancellationToken, Task> _publishFrameAsync;
+
+        public ViewerSession(string userName, Func<byte[], CancellationToken, Task> publishFrameAsync)
+        {
+            UserName = userName;
+            _publishFrameAsync = publishFrameAsync;
+        }
+
+        public string UserName { get; }
+
+        public Task PublishFrameAsync(byte[] payload, CancellationToken cancellationToken)
+        {
+            return _publishFrameAsync(payload, cancellationToken);
         }
     }
 }

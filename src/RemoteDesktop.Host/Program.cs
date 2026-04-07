@@ -1,94 +1,94 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.Options;
+using System.Windows.Forms;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using RemoteDesktop.Host.Forms;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace RemoteDesktop.Host;
 
-builder.Services
-    .AddOptions<ControlServerOptions>()
-    .Bind(builder.Configuration.GetSection(ControlServerOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
+internal static class Program
+{
+    [STAThread]
+    private static async Task Main(string[] args)
     {
-        options.LoginPath = "/Login";
-        options.AccessDeniedPath = "/Login";
-        options.LogoutPath = "/Login?handler=Logout";
-        options.SlidingExpiration = true;
-        options.ExpireTimeSpan = TimeSpan.FromHours(12);
-        options.Cookie.Name = "remote_desk_admin";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    });
+        ApplicationConfiguration.Initialize();
 
-builder.Services.AddAuthorization();
-builder.Services.AddRazorPages(options =>
-{
-    options.Conventions.AuthorizeFolder("/");
-    options.Conventions.AllowAnonymousToPage("/Login");
-    options.Conventions.AllowAnonymousToPage("/Error");
-});
+        var builder = WebApplication.CreateBuilder(args);
+        var configuredOptions = builder.Configuration.GetSection(ControlServerOptions.SectionName).Get<ControlServerOptions>() ?? new ControlServerOptions();
 
-builder.Services.AddSingleton<IDeviceRepository, SqlDeviceRepository>();
-builder.Services.AddSingleton<DeviceBroker>();
-builder.Services.AddSingleton<AgentWebSocketHandler>();
-builder.Services.AddSingleton<ViewerWebSocketHandler>();
-builder.Services.AddHostedService<AgentMonitorService>();
+        builder.WebHost.UseUrls(configuredOptions.ServerUrl);
 
-var app = builder.Build();
+        builder.Services
+            .AddOptions<ControlServerOptions>()
+            .Bind(builder.Configuration.GetSection(ControlServerOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
-var options = app.Services.GetRequiredService<IOptions<ControlServerOptions>>().Value;
-if (options.RequireHttpsRedirect)
-{
-    app.UseHsts();
-    app.UseHttpsRedirection();
+        builder.Services.AddSingleton<IDeviceRepository, SqlDeviceRepository>();
+        builder.Services.AddSingleton<DeviceBroker>();
+        builder.Services.AddSingleton<AgentWebSocketHandler>();
+        builder.Services.AddSingleton<ViewerWebSocketHandler>();
+        builder.Services.AddSingleton<CredentialValidator>();
+        builder.Services.AddSingleton<LoginFormFactory>();
+        builder.Services.AddSingleton<MainFormFactory>();
+        builder.Services.AddSingleton<RemoteViewerFormFactory>();
+        builder.Services.AddHostedService<AgentMonitorService>();
+
+        await using var app = builder.Build();
+
+        app.UseWebSockets(new WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(20)
+        });
+
+        app.Map("/ws/agent", branch =>
+        {
+            branch.Run(async context =>
+            {
+                var handler = context.RequestServices.GetRequiredService<AgentWebSocketHandler>();
+                await handler.HandleAsync(context);
+            });
+        });
+
+        app.MapGet("/healthz", async (IDeviceRepository repository, CancellationToken cancellationToken) =>
+        {
+            var devices = await repository.GetDevicesAsync(200, cancellationToken);
+            return Results.Ok(new
+            {
+                status = "ok",
+                onlineDevices = devices.Count(static item => item.IsOnline),
+                totalDevices = devices.Count
+            });
+        });
+
+        try
+        {
+            await app.Services.GetRequiredService<IDeviceRepository>().InitializeSchemaAsync(CancellationToken.None);
+            await app.StartAsync();
+
+            using var loginForm = app.Services.GetRequiredService<LoginFormFactory>().Create();
+            if (loginForm.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
+
+            using var mainForm = app.Services.GetRequiredService<MainFormFactory>().Create(loginForm.AuthenticatedUserName);
+            Application.Run(mainForm);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                $"主控台啟動失敗：{exception.Message}",
+                "RemoteDesktop.Host",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
 }
-
-await app.Services.GetRequiredService<IDeviceRepository>().InitializeSchemaAsync(app.Lifetime.ApplicationStopping);
-
-app.UseExceptionHandler("/Error");
-app.UseStaticFiles();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseWebSockets(new WebSocketOptions
-{
-    KeepAliveInterval = TimeSpan.FromSeconds(20)
-});
-
-app.Map("/ws/agent", branch =>
-{
-    branch.Run(async context =>
-    {
-        var handler = context.RequestServices.GetRequiredService<AgentWebSocketHandler>();
-        await handler.HandleAsync(context);
-    });
-});
-
-app.Map("/ws/viewer", branch =>
-{
-    branch.Run(async context =>
-    {
-        var handler = context.RequestServices.GetRequiredService<ViewerWebSocketHandler>();
-        await handler.HandleAsync(context);
-    });
-});
-
-app.MapGet("/healthz", async (IDeviceRepository repository, CancellationToken cancellationToken) =>
-{
-    var devices = await repository.GetDevicesAsync(20, cancellationToken);
-    return Results.Ok(new
-    {
-        status = "ok",
-        onlineDevices = devices.Count(static item => item.IsOnline),
-        totalDevices = devices.Count
-    });
-});
-
-app.MapRazorPages();
-
-app.Run();
