@@ -1,3 +1,4 @@
+using RemoteDesktop.Agent.Forms.Settings;
 using RemoteDesktop.Agent.Services;
 
 namespace RemoteDesktop.Agent.Forms;
@@ -6,6 +7,7 @@ public partial class AgentMainForm : Form
 {
     private readonly System.Windows.Forms.Timer _refreshTimer;
     private AgentRuntimeState? _runtimeState;
+    private AgentSettingsFormFactory? _agentSettingsFormFactory;
 
     public AgentMainForm()
     {
@@ -17,9 +19,10 @@ public partial class AgentMainForm : Form
         _refreshTimer.Tick += (_, _) => RefreshRuntimeState();
     }
 
-    public void Bind(AgentRuntimeState runtimeState)
+    public void Bind(AgentRuntimeState runtimeState, AgentSettingsFormFactory agentSettingsFormFactory)
     {
         _runtimeState = runtimeState;
+        _agentSettingsFormFactory = agentSettingsFormFactory;
     }
 
     protected override void OnShown(EventArgs e)
@@ -34,6 +37,17 @@ public partial class AgentMainForm : Form
         _refreshTimer.Stop();
         _refreshTimer.Dispose();
         base.OnFormClosed(e);
+    }
+
+    private async void btnSettings_Click(object sender, EventArgs e)
+    {
+        if (_agentSettingsFormFactory is null)
+        {
+            return;
+        }
+
+        using var settingsForm = await _agentSettingsFormFactory.CreateAsync();
+        settingsForm.ShowDialog(this);
     }
 
     private void RefreshRuntimeState()

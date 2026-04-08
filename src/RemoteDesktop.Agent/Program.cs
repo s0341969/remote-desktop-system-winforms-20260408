@@ -2,8 +2,10 @@ using System.Windows.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RemoteDesktop.Agent.Forms;
+using RemoteDesktop.Agent.Forms.Settings;
 using RemoteDesktop.Agent.Options;
 using RemoteDesktop.Agent.Services;
+using RemoteDesktop.Agent.Services.Settings;
 
 namespace RemoteDesktop.Agent;
 
@@ -25,7 +27,9 @@ internal static class Program
         builder.Services.AddSingleton<AgentRuntimeState>();
         builder.Services.AddSingleton<DesktopCaptureService>();
         builder.Services.AddSingleton<InputInjectionService>();
+        builder.Services.AddSingleton<IAgentSettingsStore, AgentSettingsStore>();
         builder.Services.AddSingleton<AgentMainFormFactory>();
+        builder.Services.AddSingleton<AgentSettingsFormFactory>();
         builder.Services.AddHostedService<RemoteAgentService>();
 
         using var host = builder.Build();

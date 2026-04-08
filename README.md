@@ -1,50 +1,52 @@
 # RemoteDesktopSystem
 
-`RemoteDesktopSystem` 已整理為可直接使用 `Visual Studio 2022` 開啟的 Windows Forms 解決方案，保留既有遠端桌面核心通訊邏輯，並將控制端與 Agent 都維持在可由 WinForms 設計器編修的桌面應用程式。
+`RemoteDesktopSystem` 現在是純 Windows Forms 控制端與 Agent 的遠端桌面系統，保留既有 WebSocket 通訊核心與 MSSQL 裝置紀錄，並移除已停用的 Razor Pages 舊 Web UI。
 
 ## 目前架構
 
 - `RemoteDesktopSystem.sln`
-  - 給 `VS2022` 直接開啟的解決方案檔。
+  - 給 `Visual Studio 2022` 直接開啟的解決方案。
 - `src/RemoteDesktop.Host`
   - Windows Forms 主控台。
-  - 背景自架 `Kestrel`，提供 Agent 連線所需的 `/ws/agent` 與 `/healthz`。
-  - 前景提供登入畫面、裝置清單、連線紀錄與遠端檢視視窗。
+  - 背景自架 `Kestrel`，提供 `/ws/agent` 與 `/healthz`。
+  - 前景提供登入、儀表板、遠端檢視與 Host 設定表單。
 - `src/RemoteDesktop.Agent`
   - Windows Forms Agent。
-  - 保留桌面截圖、心跳、輸入回放與自動重連。
-  - 顯示目前狀態、最近連線、最近送圖與錯誤資訊。
+  - 提供桌面截圖、心跳、輸入回放、自動重連與 Agent 設定表單。
 - `tests/RemoteDesktop.SmokeTests`
-  - 核心連線 smoke test。
+  - 核心通訊 smoke test。
   - 驗證 Agent 註冊、Viewer 收圖、Viewer 指令轉送。
+- `tests/RemoteDesktop.UiAutomation`
+  - WinForms UI 自動化測試。
+  - 驗證登入、Host 設定、Agent 設定、Host 主畫面與 Agent 主畫面。
 - `RemoteDesktopSystem.csproj`
-  - 根目錄聚合建置檔，用來一次建置 Host 與 Agent。
+  - 根目錄聚合建置檔，用來一次建置主要執行專案。
 
 ## 本次整理重點
 
-- 將 Host 啟動組態抽成 `RemoteDesktopHostCompositionExtensions`，降低 `Program.cs` 耦合並提高可測性。
-- 修正 Agent 預設 `ServerUrl` 與 Host 預設監聽位址不一致的問題，現在預設都使用 `http://localhost:5106`。
-- 修正 Host 對 Agent WebSocket 指令可能並發送出造成的 `SendAsync` 競爭問題，改為每個 Agent session 使用送出鎖。
-- 修正 Agent 傳輸迴圈只等待第一個 task 結束、其餘 task 未一致取消的生命週期問題。
-- 將 heartbeat 改為使用最近一次畫面尺寸，避免每 15 秒額外做一次完整桌面截圖。
-- 將 Host 與 Agent 的 WebSocket 讀取緩衝改為 `ArrayPool<byte>`，降低高頻通訊時的配置壓力。
-- 修正 Agent 執行狀態在背景執行緒與 UI 執行緒之間的讀寫同步問題，改為以 snapshot 提供表單顯示。
-- 修正 Host 儀表板定時更新失敗時會反覆跳錯誤視窗的問題，改為手動刷新才顯示重複例外提示。
-- 修正遠端檢視視窗在關閉或斷線瞬間更新畫面、傳送指令時的例外處理。
-- 新增 `tests/RemoteDesktop.SmokeTests`，可直接驗證 Host 與 Agent 的核心連線流程。
+- 補齊 Host 與 Agent 的完整設定表單，改由 UI 編輯 `appsettings.json`。
+- 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
+- Host 主畫面新增設定入口，Agent 主畫面新增設定入口。
+- 移除 `src/RemoteDesktop.Host/Pages` 與 `src/RemoteDesktop.Host/wwwroot` 舊碼，Host 專案不再保留停用的 Razor Pages。
+- 新增 `tests/RemoteDesktop.UiAutomation`，把主要 WinForms 使用流程納入自動化驗證。
+- 將 UI automation 專案加入 `RemoteDesktopSystem.sln`。
+- 保留既有 smoke test，持續驗證核心 WebSocket 與 broker 流程。
 
 ## 使用 Visual Studio 2022
 
 1. 開啟 `RemoteDesktopSystem.sln`
 2. 在方案總管中選擇要編修的專案或表單
-3. 開啟下列檔案即可用設計器拖拉 UI 控制項：
+3. 目前可由設計器直接編修的主要表單：
    - `src/RemoteDesktop.Host/Forms/LoginForm.cs`
    - `src/RemoteDesktop.Host/Forms/MainForm.cs`
    - `src/RemoteDesktop.Host/Forms/RemoteViewerForm.cs`
+   - `src/RemoteDesktop.Host/Forms/Settings/HostSettingsForm.cs`
    - `src/RemoteDesktop.Agent/Forms/AgentMainForm.cs`
+   - `src/RemoteDesktop.Agent/Forms/Settings/AgentSettingsForm.cs`
 4. 需要啟動控制端時，將 `RemoteDesktop.Host` 設為啟始專案
 5. 需要啟動 Agent 時，將 `RemoteDesktop.Agent` 設為啟始專案
-6. 需要執行核心連線驗證時，可執行 `RemoteDesktop.SmokeTests`
+6. 需要驗證核心通訊時，執行 `RemoteDesktop.SmokeTests`
+7. 需要驗證 WinForms UI 時，執行 `RemoteDesktop.UiAutomation`
 
 ## 執行需求
 
@@ -64,7 +66,7 @@
 - `ConnectionStrings:RemoteDesktopDb`
   - MSSQL 連線字串。
 - `ControlServer:ServerUrl`
-  - Host 背景 Kestrel 監聽位址，預設為 `http://localhost:5106`
+  - Host 背景 Kestrel 監聽位址，預設 `http://localhost:5106`
 - `ControlServer:ConsoleName`
   - 主控台名稱。
 - `ControlServer:AdminUserName`
@@ -72,16 +74,18 @@
 - `ControlServer:AdminPassword`
   - WinForms 主控台登入密碼。
 - `ControlServer:SharedAccessKey`
-  - Agent 與 Host 之間的共享金鑰。
+  - Agent 與 Host 間共享金鑰。
 - `ControlServer:AgentHeartbeatTimeoutSeconds`
   - Agent 心跳逾時秒數。
+- `ControlServer:RequireHttpsRedirect`
+  - 是否啟用 HTTPS 轉址。
 
 ### Agent
 
 檔案：`src/RemoteDesktop.Agent/appsettings.json`
 
 - `Agent:ServerUrl`
-  - Host 的 HTTP URL，預設為 `http://localhost:5106`，Agent 會自動轉成 `ws://` 或 `wss://` 連線 `/ws/agent`
+  - Host 的 HTTP URL，預設 `http://localhost:5106`
 - `Agent:DeviceId`
   - 裝置識別碼。
 - `Agent:DeviceName`
@@ -105,7 +109,7 @@
 $env:DOTNET_CLI_HOME="$PWD\\.dotnet"
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
-& 'C:\Program Files\dotnet\dotnet.exe' build .\RemoteDesktopSystem.csproj
+& 'C:\Program Files\dotnet\dotnet.exe' build .\RemoteDesktopSystem.sln
 ```
 
 ### 啟動 Host
@@ -126,30 +130,32 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\dotnet\dotnet.exe' run --project .\tests\RemoteDesktop.SmokeTests\RemoteDesktop.SmokeTests.csproj
 ```
 
+### 執行 WinForms UI 自動化測試
+
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' run --project .\tests\RemoteDesktop.UiAutomation\RemoteDesktop.UiAutomation.csproj
+```
+
 ## 目前行為
 
-- 啟動 Host 後，會先顯示 WinForms 登入畫面。
-- 登入成功後，主控台會背景啟動 Kestrel 並顯示：
+- Host 啟動後，先顯示 WinForms 登入畫面。
+- 登入成功後，主控台背景啟動 Kestrel，並顯示：
   - 裝置清單
   - 在線數量
   - Presence Log
   - Agent 端點與健康檢查位址
-- 主控台可直接雙擊在線裝置，開啟遠端畫面視窗。
-- 遠端畫面視窗可傳送：
-  - 滑鼠移動
-  - 滑鼠按下/放開
-  - 滾輪
-  - 一般文字輸入
-  - 常用控制鍵與方向鍵
-- Agent 會顯示目前狀態與最近事件，方便在桌面端確認是否已成功連到 Host。
+- Host 主畫面可直接開啟設定表單，修改連線字串、主控台參數、帳號密碼與共享金鑰。
+- Agent 主畫面可直接開啟設定表單，修改控制端 URL、裝置資訊、影像參數與重連策略。
+- 設定寫入 `appsettings.json` 後，重新啟動對應應用程式即可生效。
+- 主控台可直接雙擊在線裝置開啟遠端畫面視窗。
+- 遠端畫面視窗可傳送滑鼠、滾輪、文字輸入與常用控制鍵。
 
 ## 已知限制
 
-- 目前 Host 的 viewer 改為單一檢視者模式，同一台裝置同時只允許一個遠端視窗。
+- 目前 Host 的 viewer 為單一檢視者模式，同一台裝置同時只允許一個遠端視窗。
 - 目前登入驗證仍使用 `appsettings.json` 中的固定帳密，尚未改成安全儲存或雜湊驗證。
 - 目前 Agent 仍以前景應用程式方式執行，尚未包成正式 Windows Service。
-- Razor Pages 檔案仍保留在專案內，但不再參與目前 WinForms 主控台流程。
-- smoke test 驗證的是核心通訊與 broker 流程，不包含 WinForms UI 自動化操作。
+- WinForms UI 自動化測試目前驗證表單互動與資料提交流程，尚未覆蓋實際遠端檢視視窗的畫面/輸入回放自動化。
 
 ## 資料庫
 
@@ -161,7 +167,9 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 
 ## 驗證結果
 
-- 已完成 `dotnet build .\RemoteDesktopSystem.csproj`
+- 已完成 `dotnet build .\RemoteDesktopSystem.sln`
 - 建置結果：成功
 - 已完成 `dotnet run --project .\tests\RemoteDesktop.SmokeTests\RemoteDesktop.SmokeTests.csproj`
-- smoke test 結果：成功，已驗證 Agent 註冊、畫面傳送、Viewer 指令轉送
+- smoke test 結果：成功
+- 已完成 `dotnet run --project .\tests\RemoteDesktop.UiAutomation\RemoteDesktop.UiAutomation.csproj`
+- UI automation 結果：成功

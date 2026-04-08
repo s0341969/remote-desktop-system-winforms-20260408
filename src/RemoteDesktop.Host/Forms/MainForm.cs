@@ -1,6 +1,7 @@
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
+using RemoteDesktop.Host.Forms.Settings;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -10,6 +11,7 @@ public partial class MainForm : Form
     private IDeviceRepository? _repository;
     private ControlServerOptions? _options;
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
+    private HostSettingsFormFactory? _hostSettingsFormFactory;
     private string _signedInUserName = string.Empty;
     private bool _refreshing;
     private string? _lastRefreshErrorMessage;
@@ -28,11 +30,13 @@ public partial class MainForm : Form
         IDeviceRepository repository,
         ControlServerOptions options,
         RemoteViewerFormFactory remoteViewerFormFactory,
+        HostSettingsFormFactory hostSettingsFormFactory,
         string signedInUserName)
     {
         _repository = repository;
         _options = options;
         _remoteViewerFormFactory = remoteViewerFormFactory;
+        _hostSettingsFormFactory = hostSettingsFormFactory;
         _signedInUserName = signedInUserName;
     }
 
@@ -71,6 +75,17 @@ public partial class MainForm : Form
         OpenSelectedViewer();
     }
 
+    private async void btnSettings_Click(object sender, EventArgs e)
+    {
+        if (_hostSettingsFormFactory is null)
+        {
+            return;
+        }
+
+        using var settingsForm = await _hostSettingsFormFactory.CreateAsync();
+        settingsForm.ShowDialog(this);
+    }
+
     private void gridDevices_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex >= 0)
@@ -96,6 +111,7 @@ public partial class MainForm : Form
             _refreshing = true;
             btnRefresh.Enabled = false;
             btnOpenViewer.Enabled = false;
+            btnSettings.Enabled = false;
             lblStatusValue.Text = "更新中...";
 
             var devicesTask = _repository.GetDevicesAsync(100, CancellationToken.None);
@@ -134,6 +150,7 @@ public partial class MainForm : Form
         {
             _refreshing = false;
             btnRefresh.Enabled = true;
+            btnSettings.Enabled = true;
         }
     }
 

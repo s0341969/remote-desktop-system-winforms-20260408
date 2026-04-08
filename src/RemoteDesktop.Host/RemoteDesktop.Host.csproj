@@ -14,10 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Pages\**\*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="DatabaseScripts\001_create_remote_desktop_schema.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

@@ -8,7 +8,7 @@ public sealed class AgentOptions
 
     [Required]
     [Url]
-    public string ServerUrl { get; init; } = "http://localhost:5000";
+    public string ServerUrl { get; init; } = "http://localhost:5106";
 
     [Required]
     [MinLength(3)]
