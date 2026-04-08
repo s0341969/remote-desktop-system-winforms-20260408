@@ -28,6 +28,9 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                 ScreenWidth = descriptor.ScreenWidth,
                 ScreenHeight = descriptor.ScreenHeight,
                 IsOnline = true,
+                IsAuthorized = existing?.IsAuthorized ?? false,
+                AuthorizedAt = existing?.AuthorizedAt,
+                AuthorizedBy = existing?.AuthorizedBy,
                 CreatedAt = createdAt,
                 LastSeenAt = now,
                 LastConnectedAt = now,
@@ -76,6 +79,9 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                     ScreenWidth = screenWidth,
                     ScreenHeight = screenHeight,
                     IsOnline = true,
+                    IsAuthorized = device.IsAuthorized,
+                    AuthorizedAt = device.AuthorizedAt,
+                    AuthorizedBy = device.AuthorizedBy,
                     CreatedAt = device.CreatedAt,
                     LastSeenAt = now,
                     LastConnectedAt = device.LastConnectedAt,
@@ -120,6 +126,9 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                     ScreenWidth = device.ScreenWidth,
                     ScreenHeight = device.ScreenHeight,
                     IsOnline = false,
+                    IsAuthorized = device.IsAuthorized,
+                    AuthorizedAt = device.AuthorizedAt,
+                    AuthorizedBy = device.AuthorizedBy,
                     CreatedAt = device.CreatedAt,
                     LastSeenAt = now,
                     LastConnectedAt = device.LastConnectedAt,
@@ -143,6 +152,38 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                     OnlineSeconds = (long)Math.Max(0, (now - log.ConnectedAt).TotalSeconds)
                 };
             }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_devices.TryGetValue(deviceId, out var device))
+            {
+                return Task.CompletedTask;
+            }
+
+            var authorizedAt = isAuthorized ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+            _devices[deviceId] = new DeviceRecord
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.DeviceName,
+                HostName = device.HostName,
+                AgentVersion = device.AgentVersion,
+                ScreenWidth = device.ScreenWidth,
+                ScreenHeight = device.ScreenHeight,
+                IsOnline = device.IsOnline,
+                IsAuthorized = isAuthorized,
+                AuthorizedAt = authorizedAt,
+                AuthorizedBy = isAuthorized ? changedByUserName : null,
+                CreatedAt = device.CreatedAt,
+                LastSeenAt = device.LastSeenAt,
+                LastConnectedAt = device.LastConnectedAt,
+                LastDisconnectedAt = device.LastDisconnectedAt
+            };
         }
 
         return Task.CompletedTask;

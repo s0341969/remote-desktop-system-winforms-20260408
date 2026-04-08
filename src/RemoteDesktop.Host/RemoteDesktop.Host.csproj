@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
+    <SelfContained>false</SelfContained>
+    <UseAppHost>true</UseAppHost>
+    <SatelliteResourceLanguages>zh-Hant;zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

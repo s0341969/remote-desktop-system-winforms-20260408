@@ -12,6 +12,9 @@ namespace RemoteDesktop.Agent.Services;
 [SupportedOSPlatform("windows")]
 public sealed class DesktopCaptureService
 {
+    private static readonly ImageCodecInfo JpegCodec = ImageCodecInfo.GetImageEncoders()
+        .First(static encoder => string.Equals(encoder.MimeType, "image/jpeg", StringComparison.OrdinalIgnoreCase));
+
     private readonly AgentOptions _options;
 
     public DesktopCaptureService(IOptions<AgentOptions> options)
@@ -21,7 +24,7 @@ public sealed class DesktopCaptureService
 
     public DesktopFrame Capture()
     {
-        var bounds = SystemInformation.VirtualScreen;
+        var bounds = GetVirtualScreenBounds();
         using var source = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(source))
         {
@@ -34,6 +37,16 @@ public sealed class DesktopCaptureService
             : ResizeBitmap(source, outputSize.Width, outputSize.Height);
 
         return new DesktopFrame(EncodeJpeg(resized, _options.JpegQuality), bounds.Width, bounds.Height);
+    }
+
+    public Size GetVirtualScreenSize()
+    {
+        return GetVirtualScreenBounds().Size;
+    }
+
+    private static Rectangle GetVirtualScreenBounds()
+    {
+        return SystemInformation.VirtualScreen;
     }
 
     private static Size CalculateOutputSize(int width, int height, int maxWidth)
@@ -59,11 +72,10 @@ public sealed class DesktopCaptureService
 
     private static byte[] EncodeJpeg(Image image, long quality)
     {
-        var codec = ImageCodecInfo.GetImageEncoders().First(encoder => encoder.MimeType == "image/jpeg");
         using var encoderParameters = new EncoderParameters(1);
         encoderParameters.Param[0] = new EncoderParameter(Encoder.Quality, quality);
         using var stream = new MemoryStream();
-        image.Save(stream, codec, encoderParameters);
+        image.Save(stream, JpegCodec, encoderParameters);
         return stream.ToArray();
     }
 }

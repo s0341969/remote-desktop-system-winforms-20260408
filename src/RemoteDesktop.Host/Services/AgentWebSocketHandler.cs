@@ -65,6 +65,7 @@ public sealed class AgentWebSocketHandler
             {
                 type = "hello-ack",
                 deviceId = session.DeviceId,
+                authorizationStatus = session.IsAuthorized ? "approved" : "pending",
                 acceptedAt = DateTimeOffset.UtcNow
             }, JsonOptions));
 
@@ -90,6 +91,20 @@ public sealed class AgentWebSocketHandler
                 if (heartbeat is not null && string.Equals(heartbeat.Type, "heartbeat", StringComparison.OrdinalIgnoreCase))
                 {
                     await _broker.TouchAgentAsync(session.DeviceId, heartbeat.ScreenWidth, heartbeat.ScreenHeight, context.RequestAborted);
+                    continue;
+                }
+
+                var transferStatus = JsonSerializer.Deserialize<AgentFileTransferStatusMessage>(payload, JsonOptions);
+                if (transferStatus is not null && string.Equals(transferStatus.Type, "file-transfer-status", StringComparison.OrdinalIgnoreCase))
+                {
+                    await _broker.PublishViewerStatusAsync(session.DeviceId, transferStatus, context.RequestAborted);
+                    continue;
+                }
+
+                var clipboardMessage = JsonSerializer.Deserialize<AgentClipboardMessage>(payload, JsonOptions);
+                if (clipboardMessage is not null && string.Equals(clipboardMessage.Type, "clipboard-sync", StringComparison.OrdinalIgnoreCase))
+                {
+                    await _broker.PublishViewerClipboardAsync(session.DeviceId, clipboardMessage, context.RequestAborted);
                 }
             }
         }
@@ -98,7 +113,7 @@ public sealed class AgentWebSocketHandler
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "處理 Agent WebSocket 連線時發生錯誤。");
+            _logger.LogError(exception, "Agent WebSocket processing failed.");
         }
         finally
         {

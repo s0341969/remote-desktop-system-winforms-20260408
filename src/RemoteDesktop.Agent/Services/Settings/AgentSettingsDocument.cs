@@ -20,6 +20,8 @@ public sealed class AgentSettingsDocument
     [MinLength(12)]
     public string SharedAccessKey { get; set; } = "ChangeMe-Agent-Key";
 
+    public string FileTransferDirectory { get; set; } = string.Empty;
+
     [Range(1, 24)]
     public int CaptureFramesPerSecond { get; set; } = 8;
 

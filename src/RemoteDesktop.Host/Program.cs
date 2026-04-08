@@ -2,6 +2,7 @@ using System.Windows.Forms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using RemoteDesktop.Host.Forms;
 using RemoteDesktop.Host.Hosting;
 using RemoteDesktop.Host.Options;
@@ -28,17 +29,16 @@ internal static class Program
             .Validate(static options =>
                 string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeMemory, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase),
-                "ControlServer:PersistenceMode 僅支援 Memory 或 SqlServer。")
+                "ControlServer:PersistenceMode must be either Memory or SqlServer.")
             .ValidateOnStart();
 
-        if (string.Equals(configuredOptions.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase))
+        builder.Services.AddSingleton<IDeviceRepository>(static serviceProvider =>
         {
-            builder.Services.AddSingleton<IDeviceRepository, SqlDeviceRepository>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
-        }
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<SqlDeviceRepository>(serviceProvider)
+                : ActivatorUtilities.CreateInstance<InMemoryDeviceRepository>(serviceProvider);
+        });
 
         builder.Services.AddRemoteDesktopHostCore();
 
@@ -56,14 +56,24 @@ internal static class Program
                 return;
             }
 
-            using var mainForm = app.Services.GetRequiredService<MainFormFactory>().Create(loginForm.AuthenticatedUserName);
+            if (loginForm.AuthenticatedUser is null)
+            {
+                MessageBox.Show(
+                    HostUiText.Bi("登入完成但未建立使用者工作階段。", "Sign-in completed without a user session."),
+                    HostUiText.Window("啟動錯誤", "Startup Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+
+            using var mainForm = app.Services.GetRequiredService<MainFormFactory>().Create(loginForm.AuthenticatedUser);
             Application.Run(mainForm);
         }
         catch (Exception exception)
         {
             MessageBox.Show(
-                $"主控台啟動失敗：{exception.Message}",
-                "RemoteDesktop.Host",
+                HostUiText.Bi($"Host 啟動失敗：{exception.Message}", $"Host startup failed: {exception.Message}"),
+                HostUiText.Window("啟動錯誤", "Startup Error"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }

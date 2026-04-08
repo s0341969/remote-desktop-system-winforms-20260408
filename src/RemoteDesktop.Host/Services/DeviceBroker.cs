@@ -3,9 +3,11 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using RemoteDesktop.Host;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
+using RemoteDesktop.Host.Services.Auditing;
 
 namespace RemoteDesktop.Host.Services;
 
@@ -16,12 +18,14 @@ public sealed class DeviceBroker
     private readonly IDeviceRepository _repository;
     private readonly ControlServerOptions _options;
     private readonly ILogger<DeviceBroker> _logger;
+    private readonly AuditService _auditService;
 
-    public DeviceBroker(IDeviceRepository repository, IOptions<ControlServerOptions> options, ILogger<DeviceBroker> logger)
+    public DeviceBroker(IDeviceRepository repository, IOptions<ControlServerOptions> options, ILogger<DeviceBroker> logger, AuditService auditService)
     {
         _repository = repository;
         _options = options.Value;
         _logger = logger;
+        _auditService = auditService;
     }
 
     public async Task<AgentRegistrationResult> RegisterAgentAsync(WebSocket socket, AgentHelloMessage message, CancellationToken cancellationToken)
@@ -33,10 +37,10 @@ public sealed class DeviceBroker
 
         var descriptor = new AgentDescriptor
         {
-            DeviceId = message.DeviceId.Trim(),
-            DeviceName = message.DeviceName.Trim(),
-            HostName = message.HostName.Trim(),
-            AgentVersion = message.AgentVersion.Trim(),
+            DeviceId = message.DeviceId?.Trim() ?? string.Empty,
+            DeviceName = message.DeviceName?.Trim() ?? string.Empty,
+            HostName = message.HostName?.Trim() ?? string.Empty,
+            AgentVersion = message.AgentVersion?.Trim() ?? string.Empty,
             ScreenWidth = message.ScreenWidth,
             ScreenHeight = message.ScreenHeight
         };
@@ -53,9 +57,10 @@ public sealed class DeviceBroker
         }
 
         await _repository.UpsertDeviceOnlineAsync(descriptor, cancellationToken);
+        var deviceRecord = await _repository.GetDeviceAsync(descriptor.DeviceId, cancellationToken);
         var presenceId = await _repository.StartPresenceAsync(descriptor, cancellationToken);
 
-        var session = new AgentSession(socket, descriptor, presenceId);
+        var session = new AgentSession(socket, descriptor, presenceId, deviceRecord?.IsAuthorized == true);
         _agents[descriptor.DeviceId] = session;
         _logger.LogInformation("Agent registered: {DeviceId} ({DeviceName})", descriptor.DeviceId, descriptor.DeviceName);
         return AgentRegistrationResult.Success(session);
@@ -102,14 +107,153 @@ public sealed class DeviceBroker
         }
     }
 
+    public async Task PublishViewerStatusAsync(string deviceId, AgentFileTransferStatusMessage status, CancellationToken cancellationToken)
+    {
+        if (!_agents.TryGetValue(deviceId, out var session))
+        {
+            return;
+        }
+
+        ViewerSession? viewerSession;
+        lock (session.SyncRoot)
+        {
+            viewerSession = session.ViewerSession;
+        }
+
+        if (viewerSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await viewerSession.PublishStatusAsync(status, cancellationToken);
+
+            if (string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = _auditService.WriteAsync(
+                    "file-upload-complete",
+                    viewerSession.UserName,
+                    viewerSession.UserName,
+                    "device",
+                    deviceId,
+                    true,
+                    HostUiText.Bi($"檔案「{status.StoredFileName}」已成功上傳。", $"Uploaded '{status.StoredFileName}' successfully."),
+                    CancellationToken.None);
+            }
+            else if (string.Equals(status.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = _auditService.WriteAsync(
+                    "file-upload-complete",
+                    viewerSession.UserName,
+                    viewerSession.UserName,
+                    "device",
+                    deviceId,
+                    false,
+                    status.Message,
+                    CancellationToken.None);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Viewer status delivery failed for device {DeviceId}.", deviceId);
+            await DetachViewerAsync(deviceId);
+        }
+    }
+
+    public async Task PublishViewerClipboardAsync(string deviceId, AgentClipboardMessage message, CancellationToken cancellationToken)
+    {
+        if (!_agents.TryGetValue(deviceId, out var session))
+        {
+            return;
+        }
+
+        ViewerSession? viewerSession;
+        lock (session.SyncRoot)
+        {
+            viewerSession = session.ViewerSession;
+        }
+
+        if (viewerSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await viewerSession.PublishClipboardAsync(message, cancellationToken);
+
+            if (string.Equals(message.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                var action = string.Equals(message.Operation, "get", StringComparison.OrdinalIgnoreCase)
+                    ? "clipboard-get-complete"
+                    : "clipboard-set-complete";
+                _ = _auditService.WriteAsync(
+                    action,
+                    viewerSession.UserName,
+                    viewerSession.UserName,
+                    "device",
+                    deviceId,
+                    true,
+                    message.Message,
+                    CancellationToken.None);
+            }
+            else if (string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                var action = string.Equals(message.Operation, "get", StringComparison.OrdinalIgnoreCase)
+                    ? "clipboard-get-complete"
+                    : "clipboard-set-complete";
+                _ = _auditService.WriteAsync(
+                    action,
+                    viewerSession.UserName,
+                    viewerSession.UserName,
+                    "device",
+                    deviceId,
+                    false,
+                    message.Message,
+                    CancellationToken.None);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Viewer clipboard delivery failed for device {DeviceId}.", deviceId);
+            await DetachViewerAsync(deviceId);
+        }
+    }
+
     public Task<bool> AttachViewerAsync(
         string deviceId,
         string userName,
         Func<byte[], CancellationToken, Task> publishFrameAsync,
+        Func<AgentFileTransferStatusMessage, CancellationToken, Task>? publishStatusAsync,
+        Func<AgentClipboardMessage, CancellationToken, Task>? publishClipboardAsync,
         CancellationToken cancellationToken)
     {
-        if (!_agents.TryGetValue(deviceId, out var session))
+        if (!_agents.TryGetValue(deviceId, out var session) || session.AgentSocket.State != WebSocketState.Open)
         {
+            _ = _auditService.WriteAsync(
+                "viewer-session-open",
+                userName,
+                userName,
+                "device",
+                deviceId,
+                false,
+                HostUiText.Bi("Viewer 工作階段開啟失敗，因為裝置目前離線。", "Viewer session open failed because the device is offline."),
+                CancellationToken.None);
+            return Task.FromResult(false);
+        }
+
+        if (!session.IsAuthorized)
+        {
+            _ = _auditService.WriteAsync(
+                "viewer-session-open",
+                userName,
+                userName,
+                "device",
+                deviceId,
+                false,
+                HostUiText.Bi("Viewer 工作階段開啟失敗，因為裝置仍在等待核准。", "Viewer session open failed because the device is waiting for approval."),
+                CancellationToken.None);
             return Task.FromResult(false);
         }
 
@@ -117,23 +261,93 @@ public sealed class DeviceBroker
         {
             if (session.ViewerSession is not null)
             {
+                _ = _auditService.WriteAsync(
+                    "viewer-session-open",
+                    userName,
+                    userName,
+                    "device",
+                    deviceId,
+                    false,
+                    HostUiText.Bi("Viewer 工作階段開啟失敗，因為已有其他 Viewer 連線。", "Viewer session open failed because another viewer is already attached."),
+                    CancellationToken.None);
                 return Task.FromResult(false);
             }
 
-            session.ViewerSession = new ViewerSession(userName, publishFrameAsync);
+            session.ViewerSession = new ViewerSession(userName, publishFrameAsync, publishStatusAsync, publishClipboardAsync);
         }
 
         _logger.LogInformation("Viewer attached: {DeviceId} by {UserName}", deviceId, userName);
+        _ = _auditService.WriteAsync(
+            "viewer-session-open",
+            userName,
+            userName,
+            "device",
+            deviceId,
+            true,
+            HostUiText.Bi("Viewer 工作階段已成功開啟。", "Viewer session opened successfully."),
+            CancellationToken.None);
         return Task.FromResult(true);
+    }
+
+    public async Task<bool> SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
+    {
+        var device = await _repository.GetDeviceAsync(deviceId, cancellationToken);
+        if (device is null)
+        {
+            return false;
+        }
+
+        await _repository.SetDeviceAuthorizationAsync(deviceId, isAuthorized, changedByUserName, cancellationToken);
+
+        if (_agents.TryGetValue(deviceId, out var session))
+        {
+            session.IsAuthorized = isAuthorized;
+            if (!isAuthorized)
+            {
+                await DetachViewerAsync(deviceId);
+            }
+        }
+
+        var action = isAuthorized ? "device-authorization-grant" : "device-authorization-revoke";
+        var message = isAuthorized
+            ? HostUiText.Bi($"已核准裝置「{device.DeviceName}」的無人值守存取。", $"Approved unattended access for device '{device.DeviceName}'.")
+            : HostUiText.Bi($"已撤銷裝置「{device.DeviceName}」的無人值守存取。", $"Revoked unattended access for device '{device.DeviceName}'.");
+
+        await _auditService.WriteAsync(
+            action,
+            changedByUserName,
+            changedByUserName,
+            "device",
+            deviceId,
+            true,
+            message,
+            cancellationToken);
+
+        return true;
     }
 
     public Task DetachViewerAsync(string deviceId)
     {
         if (_agents.TryGetValue(deviceId, out var session))
         {
+            ViewerSession? viewerSession;
             lock (session.SyncRoot)
             {
+                viewerSession = session.ViewerSession;
                 session.ViewerSession = null;
+            }
+
+            if (viewerSession is not null)
+            {
+                _ = _auditService.WriteAsync(
+                    "viewer-session-close",
+                    viewerSession.UserName,
+                    viewerSession.UserName,
+                    "device",
+                    deviceId,
+                    true,
+                    HostUiText.Bi("Viewer 工作階段已關閉。", "Viewer session closed."),
+                    CancellationToken.None);
             }
         }
 
@@ -147,8 +361,82 @@ public sealed class DeviceBroker
             return;
         }
 
+        ViewerSession? viewerSession;
+        lock (session.SyncRoot)
+        {
+            viewerSession = session.ViewerSession;
+        }
+
+        if (viewerSession is null || !session.IsAuthorized)
+        {
+            return;
+        }
+
         var bytes = Encoding.UTF8.GetBytes(jsonPayload);
         await session.SendCommandAsync(bytes, cancellationToken);
+
+        var command = JsonSerializer.Deserialize<ViewerCommandMessage>(jsonPayload, JsonOptions);
+        if (command is not null && string.Equals(command.Type, "file-upload-start", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _auditService.WriteAsync(
+                "file-upload-start",
+                viewerSession.UserName,
+                viewerSession.UserName,
+                "device",
+                deviceId,
+                true,
+                HostUiText.Bi($"開始上傳檔案「{command.FileName}」。", $"Started uploading '{command.FileName}'."),
+                CancellationToken.None);
+            return;
+        }
+
+        if (command is not null && string.Equals(command.Type, "clipboard-set", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _auditService.WriteAsync(
+                "clipboard-set-start",
+                viewerSession.UserName,
+                viewerSession.UserName,
+                "device",
+                deviceId,
+                true,
+                HostUiText.Bi("已開始將本機剪貼簿同步到遠端裝置。", "Started syncing local clipboard to the remote device."),
+                CancellationToken.None);
+            return;
+        }
+
+        if (command is not null && string.Equals(command.Type, "clipboard-get", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _auditService.WriteAsync(
+                "clipboard-get-start",
+                viewerSession.UserName,
+                viewerSession.UserName,
+                "device",
+                deviceId,
+                true,
+                HostUiText.Bi("已要求取得遠端剪貼簿內容。", "Requested the remote clipboard contents."),
+                CancellationToken.None);
+            return;
+        }
+
+        if (!viewerSession.InputActivityLogged)
+        {
+            lock (session.SyncRoot)
+            {
+                if (!viewerSession.InputActivityLogged)
+                {
+                    viewerSession.InputActivityLogged = true;
+                    _ = _auditService.WriteAsync(
+                        "viewer-remote-control",
+                        viewerSession.UserName,
+                        viewerSession.UserName,
+                        "device",
+                        deviceId,
+                        true,
+                        HostUiText.Bi("已將遠端控制輸入送到裝置。", "Remote control input was sent to the device."),
+                        CancellationToken.None);
+                }
+            }
+        }
     }
 
     public Task ForwardViewerCommandAsync(string deviceId, ViewerCommandMessage command, CancellationToken cancellationToken)
@@ -182,10 +470,10 @@ public sealed class DeviceBroker
         }
     }
 
-    private static bool FixedTimeEquals(string left, string right)
+    private static bool FixedTimeEquals(string? left, string? right)
     {
-        var leftHash = SHA256.HashData(Encoding.UTF8.GetBytes(left));
-        var rightHash = SHA256.HashData(Encoding.UTF8.GetBytes(right));
+        var leftHash = SHA256.HashData(Encoding.UTF8.GetBytes(left ?? string.Empty));
+        var rightHash = SHA256.HashData(Encoding.UTF8.GetBytes(right ?? string.Empty));
         return CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
     }
 
@@ -216,13 +504,14 @@ public sealed class DeviceBroker
 
     public sealed class AgentSession
     {
-        public AgentSession(WebSocket agentSocket, AgentDescriptor descriptor, Guid presenceId)
+        public AgentSession(WebSocket agentSocket, AgentDescriptor descriptor, Guid presenceId, bool isAuthorized)
         {
             AgentSocket = agentSocket;
             PresenceId = presenceId;
             DeviceId = descriptor.DeviceId;
             DeviceName = descriptor.DeviceName;
             HostName = descriptor.HostName;
+            IsAuthorized = isAuthorized;
             LastHeartbeatAt = DateTimeOffset.UtcNow;
         }
 
@@ -239,6 +528,8 @@ public sealed class DeviceBroker
         public string DeviceName { get; }
 
         public string HostName { get; }
+
+        public bool IsAuthorized { get; set; }
 
         public ViewerSession? ViewerSession { get; set; }
 
@@ -277,18 +568,42 @@ public sealed class DeviceBroker
     public sealed class ViewerSession
     {
         private readonly Func<byte[], CancellationToken, Task> _publishFrameAsync;
+        private readonly Func<AgentFileTransferStatusMessage, CancellationToken, Task>? _publishStatusAsync;
+        private readonly Func<AgentClipboardMessage, CancellationToken, Task>? _publishClipboardAsync;
 
-        public ViewerSession(string userName, Func<byte[], CancellationToken, Task> publishFrameAsync)
+        public ViewerSession(
+            string userName,
+            Func<byte[], CancellationToken, Task> publishFrameAsync,
+            Func<AgentFileTransferStatusMessage, CancellationToken, Task>? publishStatusAsync,
+            Func<AgentClipboardMessage, CancellationToken, Task>? publishClipboardAsync)
         {
             UserName = userName;
             _publishFrameAsync = publishFrameAsync;
+            _publishStatusAsync = publishStatusAsync;
+            _publishClipboardAsync = publishClipboardAsync;
         }
 
         public string UserName { get; }
 
+        public bool InputActivityLogged { get; set; }
+
         public Task PublishFrameAsync(byte[] payload, CancellationToken cancellationToken)
         {
             return _publishFrameAsync(payload, cancellationToken);
+        }
+
+        public Task PublishStatusAsync(AgentFileTransferStatusMessage status, CancellationToken cancellationToken)
+        {
+            return _publishStatusAsync is null
+                ? Task.CompletedTask
+                : _publishStatusAsync(status, cancellationToken);
+        }
+
+        public Task PublishClipboardAsync(AgentClipboardMessage message, CancellationToken cancellationToken)
+        {
+            return _publishClipboardAsync is null
+                ? Task.CompletedTask
+                : _publishClipboardAsync(message, cancellationToken);
         }
     }
 }

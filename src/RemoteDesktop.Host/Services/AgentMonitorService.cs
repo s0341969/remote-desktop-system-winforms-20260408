@@ -32,7 +32,7 @@ public sealed class AgentMonitorService : BackgroundService
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, "巡檢 Agent 心跳時發生錯誤。");
+                _logger.LogError(exception, "Agent monitor loop failed.");
             }
         }
     }

@@ -2,10 +2,14 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Host.Forms;
+using RemoteDesktop.Host.Forms.Audit;
 using RemoteDesktop.Host.Forms.Settings;
+using RemoteDesktop.Host.Forms.Users;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
+using RemoteDesktop.Host.Services.Auditing;
 using RemoteDesktop.Host.Services.Settings;
+using RemoteDesktop.Host.Services.Users;
 
 namespace RemoteDesktop.Host.Hosting;
 
@@ -17,11 +21,17 @@ public static class RemoteDesktopHostCompositionExtensions
         services.AddSingleton<AgentWebSocketHandler>();
         services.AddSingleton<ViewerWebSocketHandler>();
         services.AddSingleton<CredentialValidator>();
+        services.AddSingleton<IAuditLogStore, JsonAuditLogStore>();
+        services.AddSingleton<AuditService>();
+        services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
+        services.AddSingleton<AuthenticationService>();
         services.AddSingleton<IHostSettingsStore, HostSettingsStore>();
         services.AddSingleton<LoginFormFactory>();
         services.AddSingleton<MainFormFactory>();
         services.AddSingleton<RemoteViewerFormFactory>();
         services.AddSingleton<HostSettingsFormFactory>();
+        services.AddSingleton<UserManagementFormFactory>();
+        services.AddSingleton<AuditLogFormFactory>();
         services.AddHostedService<AgentMonitorService>();
         return services;
     }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
@@ -98,7 +99,7 @@ public sealed class HostSettingsStore : IHostSettingsStore
         controlServer["AgentHeartbeatTimeoutSeconds"] = document.AgentHeartbeatTimeoutSeconds;
         root[ControlServerOptions.SectionName] = controlServer;
 
-        await File.WriteAllTextAsync(_settingsFilePath, root.ToJsonString(JsonOptions), cancellationToken);
+        await WriteJsonAtomicallyAsync(root.ToJsonString(JsonOptions), cancellationToken);
     }
 
     private async Task<JsonObject?> ReadRootAsync(CancellationToken cancellationToken)
@@ -108,15 +109,41 @@ public sealed class HostSettingsStore : IHostSettingsStore
             return null;
         }
 
-        var json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
-        return JsonNode.Parse(json) as JsonObject;
+        try
+        {
+            var json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
+            return JsonNode.Parse(json) as JsonObject;
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException($"The settings file is invalid JSON: {_settingsFilePath}", exception);
+        }
+    }
+
+    private async Task WriteJsonAtomicallyAsync(string json, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsFilePath)!);
+
+        var tempFilePath = $"{_settingsFilePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllTextAsync(tempFilePath, json, Encoding.UTF8, cancellationToken);
+            File.Move(tempFilePath, _settingsFilePath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempFilePath))
+            {
+                File.Delete(tempFilePath);
+            }
+        }
     }
 
     private static void Validate(HostSettingsDocument document)
     {
         if (document.EnableDatabase && string.IsNullOrWhiteSpace(document.RemoteDesktopDbConnectionString))
         {
-            throw new ValidationException("啟用資料庫時，必須填寫 MSSQL 連線字串。");
+            throw new ValidationException("MSSQL connection string is required when database persistence is enabled.");
         }
 
         var validationContext = new ValidationContext(document);

@@ -1,3 +1,5 @@
+using RemoteDesktop.Host.Models;
+using RemoteDesktop.Host.Services.Auditing;
 using RemoteDesktop.Host.Services.Settings;
 
 namespace RemoteDesktop.Host.Forms.Settings;
@@ -5,6 +7,8 @@ namespace RemoteDesktop.Host.Forms.Settings;
 public partial class HostSettingsForm : Form
 {
     private IHostSettingsStore? _settingsStore;
+    private AuditService? _auditService;
+    private AuthenticatedUserSession? _currentUser;
     private bool _showResultDialogs;
 
     public HostSettingsForm()
@@ -16,11 +20,14 @@ public partial class HostSettingsForm : Form
     {
         _showResultDialogs = showResultDialogs;
         InitializeComponent();
+        InitializeUiText();
     }
 
-    public void Bind(IHostSettingsStore settingsStore, HostSettingsDocument document, bool showResultDialogs = true)
+    public void Bind(IHostSettingsStore settingsStore, AuditService auditService, AuthenticatedUserSession currentUser, HostSettingsDocument document, bool showResultDialogs = true)
     {
         _settingsStore = settingsStore;
+        _auditService = auditService;
+        _currentUser = currentUser;
         _showResultDialogs = showResultDialogs;
         chkEnableDatabase.Checked = document.EnableDatabase;
         txtConnectionString.Text = document.RemoteDesktopDbConnectionString;
@@ -31,7 +38,7 @@ public partial class HostSettingsForm : Form
         txtSharedAccessKey.Text = document.SharedAccessKey;
         chkRequireHttpsRedirect.Checked = document.RequireHttpsRedirect;
         numHeartbeatTimeout.Value = Math.Clamp(document.AgentHeartbeatTimeoutSeconds, (int)numHeartbeatTimeout.Minimum, (int)numHeartbeatTimeout.Maximum);
-        lblStatus.Text = "修改後按儲存，重新啟動 Host 後生效。";
+        lblStatus.Text = HostUiText.Bi("編輯設定並儲存後會更新 appsettings.json；儲存後需要重新啟動。", "Edit settings and save to update appsettings.json. A restart is required after saving.");
         UpdateDatabaseInputState();
     }
 
@@ -39,13 +46,13 @@ public partial class HostSettingsForm : Form
     {
         if (_settingsStore is null)
         {
-            lblStatus.Text = "設定服務尚未初始化。";
+            lblStatus.Text = HostUiText.Bi("設定儲存服務尚未初始化。", "Settings store is not initialized.");
             return;
         }
 
         btnSave.Enabled = false;
         btnCancel.Enabled = false;
-        lblStatus.Text = "儲存中...";
+        lblStatus.Text = HostUiText.Bi("正在儲存設定...", "Saving settings...");
 
         try
         {
@@ -63,10 +70,22 @@ public partial class HostSettingsForm : Form
             };
 
             await _settingsStore.SaveAsync(document, CancellationToken.None);
-            lblStatus.Text = "已儲存，重新啟動 Host 後生效。";
+            if (_auditService is not null && _currentUser is not null)
+            {
+                await _auditService.WriteAsync(
+                    "host-settings-save",
+                    _currentUser,
+                    "host-settings",
+                    document.ConsoleName,
+                    true,
+                    "Host 設定已儲存。 / Host settings were saved.",
+                    CancellationToken.None);
+            }
+
+            lblStatus.Text = HostUiText.Bi("設定已儲存，請重新啟動 Host 套用新設定。", "Settings saved successfully. Restart Host to apply the new configuration.");
             if (_showResultDialogs)
             {
-                MessageBox.Show("Host 設定已儲存，重新啟動後生效。", "RemoteDesktop.Host", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(HostUiText.Bi("Host 設定已儲存，請重新啟動 Host 套用新設定。", "Host settings were saved successfully. Restart Host to apply the new configuration."), HostUiText.Window("Host 設定", "Host Settings"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
             if (Modal)
@@ -77,10 +96,22 @@ public partial class HostSettingsForm : Form
         }
         catch (Exception exception)
         {
-            lblStatus.Text = $"儲存失敗：{exception.Message}";
+            if (_auditService is not null && _currentUser is not null)
+            {
+                await _auditService.WriteAsync(
+                    "host-settings-save",
+                    _currentUser,
+                    "host-settings",
+                    txtConsoleName.Text.Trim(),
+                    false,
+                    $"Host 設定儲存失敗：{exception.Message} / Host settings save failed: {exception.Message}",
+                    CancellationToken.None);
+            }
+
+            lblStatus.Text = HostUiText.Bi($"儲存失敗：{exception.Message}", $"Save failed: {exception.Message}");
             if (_showResultDialogs)
             {
-                MessageBox.Show($"儲存 Host 設定失敗：{exception.Message}", "RemoteDesktop.Host", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(HostUiText.Bi($"Host 設定儲存失敗：{exception.Message}", $"Failed to save Host settings: {exception.Message}"), HostUiText.Window("Host 設定", "Host Settings"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         finally
@@ -98,5 +129,15 @@ public partial class HostSettingsForm : Form
     private void UpdateDatabaseInputState()
     {
         txtConnectionString.Enabled = chkEnableDatabase.Checked;
+    }
+
+    private void InitializeUiText()
+    {
+        Text = HostUiText.Window("Host 設定", "Host Settings");
+        lblTitle.Text = HostUiText.Bi("Host 設定", "Host Settings");
+        HostUiText.ApplyButton(btnSave, "儲存", "Save");
+        HostUiText.ApplyButton(btnCancel, "取消", "Cancel");
+        chkEnableDatabase.Text = HostUiText.Bi("啟用 MSSQL 以保存裝置與在線資料", "Enable MSSQL persistence for device and presence data");
+        chkRequireHttpsRedirect.Text = HostUiText.Bi("啟用", "Enabled");
     }
 }

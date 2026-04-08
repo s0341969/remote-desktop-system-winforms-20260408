@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Hosting;
@@ -38,6 +39,7 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
             DeviceId = _options.Value.DeviceId,
             DeviceName = _options.Value.DeviceName,
             SharedAccessKey = _options.Value.SharedAccessKey,
+            FileTransferDirectory = _options.Value.FileTransferDirectory,
             CaptureFramesPerSecond = _options.Value.CaptureFramesPerSecond,
             JpegQuality = _options.Value.JpegQuality,
             MaxFrameWidth = _options.Value.MaxFrameWidth,
@@ -57,6 +59,7 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
             document.DeviceId = agent["DeviceId"]?.GetValue<string>() ?? document.DeviceId;
             document.DeviceName = agent["DeviceName"]?.GetValue<string>() ?? document.DeviceName;
             document.SharedAccessKey = agent["SharedAccessKey"]?.GetValue<string>() ?? document.SharedAccessKey;
+            document.FileTransferDirectory = agent["FileTransferDirectory"]?.GetValue<string>() ?? document.FileTransferDirectory;
             document.CaptureFramesPerSecond = agent["CaptureFramesPerSecond"]?.GetValue<int?>() ?? document.CaptureFramesPerSecond;
             document.JpegQuality = agent["JpegQuality"]?.GetValue<long?>() ?? document.JpegQuality;
             document.MaxFrameWidth = agent["MaxFrameWidth"]?.GetValue<int?>() ?? document.MaxFrameWidth;
@@ -75,13 +78,14 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
         agent["DeviceId"] = document.DeviceId.Trim();
         agent["DeviceName"] = document.DeviceName.Trim();
         agent["SharedAccessKey"] = document.SharedAccessKey;
+        agent["FileTransferDirectory"] = document.FileTransferDirectory.Trim();
         agent["CaptureFramesPerSecond"] = document.CaptureFramesPerSecond;
         agent["JpegQuality"] = document.JpegQuality;
         agent["MaxFrameWidth"] = document.MaxFrameWidth;
         agent["ReconnectDelaySeconds"] = document.ReconnectDelaySeconds;
         root[AgentOptions.SectionName] = agent;
 
-        await File.WriteAllTextAsync(_settingsFilePath, root.ToJsonString(JsonOptions), cancellationToken);
+        await WriteJsonAtomicallyAsync(root.ToJsonString(JsonOptions), cancellationToken);
     }
 
     private async Task<JsonObject?> ReadRootAsync(CancellationToken cancellationToken)
@@ -91,8 +95,34 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
             return null;
         }
 
-        var json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
-        return JsonNode.Parse(json) as JsonObject;
+        try
+        {
+            var json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
+            return JsonNode.Parse(json) as JsonObject;
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException($"The settings file is invalid JSON: {_settingsFilePath}", exception);
+        }
+    }
+
+    private async Task WriteJsonAtomicallyAsync(string json, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsFilePath)!);
+
+        var tempFilePath = $"{_settingsFilePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllTextAsync(tempFilePath, json, Encoding.UTF8, cancellationToken);
+            File.Move(tempFilePath, _settingsFilePath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempFilePath))
+            {
+                File.Delete(tempFilePath);
+            }
+        }
     }
 
     private static void Validate(AgentSettingsDocument document)

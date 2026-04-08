@@ -22,6 +22,8 @@ public sealed class AgentOptions
     [MinLength(12)]
     public string SharedAccessKey { get; init; } = "ChangeMe-Agent-Key";
 
+    public string FileTransferDirectory { get; init; } = string.Empty;
+
     [Range(1, 24)]
     public int CaptureFramesPerSecond { get; init; } = 8;
 

@@ -15,4 +15,16 @@ public sealed class ViewerCommandMessage
     public string? Key { get; init; }
 
     public int DeltaY { get; init; }
+
+    public string? UploadId { get; init; }
+
+    public string? FileName { get; init; }
+
+    public long FileSize { get; init; }
+
+    public int SequenceNumber { get; init; }
+
+    public string? ChunkBase64 { get; init; }
+
+    public string? ClipboardText { get; init; }
 }

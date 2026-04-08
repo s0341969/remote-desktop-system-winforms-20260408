@@ -5,120 +5,256 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RemoteDesktop.Agent.Options;
+using RemoteDesktop.Agent.Services;
 using RemoteDesktop.Host.Hosting;
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
+using RemoteDesktop.Host.Services.Auditing;
 
-var port = GetFreeTcpPort();
-var serverUrl = $"http://127.0.0.1:{port}";
-var accessKey = "SmokeTest-Agent-Key-2026";
-var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseSetting("urls", serverUrl);
+await RunHostRelaySmokeTestAsync();
+await RunFileTransferSmokeTestAsync();
+await RunClipboardSmokeTestAsync();
+Console.WriteLine("SMOKE_TEST_PASSED");
 
-builder.Services.AddSingleton<IOptions<ControlServerOptions>>(Options.Create(new ControlServerOptions
+static async Task RunHostRelaySmokeTestAsync()
 {
-    ServerUrl = serverUrl,
-    ConsoleName = "Smoke Test Console",
-    AdminUserName = "admin",
-    AdminPassword = "ChangeMe!2026",
-    SharedAccessKey = accessKey,
-    AgentHeartbeatTimeoutSeconds = 45
-}));
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "SmokeTest-Agent-Key-2026";
+    var builder = WebApplication.CreateBuilder();
+    builder.WebHost.UseSetting("urls", serverUrl);
 
-builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
-builder.Services.AddRemoteDesktopHostCore();
-
-await using var app = builder.Build();
-app.MapRemoteDesktopHostEndpoints();
-await app.StartAsync();
-
-try
-{
-    var agentUri = new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri;
-    using var agentSocket = new ClientWebSocket();
-    await agentSocket.ConnectAsync(agentUri, CancellationToken.None);
-
-    var helloPayload = JsonSerializer.Serialize(new AgentHelloMessage
+    builder.Services.AddSingleton<IOptions<ControlServerOptions>>(Options.Create(new ControlServerOptions
     {
-        Type = "hello",
-        DeviceId = "smoke-device-001",
-        DeviceName = "Smoke Device",
-        HostName = Environment.MachineName,
-        AgentVersion = "smoke",
-        AccessKey = accessKey,
-        ScreenWidth = 1920,
-        ScreenHeight = 1080
-    });
+        ServerUrl = serverUrl,
+        ConsoleName = "Smoke Test Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 45
+    }));
 
-    await SendTextAsync(agentSocket, helloPayload, CancellationToken.None);
-    var ack = await ReadMessageAsync(agentSocket, CancellationToken.None);
-    var ackJson = Encoding.UTF8.GetString(ack.Payload);
-    if (!ackJson.Contains("\"hello-ack\"", StringComparison.Ordinal))
+    builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopHostCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopHostEndpoints();
+    await app.StartAsync();
+
+    try
     {
-        throw new InvalidOperationException("Host 未回覆 hello-ack。");
-    }
+        var agentUri = new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri;
+        using var agentSocket = new ClientWebSocket();
+        await agentSocket.ConnectAsync(agentUri, CancellationToken.None);
 
-    var broker = app.Services.GetRequiredService<DeviceBroker>();
-    var viewerFrameReceived = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var viewerAttached = await broker.AttachViewerAsync(
-        "smoke-device-001",
-        "smoke-viewer",
-        (payload, cancellationToken) =>
+        var helloPayload = JsonSerializer.Serialize(new RemoteDesktop.Host.Models.AgentHelloMessage
         {
-            viewerFrameReceived.TrySetResult(payload);
+            Type = "hello",
+            DeviceId = "smoke-device-001",
+            DeviceName = "Smoke Device",
+            HostName = Environment.MachineName,
+            AgentVersion = "smoke",
+            AccessKey = accessKey,
+            ScreenWidth = 1920,
+            ScreenHeight = 1080
+        });
+
+        await SendTextAsync(agentSocket, helloPayload, CancellationToken.None);
+        var ack = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        var ackJson = Encoding.UTF8.GetString(ack.Payload);
+        if (!ackJson.Contains("\"hello-ack\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Host did not acknowledge the agent hello message.");
+        }
+
+        var broker = app.Services.GetRequiredService<DeviceBroker>();
+        var authorizationUpdated = await broker.SetDeviceAuthorizationAsync("smoke-device-001", true, "smoke-admin", CancellationToken.None);
+        if (!authorizationUpdated)
+        {
+            throw new InvalidOperationException("Smoke device could not be approved for unattended access.");
+        }
+
+        var viewerFrameReceived = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var viewerAttached = await broker.AttachViewerAsync(
+            "smoke-device-001",
+            "smoke-viewer",
+            (payload, cancellationToken) =>
+            {
+                viewerFrameReceived.TrySetResult(payload);
+                return Task.CompletedTask;
+            },
+            null,
+            null,
+            CancellationToken.None);
+
+        if (!viewerAttached)
+        {
+            throw new InvalidOperationException("Viewer could not attach to the smoke agent.");
+        }
+
+        var sampleFrame = Encoding.UTF8.GetBytes("frame-payload");
+        await agentSocket.SendAsync(sampleFrame, WebSocketMessageType.Binary, true, CancellationToken.None);
+        var publishedFrame = await viewerFrameReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (!publishedFrame.SequenceEqual(sampleFrame))
+        {
+            throw new InvalidOperationException("Viewer did not receive the expected frame payload.");
+        }
+
+        var receiveCommandTask = ReadMessageAsync(agentSocket, CancellationToken.None);
+        await broker.ForwardViewerCommandAsync(
+            "smoke-device-001",
+            new RemoteDesktop.Host.Models.ViewerCommandMessage
+            {
+                Type = "move",
+                X = 0.25,
+                Y = 0.75
+            },
+            CancellationToken.None);
+
+        var commandMessage = await receiveCommandTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var commandJson = Encoding.UTF8.GetString(commandMessage.Payload);
+        if (!commandJson.Contains("\"type\":\"move\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Agent did not receive the expected viewer command.");
+        }
+
+        if (agentSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        {
+            try
+            {
+                await agentSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "smoke-test-complete", CancellationToken.None);
+            }
+            catch (WebSocketException)
+            {
+            }
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+    }
+}
+
+static async Task RunFileTransferSmokeTestAsync()
+{
+    var tempRoot = Path.Combine(Path.GetTempPath(), "RemoteDesktopSmoke", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(tempRoot);
+
+    try
+    {
+        var loggerFactory = LoggerFactory.Create(static builder => { });
+        var options = Options.Create(new AgentOptions
+        {
+            ServerUrl = "http://localhost:5106",
+            DeviceId = "smoke-agent",
+            DeviceName = "Smoke Agent",
+            SharedAccessKey = "SmokeTest-Agent-Key-2026",
+            FileTransferDirectory = tempRoot,
+            CaptureFramesPerSecond = 8,
+            JpegQuality = 55,
+            MaxFrameWidth = 1600,
+            ReconnectDelaySeconds = 5
+        });
+
+        var fileTransferService = new FileTransferService(options, loggerFactory.CreateLogger<FileTransferService>());
+        var statuses = new List<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage>();
+        Func<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync = (status, cancellationToken) =>
+        {
+            statuses.Add(status);
             return Task.CompletedTask;
-        },
-        CancellationToken.None);
+        };
 
-    if (!viewerAttached)
-    {
-        throw new InvalidOperationException("Viewer 無法附掛到 smoke agent。");
-    }
+        var content = Encoding.UTF8.GetBytes("smoke-file-transfer-payload");
+        var uploadId = Guid.NewGuid().ToString("N");
 
-    var sampleFrame = Encoding.UTF8.GetBytes("frame-payload");
-    await agentSocket.SendAsync(sampleFrame, WebSocketMessageType.Binary, true, CancellationToken.None);
-    var publishedFrame = await viewerFrameReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
-    if (!publishedFrame.SequenceEqual(sampleFrame))
-    {
-        throw new InvalidOperationException("Viewer 收到的畫面內容與 Agent 傳送內容不一致。");
-    }
-
-    var receiveCommandTask = ReadMessageAsync(agentSocket, CancellationToken.None);
-    await broker.ForwardViewerCommandAsync(
-        "smoke-device-001",
-        new ViewerCommandMessage
+        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
         {
-            Type = "move",
-            X = 0.25,
-            Y = 0.75
-        },
-        CancellationToken.None);
+            Type = "file-upload-start",
+            UploadId = uploadId,
+            FileName = "smoke.txt",
+            FileSize = content.Length
+        }, publishStatusAsync, CancellationToken.None);
 
-    var commandMessage = await receiveCommandTask.WaitAsync(TimeSpan.FromSeconds(5));
-    var commandJson = Encoding.UTF8.GetString(commandMessage.Payload);
-    if (!commandJson.Contains("\"type\":\"move\"", StringComparison.Ordinal))
-    {
-        throw new InvalidOperationException("Agent 未收到 viewer command。");
+        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+        {
+            Type = "file-upload-chunk",
+            UploadId = uploadId,
+            FileName = "smoke.txt",
+            FileSize = content.Length,
+            SequenceNumber = 0,
+            ChunkBase64 = Convert.ToBase64String(content)
+        }, publishStatusAsync, CancellationToken.None);
+
+        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+        {
+            Type = "file-upload-complete",
+            UploadId = uploadId,
+            FileName = "smoke.txt",
+            FileSize = content.Length
+        }, publishStatusAsync, CancellationToken.None);
+
+        var completed = statuses.LastOrDefault(static item => string.Equals(item.Status, "completed", StringComparison.Ordinal));
+        if (completed is null)
+        {
+            throw new InvalidOperationException("File transfer service did not emit a completion status.");
+        }
+
+        var storedPath = Path.Combine(tempRoot, completed.StoredFileName);
+        if (!File.Exists(storedPath))
+        {
+            throw new InvalidOperationException("File transfer service did not create the expected output file.");
+        }
+
+        var savedBytes = await File.ReadAllBytesAsync(storedPath);
+        if (!savedBytes.SequenceEqual(content))
+        {
+            throw new InvalidOperationException("File transfer service saved unexpected file contents.");
+        }
     }
-
-    if (agentSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+    finally
     {
         try
         {
-            await agentSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "smoke-test-complete", CancellationToken.None);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
         }
-        catch (WebSocketException)
+        catch
         {
         }
     }
-
-    Console.WriteLine("SMOKE_TEST_PASSED");
 }
-finally
+
+static async Task RunClipboardSmokeTestAsync()
 {
-    await app.StopAsync();
+    using var service = new ClipboardSyncService();
+    var originalText = await service.GetTextAsync(CancellationToken.None);
+
+    try
+    {
+        await service.SetTextAsync("smoke-clipboard-text", CancellationToken.None);
+        var actual = await service.GetTextAsync(CancellationToken.None);
+        if (!string.Equals(actual, "smoke-clipboard-text", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Clipboard sync service did not return the expected text.");
+        }
+
+        await service.SetTextAsync(string.Empty, CancellationToken.None);
+        var cleared = await service.GetTextAsync(CancellationToken.None);
+        if (!string.IsNullOrEmpty(cleared))
+        {
+            throw new InvalidOperationException("Clipboard sync service did not clear clipboard text.");
+        }
+    }
+    finally
+    {
+        await service.SetTextAsync(originalText, CancellationToken.None);
+    }
 }
 
 static async Task SendTextAsync(ClientWebSocket socket, string payload, CancellationToken cancellationToken)
@@ -190,6 +326,9 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                 ScreenWidth = descriptor.ScreenWidth,
                 ScreenHeight = descriptor.ScreenHeight,
                 IsOnline = true,
+                IsAuthorized = existing?.IsAuthorized ?? false,
+                AuthorizedAt = existing?.AuthorizedAt,
+                AuthorizedBy = existing?.AuthorizedBy,
                 CreatedAt = createdAt,
                 LastSeenAt = now,
                 LastConnectedAt = now,
@@ -238,6 +377,9 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                     ScreenWidth = screenWidth,
                     ScreenHeight = screenHeight,
                     IsOnline = true,
+                    IsAuthorized = device.IsAuthorized,
+                    AuthorizedAt = device.AuthorizedAt,
+                    AuthorizedBy = device.AuthorizedBy,
                     CreatedAt = device.CreatedAt,
                     LastSeenAt = now,
                     LastConnectedAt = device.LastConnectedAt,
@@ -282,6 +424,9 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                     ScreenWidth = device.ScreenWidth,
                     ScreenHeight = device.ScreenHeight,
                     IsOnline = false,
+                    IsAuthorized = device.IsAuthorized,
+                    AuthorizedAt = device.AuthorizedAt,
+                    AuthorizedBy = device.AuthorizedBy,
                     CreatedAt = device.CreatedAt,
                     LastSeenAt = now,
                     LastConnectedAt = device.LastConnectedAt,
@@ -305,6 +450,37 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                     OnlineSeconds = (long)Math.Max(0, (now - log.ConnectedAt).TotalSeconds)
                 };
             }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_devices.TryGetValue(deviceId, out var device))
+            {
+                return Task.CompletedTask;
+            }
+
+            _devices[deviceId] = new DeviceRecord
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.DeviceName,
+                HostName = device.HostName,
+                AgentVersion = device.AgentVersion,
+                ScreenWidth = device.ScreenWidth,
+                ScreenHeight = device.ScreenHeight,
+                IsOnline = device.IsOnline,
+                IsAuthorized = isAuthorized,
+                AuthorizedAt = isAuthorized ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
+                AuthorizedBy = isAuthorized ? changedByUserName : null,
+                CreatedAt = device.CreatedAt,
+                LastSeenAt = device.LastSeenAt,
+                LastConnectedAt = device.LastConnectedAt,
+                LastDisconnectedAt = device.LastDisconnectedAt
+            };
         }
 
         return Task.CompletedTask;
@@ -342,5 +518,15 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                 .ToList();
             return Task.FromResult(result);
         }
+    }
+}
+
+internal sealed class InMemoryAuditLogStore : IAuditLogStore
+{
+    public Task AppendAsync(AuditLogEntry entry, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<AuditLogEntry>> GetRecentAsync(int take, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }

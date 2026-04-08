@@ -14,6 +14,8 @@ public interface IDeviceRepository
 
     Task ClosePresenceAsync(Guid presenceId, string deviceId, string reason, CancellationToken cancellationToken);
 
+    Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken);
 
     Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken);

@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.Data;
 using RemoteDesktop.Host.Models;
 
 namespace RemoteDesktop.Host.Services;
@@ -12,7 +13,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
     public SqlDeviceRepository(IConfiguration configuration, IHostEnvironment environment, ILogger<SqlDeviceRepository> logger)
     {
         _connectionString = configuration.GetConnectionString("RemoteDesktopDb")
-            ?? throw new InvalidOperationException("找不到 ConnectionStrings:RemoteDesktopDb。");
+            ?? throw new InvalidOperationException("Missing required connection string: ConnectionStrings:RemoteDesktopDb.");
         _environment = environment;
         _logger = logger;
     }
@@ -20,13 +21,18 @@ public sealed class SqlDeviceRepository : IDeviceRepository
     public async Task InitializeSchemaAsync(CancellationToken cancellationToken)
     {
         var scriptPath = Path.Combine(_environment.ContentRootPath, "DatabaseScripts", "001_create_remote_desktop_schema.sql");
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException($"Schema script was not found: {scriptPath}", scriptPath);
+        }
+
         var script = await File.ReadAllTextAsync(scriptPath, cancellationToken);
 
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(script, connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
-        _logger.LogInformation("MSSQL schema 初始化完成。");
+        _logger.LogInformation("MSSQL schema initialized.");
     }
 
     public async Task UpsertDeviceOnlineAsync(AgentDescriptor descriptor, CancellationToken cancellationToken)
@@ -66,6 +72,9 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     ScreenWidth,
                     ScreenHeight,
                     IsOnline,
+                    IsAuthorized,
+                    AuthorizedAt,
+                    AuthorizedBy,
                     CreatedAt,
                     UpdatedAt,
                     LastSeenAt,
@@ -80,6 +89,9 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     source.ScreenWidth,
                     source.ScreenHeight,
                     1,
+                    0,
+                    NULL,
+                    NULL,
                     source.CurrentTime,
                     source.CurrentTime,
                     source.CurrentTime,
@@ -90,13 +102,13 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await ExecuteAsync(sql, command =>
         {
             var now = DateTimeOffset.UtcNow;
-            command.Parameters.AddWithValue("@deviceId", descriptor.DeviceId);
-            command.Parameters.AddWithValue("@deviceName", descriptor.DeviceName);
-            command.Parameters.AddWithValue("@hostName", descriptor.HostName);
-            command.Parameters.AddWithValue("@agentVersion", descriptor.AgentVersion);
-            command.Parameters.AddWithValue("@screenWidth", descriptor.ScreenWidth);
-            command.Parameters.AddWithValue("@screenHeight", descriptor.ScreenHeight);
-            command.Parameters.AddWithValue("@now", now);
+            AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
+            AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
+            AddStringParameter(command, "@hostName", descriptor.HostName, 256);
+            AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
+            command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = descriptor.ScreenWidth;
+            command.Parameters.Add("@screenHeight", SqlDbType.Int).Value = descriptor.ScreenHeight;
+            command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
         }, cancellationToken);
     }
 
@@ -134,13 +146,13 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
         await ExecuteAsync(sql, command =>
         {
-            command.Parameters.AddWithValue("@presenceId", presenceId);
-            command.Parameters.AddWithValue("@deviceId", descriptor.DeviceId);
-            command.Parameters.AddWithValue("@deviceName", descriptor.DeviceName);
-            command.Parameters.AddWithValue("@hostName", descriptor.HostName);
-            command.Parameters.AddWithValue("@agentVersion", descriptor.AgentVersion);
-            command.Parameters.AddWithValue("@connectedAt", now);
-            command.Parameters.AddWithValue("@lastSeenAt", now);
+            command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+            AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
+            AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
+            AddStringParameter(command, "@hostName", descriptor.HostName, 256);
+            AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
+            command.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = now;
+            command.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
         }, cancellationToken);
 
         return presenceId;
@@ -166,11 +178,11 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         return ExecuteAsync(sql, command =>
         {
             var now = DateTimeOffset.UtcNow;
-            command.Parameters.AddWithValue("@presenceId", presenceId);
-            command.Parameters.AddWithValue("@deviceId", deviceId);
-            command.Parameters.AddWithValue("@screenWidth", screenWidth);
-            command.Parameters.AddWithValue("@screenHeight", screenHeight);
-            command.Parameters.AddWithValue("@now", now);
+            command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+            AddStringParameter(command, "@deviceId", deviceId, 128);
+            command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = screenWidth;
+            command.Parameters.Add("@screenHeight", SqlDbType.Int).Value = screenHeight;
+            command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
         }, cancellationToken);
     }
 
@@ -195,10 +207,32 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         return ExecuteAsync(sql, command =>
         {
             var now = DateTimeOffset.UtcNow;
-            command.Parameters.AddWithValue("@presenceId", presenceId);
-            command.Parameters.AddWithValue("@deviceId", deviceId);
-            command.Parameters.AddWithValue("@reason", reason);
-            command.Parameters.AddWithValue("@now", now);
+            command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+            AddStringParameter(command, "@deviceId", deviceId, 128);
+            AddStringParameter(command, "@reason", reason, 128);
+            command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
+        }, cancellationToken);
+    }
+
+    public Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.RemoteDesktopDevices
+            SET
+                IsAuthorized = @isAuthorized,
+                AuthorizedAt = CASE WHEN @isAuthorized = 1 THEN @changedAt ELSE NULL END,
+                AuthorizedBy = CASE WHEN @isAuthorized = 1 THEN @changedBy ELSE NULL END,
+                UpdatedAt = @changedAt
+            WHERE DeviceId = @deviceId;
+            """;
+
+        return ExecuteAsync(sql, command =>
+        {
+            var changedAt = DateTimeOffset.UtcNow;
+            AddStringParameter(command, "@deviceId", deviceId, 128);
+            command.Parameters.Add("@isAuthorized", SqlDbType.Bit).Value = isAuthorized;
+            command.Parameters.Add("@changedAt", SqlDbType.DateTimeOffset).Value = changedAt;
+            AddStringParameter(command, "@changedBy", changedByUserName, 128);
         }, cancellationToken);
     }
 
@@ -213,6 +247,9 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 ScreenWidth,
                 ScreenHeight,
                 IsOnline,
+                IsAuthorized,
+                AuthorizedAt,
+                AuthorizedBy,
                 CreatedAt,
                 LastSeenAt,
                 LastConnectedAt,
@@ -225,7 +262,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@take", take);
+        command.Parameters.Add("@take", SqlDbType.Int).Value = take;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -247,6 +284,9 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 ScreenWidth,
                 ScreenHeight,
                 IsOnline,
+                IsAuthorized,
+                AuthorizedAt,
+                AuthorizedBy,
                 CreatedAt,
                 LastSeenAt,
                 LastConnectedAt,
@@ -258,7 +298,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@deviceId", deviceId);
+        AddStringParameter(command, "@deviceId", deviceId, 128);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? ReadDevice(reader) : null;
@@ -286,7 +326,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@take", take);
+        command.Parameters.Add("@take", SqlDbType.Int).Value = take;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -318,6 +358,11 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static void AddStringParameter(SqlCommand command, string name, string? value, int length)
+    {
+        command.Parameters.Add(name, SqlDbType.NVarChar, length).Value = value ?? string.Empty;
+    }
+
     private static DeviceRecord ReadDevice(SqlDataReader reader)
     {
         return new DeviceRecord
@@ -329,10 +374,13 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             ScreenWidth = reader.GetInt32(4),
             ScreenHeight = reader.GetInt32(5),
             IsOnline = reader.GetBoolean(6),
-            CreatedAt = reader.GetFieldValue<DateTimeOffset>(7),
-            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(8),
-            LastConnectedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
-            LastDisconnectedAt = reader.IsDBNull(10) ? null : reader.GetFieldValue<DateTimeOffset>(10)
+            IsAuthorized = reader.GetBoolean(7),
+            AuthorizedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+            AuthorizedBy = reader.IsDBNull(9) ? null : reader.GetString(9),
+            CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
+            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(11),
+            LastConnectedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+            LastDisconnectedAt = reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13)
         };
     }
 }

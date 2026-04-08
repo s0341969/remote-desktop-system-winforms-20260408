@@ -12,10 +12,10 @@ public sealed class RemoteViewerFormFactory
         _deviceBroker = deviceBroker;
     }
 
-    public RemoteViewerForm Create(DeviceRecord device, string viewerName)
+    public RemoteViewerForm Create(DeviceRecord device, AuthenticatedUserSession viewer)
     {
         var form = new RemoteViewerForm();
-        form.Bind(device, viewerName, _deviceBroker);
+        form.Bind(device, viewer, _deviceBroker);
         return form;
     }
 }

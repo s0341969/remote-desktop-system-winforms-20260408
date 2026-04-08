@@ -16,7 +16,9 @@ public sealed class RemoteAgentService : BackgroundService
     private readonly AgentOptions _options;
     private readonly AgentRuntimeState _runtimeState;
     private readonly DesktopCaptureService _captureService;
+    private readonly ClipboardSyncService _clipboardSyncService;
     private readonly InputInjectionService _inputInjectionService;
+    private readonly FileTransferService _fileTransferService;
     private readonly ILogger<RemoteAgentService> _logger;
     private volatile int _lastScreenWidth;
     private volatile int _lastScreenHeight;
@@ -25,13 +27,17 @@ public sealed class RemoteAgentService : BackgroundService
         IOptions<AgentOptions> options,
         AgentRuntimeState runtimeState,
         DesktopCaptureService captureService,
+        ClipboardSyncService clipboardSyncService,
         InputInjectionService inputInjectionService,
+        FileTransferService fileTransferService,
         ILogger<RemoteAgentService> logger)
     {
         _options = options.Value;
         _runtimeState = runtimeState;
         _captureService = captureService;
+        _clipboardSyncService = clipboardSyncService;
         _inputInjectionService = inputInjectionService;
+        _fileTransferService = fileTransferService;
         _logger = logger;
     }
 
@@ -50,10 +56,10 @@ public sealed class RemoteAgentService : BackgroundService
             catch (Exception exception)
             {
                 _runtimeState.MarkError(exception);
-                _logger.LogError(exception, "Agent 執行迴圈發生錯誤，稍後將重新連線。");
+                _logger.LogError(exception, "Agent loop failed unexpectedly.");
             }
 
-            _runtimeState.MarkDisconnected($"等待 {_options.ReconnectDelaySeconds} 秒後重連。");
+            _runtimeState.MarkDisconnected(AgentUiText.Bi($"將於 {_options.ReconnectDelaySeconds} 秒後重新連線。", $"Reconnecting in {_options.ReconnectDelaySeconds} seconds."));
             await Task.Delay(TimeSpan.FromSeconds(_options.ReconnectDelaySeconds), stoppingToken);
         }
     }
@@ -66,15 +72,15 @@ public sealed class RemoteAgentService : BackgroundService
         _runtimeState.MarkConnecting(serverUri);
         await socket.ConnectAsync(serverUri, cancellationToken);
         _runtimeState.MarkConnected();
-        _logger.LogInformation("已連線到 Control Server: {ServerUri}", serverUri);
+        _logger.LogInformation("Connected to Control Server: {ServerUri}", serverUri);
 
-        var initialFrame = _captureService.Capture();
-        _lastScreenWidth = initialFrame.Width;
-        _lastScreenHeight = initialFrame.Height;
-        await SendTextAsync(socket, sendLock, CreateHelloPayload(initialFrame), cancellationToken);
+        var screenSize = _captureService.GetVirtualScreenSize();
+        _lastScreenWidth = screenSize.Width;
+        _lastScreenHeight = screenSize.Height;
+        await SendTextAsync(socket, sendLock, CreateHelloPayload(screenSize.Width, screenSize.Height), cancellationToken);
 
         using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var receiveTask = ReceiveLoopAsync(socket, loopCts.Token);
+        var receiveTask = ReceiveLoopAsync(socket, sendLock, loopCts.Token);
         var heartbeatTask = HeartbeatLoopAsync(socket, sendLock, loopCts.Token);
         var captureTask = CaptureLoopAsync(socket, sendLock, loopCts.Token);
         var completedTask = await Task.WhenAny(receiveTask, heartbeatTask, captureTask);
@@ -95,7 +101,7 @@ public sealed class RemoteAgentService : BackgroundService
         }
     }
 
-    private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken cancellationToken)
+    private async Task ReceiveLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
@@ -122,8 +128,125 @@ public sealed class RemoteAgentService : BackgroundService
                 continue;
             }
 
+            var handled = await _fileTransferService.TryHandleAsync(
+                command,
+                async (status, token) =>
+                {
+                    var payload = JsonSerializer.Serialize(status, JsonOptions);
+                    await SendTextAsync(socket, sendLock, payload, token);
+                },
+                cancellationToken);
+
+            if (handled)
+            {
+                continue;
+            }
+
+            if (await TryHandleClipboardAsync(command, socket, sendLock, cancellationToken))
+            {
+                continue;
+            }
+
             _inputInjectionService.Apply(command);
         }
+    }
+
+    private async Task<bool> TryHandleClipboardAsync(
+        ViewerCommandMessage command,
+        ClientWebSocket socket,
+        SemaphoreSlim sendLock,
+        CancellationToken cancellationToken)
+    {
+        switch (command.Type)
+        {
+            case "clipboard-set":
+                await HandleClipboardSetAsync(command, socket, sendLock, cancellationToken);
+                return true;
+            case "clipboard-get":
+                await HandleClipboardGetAsync(socket, sendLock, cancellationToken);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private async Task HandleClipboardSetAsync(
+        ViewerCommandMessage command,
+        ClientWebSocket socket,
+        SemaphoreSlim sendLock,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var text = command.ClipboardText ?? string.Empty;
+            await _clipboardSyncService.SetTextAsync(text, cancellationToken);
+            await PublishClipboardMessageAsync(socket, sendLock, new AgentClipboardMessage
+            {
+                Operation = "set",
+                Status = "completed",
+                Text = string.Empty,
+                Truncated = false,
+                Message = AgentUiText.Bi("遠端剪貼簿已更新。", "Remote clipboard updated successfully.")
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await PublishClipboardMessageAsync(socket, sendLock, new AgentClipboardMessage
+            {
+                Operation = "set",
+                Status = "failed",
+                Text = string.Empty,
+                Truncated = false,
+                Message = AgentUiText.Bi($"遠端剪貼簿更新失敗：{exception.Message}", $"Remote clipboard update failed: {exception.Message}")
+            }, cancellationToken);
+        }
+    }
+
+    private async Task HandleClipboardGetAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
+    {
+        try
+        {
+            const int maxClipboardCharacters = 32_768;
+            var text = await _clipboardSyncService.GetTextAsync(cancellationToken);
+            var truncated = false;
+            if (text.Length > maxClipboardCharacters)
+            {
+                text = text[..maxClipboardCharacters];
+                truncated = true;
+            }
+
+            await PublishClipboardMessageAsync(socket, sendLock, new AgentClipboardMessage
+            {
+                Operation = "get",
+                Status = "completed",
+                Text = text,
+                Truncated = truncated,
+                Message = truncated
+                    ? AgentUiText.Bi("遠端剪貼簿已截斷到系統支援的最大長度。", "Remote clipboard was truncated to the maximum supported length.")
+                    : AgentUiText.Bi("遠端剪貼簿已成功讀取。", "Remote clipboard retrieved successfully.")
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await PublishClipboardMessageAsync(socket, sendLock, new AgentClipboardMessage
+            {
+                Operation = "get",
+                Status = "failed",
+                Text = string.Empty,
+                Truncated = false,
+                Message = AgentUiText.Bi($"讀取遠端剪貼簿失敗：{exception.Message}", $"Remote clipboard read failed: {exception.Message}")
+            }, cancellationToken);
+        }
+    }
+
+    private static Task PublishClipboardMessageAsync(
+        ClientWebSocket socket,
+        SemaphoreSlim sendLock,
+        AgentClipboardMessage message,
+        CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Serialize(message, JsonOptions);
+        return SendTextAsync(socket, sendLock, payload, cancellationToken);
     }
 
     private async Task HeartbeatLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
@@ -164,7 +287,7 @@ public sealed class RemoteAgentService : BackgroundService
         }
     }
 
-    private string CreateHelloPayload(DesktopFrame frame)
+    private string CreateHelloPayload(int screenWidth, int screenHeight)
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
         return JsonSerializer.Serialize(new AgentHelloMessage
@@ -174,8 +297,8 @@ public sealed class RemoteAgentService : BackgroundService
             HostName = Environment.MachineName,
             AgentVersion = version,
             AccessKey = _options.SharedAccessKey,
-            ScreenWidth = frame.Width,
-            ScreenHeight = frame.Height
+            ScreenWidth = screenWidth,
+            ScreenHeight = screenHeight
         }, JsonOptions);
     }
 

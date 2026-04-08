@@ -26,7 +26,9 @@ internal static class Program
 
         builder.Services.AddSingleton<AgentRuntimeState>();
         builder.Services.AddSingleton<DesktopCaptureService>();
+        builder.Services.AddSingleton<ClipboardSyncService>();
         builder.Services.AddSingleton<InputInjectionService>();
+        builder.Services.AddSingleton<FileTransferService>();
         builder.Services.AddSingleton<IAgentSettingsStore, AgentSettingsStore>();
         builder.Services.AddSingleton<AgentMainFormFactory>();
         builder.Services.AddSingleton<AgentSettingsFormFactory>();
@@ -45,8 +47,8 @@ internal static class Program
         catch (Exception exception)
         {
             MessageBox.Show(
-                $"Agent 啟動失敗：{exception.Message}",
-                "RemoteDesktop.Agent",
+                AgentUiText.Bi($"Agent 啟動失敗：{exception.Message}", $"Agent startup failed: {exception.Message}"),
+                AgentUiText.Window("啟動錯誤", "Startup Error"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }

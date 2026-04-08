@@ -16,6 +16,7 @@ public partial class AgentSettingsForm : Form
     {
         _showResultDialogs = showResultDialogs;
         InitializeComponent();
+        InitializeUiText();
     }
 
     public void Bind(IAgentSettingsStore settingsStore, AgentSettingsDocument document, bool showResultDialogs = true)
@@ -26,24 +27,25 @@ public partial class AgentSettingsForm : Form
         txtDeviceId.Text = document.DeviceId;
         txtDeviceName.Text = document.DeviceName;
         txtSharedAccessKey.Text = document.SharedAccessKey;
+        txtFileTransferDirectory.Text = document.FileTransferDirectory;
         numCaptureFps.Value = Math.Clamp(document.CaptureFramesPerSecond, (int)numCaptureFps.Minimum, (int)numCaptureFps.Maximum);
         numJpegQuality.Value = Math.Clamp((decimal)document.JpegQuality, numJpegQuality.Minimum, numJpegQuality.Maximum);
         numMaxFrameWidth.Value = Math.Clamp(document.MaxFrameWidth, (int)numMaxFrameWidth.Minimum, (int)numMaxFrameWidth.Maximum);
         numReconnectDelay.Value = Math.Clamp(document.ReconnectDelaySeconds, (int)numReconnectDelay.Minimum, (int)numReconnectDelay.Maximum);
-        lblStatus.Text = "修改後按儲存，重新啟動 Agent 後生效。";
+        lblStatus.Text = AgentUiText.Bi("編輯設定並儲存後會更新 appsettings.json；儲存後需要重新啟動。", "Edit settings and save to update appsettings.json. A restart is required after saving.");
     }
 
     private async void btnSave_Click(object sender, EventArgs e)
     {
         if (_settingsStore is null)
         {
-            lblStatus.Text = "設定服務尚未初始化。";
+            lblStatus.Text = AgentUiText.Bi("設定儲存服務尚未初始化。", "Settings store is not initialized.");
             return;
         }
 
         btnSave.Enabled = false;
         btnCancel.Enabled = false;
-        lblStatus.Text = "儲存中...";
+        lblStatus.Text = AgentUiText.Bi("正在儲存設定...", "Saving settings...");
 
         try
         {
@@ -53,6 +55,7 @@ public partial class AgentSettingsForm : Form
                 DeviceId = txtDeviceId.Text.Trim(),
                 DeviceName = txtDeviceName.Text.Trim(),
                 SharedAccessKey = txtSharedAccessKey.Text,
+                FileTransferDirectory = txtFileTransferDirectory.Text.Trim(),
                 CaptureFramesPerSecond = (int)numCaptureFps.Value,
                 JpegQuality = (long)numJpegQuality.Value,
                 MaxFrameWidth = (int)numMaxFrameWidth.Value,
@@ -60,10 +63,10 @@ public partial class AgentSettingsForm : Form
             };
 
             await _settingsStore.SaveAsync(document, CancellationToken.None);
-            lblStatus.Text = "已儲存，重新啟動 Agent 後生效。";
+            lblStatus.Text = AgentUiText.Bi("設定已儲存，請重新啟動 Agent 套用新設定。", "Settings saved successfully. Restart Agent to apply the new configuration.");
             if (_showResultDialogs)
             {
-                MessageBox.Show("Agent 設定已儲存，重新啟動後生效。", "RemoteDesktop.Agent", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(AgentUiText.Bi("Agent 設定已儲存，請重新啟動 Agent 套用新設定。", "Agent settings were saved successfully. Restart Agent to apply the new configuration."), AgentUiText.Window("Agent 設定", "Agent Settings"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
             if (Modal)
@@ -74,10 +77,10 @@ public partial class AgentSettingsForm : Form
         }
         catch (Exception exception)
         {
-            lblStatus.Text = $"儲存失敗：{exception.Message}";
+            lblStatus.Text = AgentUiText.Bi($"儲存失敗：{exception.Message}", $"Save failed: {exception.Message}");
             if (_showResultDialogs)
             {
-                MessageBox.Show($"儲存 Agent 設定失敗：{exception.Message}", "RemoteDesktop.Agent", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(AgentUiText.Bi($"Agent 設定儲存失敗：{exception.Message}", $"Failed to save Agent settings: {exception.Message}"), AgentUiText.Window("Agent 設定", "Agent Settings"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         finally
@@ -85,5 +88,13 @@ public partial class AgentSettingsForm : Form
             btnSave.Enabled = true;
             btnCancel.Enabled = true;
         }
+    }
+
+    private void InitializeUiText()
+    {
+        Text = AgentUiText.Window("Agent 設定", "Agent Settings");
+        lblTitle.Text = AgentUiText.Bi("Agent 設定", "Agent Settings");
+        AgentUiText.ApplyButton(btnSave, "儲存", "Save");
+        AgentUiText.ApplyButton(btnCancel, "取消", "Cancel");
     }
 }

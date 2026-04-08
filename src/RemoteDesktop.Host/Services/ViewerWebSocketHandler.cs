@@ -44,6 +44,8 @@ public sealed class ViewerWebSocketHandler
             {
                 await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
             },
+            null,
+            null,
             context.RequestAborted);
 
         if (!attached)

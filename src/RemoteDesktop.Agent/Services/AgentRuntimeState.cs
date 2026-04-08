@@ -13,7 +13,7 @@ public sealed class AgentRuntimeState
     public AgentRuntimeState(IOptions<AgentOptions> options)
     {
         _options = options.Value;
-        CurrentStatus = "待命";
+        CurrentStatus = AgentUiText.Bi("閒置", "Idle");
         ServerUrl = _options.ServerUrl;
         DeviceId = _options.DeviceId;
         DeviceName = _options.DeviceName;
@@ -53,8 +53,8 @@ public sealed class AgentRuntimeState
     {
         lock (_sync)
         {
-            CurrentStatus = "啟動中";
-            Enqueue("Agent 啟動中。");
+            CurrentStatus = AgentUiText.Bi("啟動中", "Starting");
+            Enqueue(AgentUiText.Bi("Agent 正在啟動。", "Agent is starting."));
         }
     }
 
@@ -62,8 +62,8 @@ public sealed class AgentRuntimeState
     {
         lock (_sync)
         {
-            CurrentStatus = "連線中";
-            Enqueue($"連線至 {serverUri}");
+            CurrentStatus = AgentUiText.Bi("連線中", "Connecting");
+            Enqueue(AgentUiText.Bi($"正在連線到 {serverUri}", $"Connecting to {serverUri}"));
         }
     }
 
@@ -71,10 +71,10 @@ public sealed class AgentRuntimeState
     {
         lock (_sync)
         {
-            CurrentStatus = "已連線";
+            CurrentStatus = AgentUiText.Bi("已連線", "Connected");
             LastConnectedAt = DateTimeOffset.Now;
             LastError = null;
-            Enqueue("已成功連線到控制端。");
+            Enqueue(AgentUiText.Bi("已連線到控制伺服器。", "Connected to Control Server."));
         }
     }
 
@@ -90,8 +90,8 @@ public sealed class AgentRuntimeState
     {
         lock (_sync)
         {
-            CurrentStatus = "已中斷";
-            Enqueue($"連線中斷：{reason}");
+            CurrentStatus = AgentUiText.Bi("已中斷", "Disconnected");
+            Enqueue(AgentUiText.Bi($"連線已中斷：{reason}", $"Disconnected: {reason}"));
         }
     }
 
@@ -99,9 +99,9 @@ public sealed class AgentRuntimeState
     {
         lock (_sync)
         {
-            CurrentStatus = "錯誤";
-            LastError = exception.Message;
-            Enqueue($"錯誤：{exception.Message}");
+            CurrentStatus = AgentUiText.Bi("錯誤", "Error");
+            LastError = AgentUiText.Bi($"發生錯誤：{exception.Message}", $"Error: {exception.Message}");
+            Enqueue(LastError);
         }
     }
 

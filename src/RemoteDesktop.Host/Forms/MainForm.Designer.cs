@@ -7,9 +7,13 @@ partial class MainForm
     private TableLayoutPanel layoutRoot;
     private Panel panelHeader;
     private Label lblTitle;
-    private Button btnRefresh;
-    private Button btnOpenViewer;
+    private Button btnAudit;
+    private Button btnUsers;
     private Button btnSettings;
+    private Button btnRevokeDevice;
+    private Button btnApproveDevice;
+    private Button btnOpenViewer;
+    private Button btnRefresh;
     private TableLayoutPanel layoutSummary;
     private Label lblConsoleNameCaption;
     private Label lblConsoleNameValue;
@@ -48,7 +52,11 @@ partial class MainForm
     {
         layoutRoot = new TableLayoutPanel();
         panelHeader = new Panel();
+        btnAudit = new Button();
+        btnUsers = new Button();
         btnSettings = new Button();
+        btnRevokeDevice = new Button();
+        btnApproveDevice = new Button();
         btnOpenViewer = new Button();
         btnRefresh = new Button();
         lblTitle = new Label();
@@ -86,6 +94,7 @@ partial class MainForm
         ((System.ComponentModel.ISupportInitialize)gridLogs).BeginInit();
         panelStatus.SuspendLayout();
         SuspendLayout();
+        // layoutRoot
         layoutRoot.ColumnCount = 1;
         layoutRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         layoutRoot.Controls.Add(panelHeader, 0, 0);
@@ -96,50 +105,97 @@ partial class MainForm
         layoutRoot.Location = new Point(0, 0);
         layoutRoot.Name = "layoutRoot";
         layoutRoot.RowCount = 4;
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 168F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
         layoutRoot.Size = new Size(1384, 861);
+        // panelHeader
+        panelHeader.Controls.Add(btnAudit);
+        panelHeader.Controls.Add(btnUsers);
         panelHeader.Controls.Add(btnSettings);
+        panelHeader.Controls.Add(btnRevokeDevice);
+        panelHeader.Controls.Add(btnApproveDevice);
         panelHeader.Controls.Add(btnOpenViewer);
         panelHeader.Controls.Add(btnRefresh);
         panelHeader.Controls.Add(lblTitle);
         panelHeader.Dock = DockStyle.Fill;
         panelHeader.Location = new Point(3, 3);
         panelHeader.Name = "panelHeader";
-        panelHeader.Size = new Size(1378, 66);
+        panelHeader.Size = new Size(1378, 86);
+        // btnAudit
+        btnAudit.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnAudit.Location = new Point(651, 18);
+        btnAudit.Name = "btnAudit";
+        btnAudit.Size = new Size(96, 46);
+        btnAudit.TabIndex = 0;
+        btnAudit.Text = "Audit";
+        btnAudit.UseVisualStyleBackColor = true;
+        btnAudit.Click += btnAudit_Click;
+        // btnUsers
+        btnUsers.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnUsers.Location = new Point(753, 18);
+        btnUsers.Name = "btnUsers";
+        btnUsers.Size = new Size(96, 46);
+        btnUsers.TabIndex = 1;
+        btnUsers.Text = "Users";
+        btnUsers.UseVisualStyleBackColor = true;
+        btnUsers.Click += btnUsers_Click;
+        // btnSettings
         btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSettings.Location = new Point(1045, 18);
+        btnSettings.Location = new Point(855, 18);
         btnSettings.Name = "btnSettings";
-        btnSettings.Size = new Size(100, 34);
-        btnSettings.TabIndex = 0;
-        btnSettings.Text = "設定";
+        btnSettings.Size = new Size(96, 46);
+        btnSettings.TabIndex = 2;
+        btnSettings.Text = "Settings";
         btnSettings.UseVisualStyleBackColor = true;
         btnSettings.Click += btnSettings_Click;
+        // btnRevokeDevice
+        btnRevokeDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnRevokeDevice.Location = new Point(951, 18);
+        btnRevokeDevice.Name = "btnRevokeDevice";
+        btnRevokeDevice.Size = new Size(96, 46);
+        btnRevokeDevice.TabIndex = 3;
+        btnRevokeDevice.Text = "Revoke";
+        btnRevokeDevice.UseVisualStyleBackColor = true;
+        btnRevokeDevice.Click += btnRevokeDevice_Click;
+        // btnApproveDevice
+        btnApproveDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnApproveDevice.Location = new Point(1047, 18);
+        btnApproveDevice.Name = "btnApproveDevice";
+        btnApproveDevice.Size = new Size(96, 46);
+        btnApproveDevice.TabIndex = 4;
+        btnApproveDevice.Text = "Approve";
+        btnApproveDevice.UseVisualStyleBackColor = true;
+        btnApproveDevice.Click += btnApproveDevice_Click;
+        // btnOpenViewer
         btnOpenViewer.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnOpenViewer.Enabled = false;
-        btnOpenViewer.Location = new Point(1151, 18);
+        btnOpenViewer.Location = new Point(1143, 18);
         btnOpenViewer.Name = "btnOpenViewer";
-        btnOpenViewer.Size = new Size(108, 34);
-        btnOpenViewer.TabIndex = 1;
-        btnOpenViewer.Text = "開啟遠端畫面";
+        btnOpenViewer.Size = new Size(110, 46);
+        btnOpenViewer.TabIndex = 5;
+        btnOpenViewer.Text = "Open Viewer";
         btnOpenViewer.UseVisualStyleBackColor = true;
         btnOpenViewer.Click += btnOpenViewer_Click;
+        // btnRefresh
         btnRefresh.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnRefresh.Location = new Point(1265, 18);
+        btnRefresh.Location = new Point(1259, 18);
         btnRefresh.Name = "btnRefresh";
-        btnRefresh.Size = new Size(98, 34);
-        btnRefresh.TabIndex = 2;
-        btnRefresh.Text = "重新整理";
+        btnRefresh.Size = new Size(104, 46);
+        btnRefresh.TabIndex = 6;
+        btnRefresh.Text = "Refresh";
         btnRefresh.UseVisualStyleBackColor = true;
         btnRefresh.Click += btnRefresh_Click;
+        // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 18F, FontStyle.Bold, GraphicsUnit.Point);
         lblTitle.Location = new Point(16, 18);
         lblTitle.Name = "lblTitle";
-        lblTitle.Size = new Size(326, 30);
-        lblTitle.Text = "RemoteDesktop Windows 主控台";
+        lblTitle.Size = new Size(362, 60);
+        lblTitle.TabIndex = 7;
+        lblTitle.Text = "RemoteDesktop Windows Console";
+        // layoutSummary
         layoutSummary.ColumnCount = 4;
         layoutSummary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16F));
         layoutSummary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34F));
@@ -160,133 +216,198 @@ partial class MainForm
         layoutSummary.Controls.Add(lblLastRefreshCaption, 0, 3);
         layoutSummary.Controls.Add(lblLastRefreshValue, 1, 3);
         layoutSummary.Dock = DockStyle.Fill;
-        layoutSummary.Location = new Point(3, 75);
+        layoutSummary.Location = new Point(3, 95);
         layoutSummary.Name = "layoutSummary";
         layoutSummary.RowCount = 4;
-        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        layoutSummary.Size = new Size(1378, 104);
+        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        layoutSummary.Size = new Size(1378, 160);
+        // lblConsoleNameCaption
         lblConsoleNameCaption.AutoSize = true;
         lblConsoleNameCaption.Name = "lblConsoleNameCaption";
-        lblConsoleNameCaption.Text = "主控台名稱";
+        lblConsoleNameCaption.Size = new Size(48, 15);
+        lblConsoleNameCaption.TabIndex = 0;
+        lblConsoleNameCaption.Text = "Console";
+        // lblConsoleNameValue
         lblConsoleNameValue.AutoSize = true;
         lblConsoleNameValue.Name = "lblConsoleNameValue";
+        lblConsoleNameValue.Size = new Size(12, 15);
+        lblConsoleNameValue.TabIndex = 1;
         lblConsoleNameValue.Text = "-";
+        // lblServerUrlCaption
         lblServerUrlCaption.AutoSize = true;
         lblServerUrlCaption.Name = "lblServerUrlCaption";
-        lblServerUrlCaption.Text = "Agent 端點";
+        lblServerUrlCaption.Size = new Size(59, 15);
+        lblServerUrlCaption.TabIndex = 2;
+        lblServerUrlCaption.Text = "Agent URL";
+        // lblServerUrlValue
         lblServerUrlValue.AutoSize = true;
         lblServerUrlValue.Name = "lblServerUrlValue";
+        lblServerUrlValue.Size = new Size(12, 15);
+        lblServerUrlValue.TabIndex = 3;
         lblServerUrlValue.Text = "-";
+        // lblHealthUrlCaption
         lblHealthUrlCaption.AutoSize = true;
         lblHealthUrlCaption.Name = "lblHealthUrlCaption";
-        lblHealthUrlCaption.Text = "健康檢查位";
+        lblHealthUrlCaption.Size = new Size(59, 15);
+        lblHealthUrlCaption.TabIndex = 4;
+        lblHealthUrlCaption.Text = "Health URL";
+        // lblHealthUrlValue
         lblHealthUrlValue.AutoSize = true;
         lblHealthUrlValue.Name = "lblHealthUrlValue";
+        lblHealthUrlValue.Size = new Size(12, 15);
+        lblHealthUrlValue.TabIndex = 5;
         lblHealthUrlValue.Text = "-";
+        // lblSignedInUserCaption
         lblSignedInUserCaption.AutoSize = true;
         lblSignedInUserCaption.Name = "lblSignedInUserCaption";
-        lblSignedInUserCaption.Text = "目前登入者";
+        lblSignedInUserCaption.Size = new Size(79, 15);
+        lblSignedInUserCaption.TabIndex = 6;
+        lblSignedInUserCaption.Text = "Signed in user";
+        // lblSignedInUserValue
         lblSignedInUserValue.AutoSize = true;
         lblSignedInUserValue.Name = "lblSignedInUserValue";
+        lblSignedInUserValue.Size = new Size(12, 15);
+        lblSignedInUserValue.TabIndex = 7;
         lblSignedInUserValue.Text = "-";
+        // lblOnlineCountCaption
         lblOnlineCountCaption.AutoSize = true;
         lblOnlineCountCaption.Name = "lblOnlineCountCaption";
-        lblOnlineCountCaption.Text = "在線裝置";
+        lblOnlineCountCaption.Size = new Size(86, 15);
+        lblOnlineCountCaption.TabIndex = 8;
+        lblOnlineCountCaption.Text = "Online devices";
+        // lblOnlineCountValue
         lblOnlineCountValue.AutoSize = true;
         lblOnlineCountValue.Name = "lblOnlineCountValue";
+        lblOnlineCountValue.Size = new Size(13, 15);
+        lblOnlineCountValue.TabIndex = 9;
         lblOnlineCountValue.Text = "0";
+        // lblTotalCountCaption
         lblTotalCountCaption.AutoSize = true;
         lblTotalCountCaption.Name = "lblTotalCountCaption";
-        lblTotalCountCaption.Text = "裝置總數";
+        lblTotalCountCaption.Size = new Size(76, 15);
+        lblTotalCountCaption.TabIndex = 10;
+        lblTotalCountCaption.Text = "Total devices";
+        // lblTotalCountValue
         lblTotalCountValue.AutoSize = true;
         lblTotalCountValue.Name = "lblTotalCountValue";
+        lblTotalCountValue.Size = new Size(13, 15);
+        lblTotalCountValue.TabIndex = 11;
         lblTotalCountValue.Text = "0";
+        // lblLastRefreshCaption
         lblLastRefreshCaption.AutoSize = true;
         lblLastRefreshCaption.Name = "lblLastRefreshCaption";
-        lblLastRefreshCaption.Text = "最後更新";
+        lblLastRefreshCaption.Size = new Size(68, 15);
+        lblLastRefreshCaption.TabIndex = 12;
+        lblLastRefreshCaption.Text = "Last refresh";
+        // lblLastRefreshValue
         lblLastRefreshValue.AutoSize = true;
         lblLastRefreshValue.Name = "lblLastRefreshValue";
+        lblLastRefreshValue.Size = new Size(12, 15);
+        lblLastRefreshValue.TabIndex = 13;
         lblLastRefreshValue.Text = "-";
+        // splitMain
         splitMain.Dock = DockStyle.Fill;
-        splitMain.Location = new Point(3, 185);
+        splitMain.Location = new Point(3, 263);
         splitMain.Name = "splitMain";
         splitMain.Orientation = Orientation.Horizontal;
+        // splitMain.Panel1
         splitMain.Panel1.Controls.Add(gridDevices);
         splitMain.Panel1.Controls.Add(lblDevicesTitle);
+        // splitMain.Panel2
         splitMain.Panel2.Controls.Add(gridLogs);
         splitMain.Panel2.Controls.Add(lblLogsTitle);
         splitMain.Size = new Size(1378, 633);
         splitMain.SplitterDistance = 315;
-        lblDevicesTitle.AutoSize = true;
-        lblDevicesTitle.Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold, GraphicsUnit.Point);
-        lblDevicesTitle.Location = new Point(10, 9);
-        lblDevicesTitle.Name = "lblDevicesTitle";
-        lblDevicesTitle.Text = "設備與在線狀態";
+        splitMain.TabIndex = 2;
+        // gridDevices
         gridDevices.AllowUserToAddRows = false;
         gridDevices.AllowUserToDeleteRows = false;
         gridDevices.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridDevices.AutoGenerateColumns = false;
         gridDevices.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridDevices.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "StatusText", HeaderText = "Status", FillWeight = 70F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "AccessText", HeaderText = "Access", FillWeight = 90F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceId", HeaderText = "Device ID", FillWeight = 110F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceName", HeaderText = "Device name", FillWeight = 120F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HostName", HeaderText = "Host name", FillWeight = 110F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Resolution", HeaderText = "Resolution", FillWeight = 90F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "AgentVersion", HeaderText = "Agent version", FillWeight = 80F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "Last seen", FillWeight = 110F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastConnectedAt", HeaderText = "Last connected", FillWeight = 110F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastDisconnectedAt", HeaderText = "Last disconnected", FillWeight = 110F });
         gridDevices.Location = new Point(10, 37);
         gridDevices.MultiSelect = false;
         gridDevices.Name = "gridDevices";
         gridDevices.ReadOnly = true;
         gridDevices.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         gridDevices.Size = new Size(1359, 266);
+        gridDevices.TabIndex = 1;
         gridDevices.CellDoubleClick += gridDevices_CellDoubleClick;
         gridDevices.SelectionChanged += gridDevices_SelectionChanged;
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "StatusText", HeaderText = "狀態", FillWeight = 70F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceId", HeaderText = "DeviceId", FillWeight = 110F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceName", HeaderText = "裝置名稱", FillWeight = 120F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HostName", HeaderText = "主機名稱", FillWeight = 110F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Resolution", HeaderText = "解析度", FillWeight = 90F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "AgentVersion", HeaderText = "版本", FillWeight = 80F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "最後心跳", FillWeight = 110F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastConnectedAt", HeaderText = "最近連線", FillWeight = 110F });
-        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastDisconnectedAt", HeaderText = "最近離線", FillWeight = 110F });
-        lblLogsTitle.AutoSize = true;
-        lblLogsTitle.Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold, GraphicsUnit.Point);
-        lblLogsTitle.Location = new Point(10, 9);
-        lblLogsTitle.Name = "lblLogsTitle";
-        lblLogsTitle.Text = "連線歷程與紀錄";
+        // gridLogs
         gridLogs.AllowUserToAddRows = false;
         gridLogs.AllowUserToDeleteRows = false;
         gridLogs.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridLogs.AutoGenerateColumns = false;
         gridLogs.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridLogs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceId", HeaderText = "Device ID", FillWeight = 95F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceName", HeaderText = "Device name", FillWeight = 110F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HostName", HeaderText = "Host name", FillWeight = 110F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ConnectedAt", HeaderText = "Connected at", FillWeight = 115F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "Last seen", FillWeight = 115F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DisconnectedAt", HeaderText = "Disconnected at", FillWeight = 115F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DisconnectReason", HeaderText = "Disconnect reason", FillWeight = 120F });
+        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "OnlineSeconds", HeaderText = "Online seconds", FillWeight = 80F });
         gridLogs.Location = new Point(10, 37);
         gridLogs.MultiSelect = false;
         gridLogs.Name = "gridLogs";
         gridLogs.ReadOnly = true;
         gridLogs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         gridLogs.Size = new Size(1359, 263);
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceId", HeaderText = "DeviceId", FillWeight = 95F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DeviceName", HeaderText = "裝置名稱", FillWeight = 110F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HostName", HeaderText = "主機名稱", FillWeight = 110F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ConnectedAt", HeaderText = "連線時間", FillWeight = 115F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "最後心跳", FillWeight = 115F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DisconnectedAt", HeaderText = "離線時間", FillWeight = 115F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "DisconnectReason", HeaderText = "離線原因", FillWeight = 120F });
-        gridLogs.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "OnlineSeconds", HeaderText = "在線秒數", FillWeight = 80F });
+        gridLogs.TabIndex = 1;
+        // lblDevicesTitle
+        lblDevicesTitle.AutoSize = true;
+        lblDevicesTitle.Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold, GraphicsUnit.Point);
+        lblDevicesTitle.Location = new Point(10, 9);
+        lblDevicesTitle.Name = "lblDevicesTitle";
+        lblDevicesTitle.Size = new Size(135, 19);
+        lblDevicesTitle.TabIndex = 0;
+        lblDevicesTitle.Text = "Connected devices";
+        // lblLogsTitle
+        lblLogsTitle.AutoSize = true;
+        lblLogsTitle.Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold, GraphicsUnit.Point);
+        lblLogsTitle.Location = new Point(10, 9);
+        lblLogsTitle.Name = "lblLogsTitle";
+        lblLogsTitle.Size = new Size(100, 19);
+        lblLogsTitle.TabIndex = 0;
+        lblLogsTitle.Text = "Presence logs";
+        // panelStatus
         panelStatus.Controls.Add(lblStatusValue);
         panelStatus.Controls.Add(lblStatusCaption);
         panelStatus.Dock = DockStyle.Fill;
-        panelStatus.Location = new Point(3, 824);
+        panelStatus.Location = new Point(3, 810);
         panelStatus.Name = "panelStatus";
-        panelStatus.Size = new Size(1378, 34);
+        panelStatus.Size = new Size(1378, 48);
+        // lblStatusCaption
         lblStatusCaption.AutoSize = true;
-        lblStatusCaption.Location = new Point(16, 9);
+        lblStatusCaption.Location = new Point(16, 4);
         lblStatusCaption.Name = "lblStatusCaption";
-        lblStatusCaption.Text = "狀態";
+        lblStatusCaption.Size = new Size(42, 15);
+        lblStatusCaption.TabIndex = 0;
+        lblStatusCaption.Text = "Status:";
+        // lblStatusValue
         lblStatusValue.AutoSize = true;
-        lblStatusValue.Location = new Point(59, 9);
+        lblStatusValue.Location = new Point(116, 4);
         lblStatusValue.Name = "lblStatusValue";
-        lblStatusValue.Text = "就緒";
+        lblStatusValue.Size = new Size(38, 15);
+        lblStatusValue.TabIndex = 1;
+        lblStatusValue.Text = "Ready";
+        // MainForm
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1384, 861);
@@ -294,7 +415,7 @@ partial class MainForm
         MinimumSize = new Size(1180, 760);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
-        Text = "RemoteDesktop Windows 主控台";
+        Text = "RemoteDesktop Windows Console";
         layoutRoot.ResumeLayout(false);
         panelHeader.ResumeLayout(false);
         panelHeader.PerformLayout();

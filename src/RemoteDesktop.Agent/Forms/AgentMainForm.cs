@@ -8,10 +8,12 @@ public partial class AgentMainForm : Form
     private readonly System.Windows.Forms.Timer _refreshTimer;
     private AgentRuntimeState? _runtimeState;
     private AgentSettingsFormFactory? _agentSettingsFormFactory;
+    private string[] _lastEvents = Array.Empty<string>();
 
     public AgentMainForm()
     {
         InitializeComponent();
+        InitializeUiText();
         _refreshTimer = new System.Windows.Forms.Timer
         {
             Interval = 1500
@@ -47,7 +49,14 @@ public partial class AgentMainForm : Form
         }
 
         using var settingsForm = await _agentSettingsFormFactory.CreateAsync();
-        settingsForm.ShowDialog(this);
+        if (settingsForm.ShowDialog(this) == DialogResult.OK)
+        {
+            MessageBox.Show(
+                AgentUiText.Bi("Agent 設定已儲存，請重新啟動 Agent 套用全部變更。", "Agent settings were saved. Restart the Agent application to apply all changes."),
+                AgentUiText.Window("Agent 設定", "Agent Settings"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
     }
 
     private void RefreshRuntimeState()
@@ -64,7 +73,30 @@ public partial class AgentMainForm : Form
         lblStatusValue.Text = snapshot.CurrentStatus;
         lblLastConnectedValue.Text = snapshot.LastConnectedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
         lblLastFrameValue.Text = snapshot.LastFrameSentAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-        txtLastError.Text = string.IsNullOrWhiteSpace(snapshot.LastError) ? "無" : snapshot.LastError;
-        listEvents.DataSource = snapshot.RecentEvents.ToList();
+        txtLastError.Text = string.IsNullOrWhiteSpace(snapshot.LastError) ? "-" : snapshot.LastError;
+
+        var events = snapshot.RecentEvents.ToArray();
+        if (_lastEvents.SequenceEqual(events))
+        {
+            return;
+        }
+
+        _lastEvents = events;
+        listEvents.DataSource = events;
+    }
+
+    private void InitializeUiText()
+    {
+        Text = AgentUiText.Window("遠端桌面 Agent", "RemoteDesktop Agent");
+        lblTitle.Text = AgentUiText.Bi("遠端桌面 Agent", "RemoteDesktop Agent");
+        AgentUiText.ApplyButton(btnSettings, "設定", "Settings");
+        lblServerUrlCaption.Text = AgentUiText.Bi("Server 位址", "Server URL");
+        lblDeviceIdCaption.Text = AgentUiText.Bi("裝置 ID", "Device ID");
+        lblDeviceNameCaption.Text = AgentUiText.Bi("裝置名稱", "Device name");
+        lblStatusCaption.Text = AgentUiText.Bi("狀態", "Status");
+        lblLastConnectedCaption.Text = AgentUiText.Bi("最後連線", "Last connected");
+        lblLastFrameCaption.Text = AgentUiText.Bi("最後送出畫面", "Last frame sent");
+        lblLastErrorCaption.Text = AgentUiText.Bi("最近錯誤", "Last error");
+        lblEventsCaption.Text = AgentUiText.Bi("最近事件", "Recent events");
     }
 }

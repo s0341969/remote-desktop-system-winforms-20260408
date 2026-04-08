@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Agent.Forms;
@@ -7,11 +6,15 @@ using RemoteDesktop.Agent.Options;
 using RemoteDesktop.Agent.Services;
 using RemoteDesktop.Agent.Services.Settings;
 using RemoteDesktop.Host.Forms;
+using RemoteDesktop.Host.Forms.Audit;
 using RemoteDesktop.Host.Forms.Settings;
+using RemoteDesktop.Host.Forms.Users;
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
+using RemoteDesktop.Host.Services.Auditing;
 using RemoteDesktop.Host.Services.Settings;
+using RemoteDesktop.Host.Services.Users;
 
 var tests = new (string Name, Action Body)[]
 {
@@ -19,6 +22,8 @@ var tests = new (string Name, Action Body)[]
     ("Host Settings UI", TestHostSettingsForm),
     ("Agent Settings UI", TestAgentSettingsForm),
     ("Host Main Dashboard UI", TestHostMainForm),
+    ("Host User Management UI", TestHostUserManagementForm),
+    ("Host Audit Log UI", TestHostAuditLogForm),
     ("Agent Main Runtime UI", TestAgentMainForm)
 };
 
@@ -39,50 +44,41 @@ foreach (var test in tests)
 
 if (failures.Count > 0)
 {
-    throw new InvalidOperationException("UI_AUTOMATION_FAILED\n" + string.Join(Environment.NewLine, failures));
+    throw new InvalidOperationException("UI_AUTOMATION_FAILED" + Environment.NewLine + string.Join(Environment.NewLine, failures));
 }
 
 Console.WriteLine("UI_AUTOMATION_PASSED");
 
 static void TestHostLoginForm()
 {
-    var options = Options.Create(new ControlServerOptions
-    {
-        ServerUrl = "http://localhost:5106",
-        ConsoleName = "UI Test Host",
-        AdminUserName = "admin",
-        AdminPassword = "Password!2026",
-        SharedAccessKey = "ChangeMe-Agent-Key",
-        AgentHeartbeatTimeoutSeconds = 45
-    });
+    var options = CreateHostOptions("UI Test Host");
+    var authenticationService = CreateAuthenticationService(options.Value);
+    var auditService = CreateAuditService();
 
     using var form = new LoginForm();
-    form.Bind(new CredentialValidator(options), options.Value);
+    form.Bind(authenticationService, auditService, options.Value);
     form.Show();
     PumpUi();
 
     GetControl<TextBox>(form, "txtUserName").Text = "admin";
     GetControl<TextBox>(form, "txtPassword").Text = "Password!2026";
     GetControl<Button>(form, "btnLogin").PerformClick();
-    PumpUi();
+    WaitUntil(() => form.DialogResult == DialogResult.OK, 3000);
 
-    if (form.DialogResult != DialogResult.OK)
+    if (!string.Equals(form.AuthenticatedUser?.UserName, "admin", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("登入表單未回傳成功。");
-    }
-
-    if (!string.Equals(form.AuthenticatedUserName, "admin", StringComparison.Ordinal))
-    {
-        throw new InvalidOperationException("登入後的使用者名稱不正確。");
+        throw new InvalidOperationException("Host login form did not produce the expected user session.");
     }
 }
 
 static void TestHostSettingsForm()
 {
     var store = new InMemoryHostSettingsStore();
+    var auditService = CreateAuditService();
+    var currentUser = CreateAdministratorSession();
     var document = store.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
     using var form = new HostSettingsForm(false);
-    form.Bind(store, document, false);
+    form.Bind(store, auditService, currentUser, document, false);
     form.Show();
     PumpUi();
 
@@ -94,10 +90,11 @@ static void TestHostSettingsForm()
     GetControl<Button>(form, "btnSave").PerformClick();
     PumpUi();
 
-    var saved = store.LastSaved ?? throw new InvalidOperationException("Host 設定未送出到儲存服務。");
-    if (!string.Equals(saved.ConsoleName, "UI Edited Host", StringComparison.Ordinal) || !string.Equals(saved.ServerUrl, "http://localhost:5301", StringComparison.Ordinal))
+    var saved = store.LastSaved ?? throw new InvalidOperationException("Host settings were not saved.");
+    if (!string.Equals(saved.ConsoleName, "UI Edited Host", StringComparison.Ordinal)
+        || !string.Equals(saved.ServerUrl, "http://localhost:5301", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Host 設定 UI 未正確提交更新後的欄位值。");
+        throw new InvalidOperationException("Host settings form did not persist the edited values.");
     }
 }
 
@@ -112,15 +109,17 @@ static void TestAgentSettingsForm()
 
     GetControl<TextBox>(form, "txtServerUrl").Text = "http://localhost:5402";
     GetControl<TextBox>(form, "txtDeviceName").Text = "QA Agent";
+    GetControl<TextBox>(form, "txtFileTransferDirectory").Text = "C:\\Temp\\RemoteTransfers";
     GetControl<NumericUpDown>(form, "numCaptureFps").Value = 12;
     GetControl<NumericUpDown>(form, "numReconnectDelay").Value = 8;
     GetControl<Button>(form, "btnSave").PerformClick();
     PumpUi();
 
-    var saved = store.LastSaved ?? throw new InvalidOperationException("Agent 設定未送出到儲存服務。");
-    if (!string.Equals(saved.DeviceName, "QA Agent", StringComparison.Ordinal) || !string.Equals(saved.ServerUrl, "http://localhost:5402", StringComparison.Ordinal))
+    var saved = store.LastSaved ?? throw new InvalidOperationException("Agent settings were not saved.");
+    if (!string.Equals(saved.DeviceName, "QA Agent", StringComparison.Ordinal)
+        || !string.Equals(saved.ServerUrl, "http://localhost:5402", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Agent 設定 UI 未正確提交更新後的欄位值。");
+        throw new InvalidOperationException("Agent settings form did not persist the edited values.");
     }
 }
 
@@ -137,42 +136,41 @@ static void TestHostMainForm()
             ScreenWidth = 1920,
             ScreenHeight = 1080,
             IsOnline = true,
+            IsAuthorized = true,
+            AuthorizedAt = DateTimeOffset.UtcNow,
+            AuthorizedBy = "admin",
             CreatedAt = DateTimeOffset.UtcNow,
             LastSeenAt = DateTimeOffset.UtcNow,
             LastConnectedAt = DateTimeOffset.UtcNow
         },
         new DeviceRecord
         {
-            DeviceId = "device-offline",
-            DeviceName = "Offline Device",
+            DeviceId = "device-pending",
+            DeviceName = "Pending Device",
             HostName = "HOST-02",
             AgentVersion = "1.0.0",
             ScreenWidth = 1280,
             ScreenHeight = 720,
-            IsOnline = false,
+            IsOnline = true,
+            IsAuthorized = false,
             CreatedAt = DateTimeOffset.UtcNow,
             LastSeenAt = DateTimeOffset.UtcNow.AddMinutes(-5),
-            LastConnectedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
-            LastDisconnectedAt = DateTimeOffset.UtcNow.AddMinutes(-5)
+            LastConnectedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
         });
 
-    var options = Options.Create(new ControlServerOptions
-    {
-        ServerUrl = "http://localhost:5106",
-        ConsoleName = "UI Dashboard",
-        AdminUserName = "admin",
-        AdminPassword = "Password!2026",
-        SharedAccessKey = "ChangeMe-Agent-Key",
-        AgentHeartbeatTimeoutSeconds = 45
-    });
-
-    var loggerFactory = LoggerFactory.Create(builder => { });
-    var broker = new DeviceBroker(repo, options, loggerFactory.CreateLogger<DeviceBroker>());
-    var settingsFactory = new HostSettingsFormFactory(new InMemoryHostSettingsStore());
+    var options = CreateHostOptions("UI Dashboard");
+    var auditService = CreateAuditService();
+    var loggerFactory = LoggerFactory.Create(static builder => { });
+    var broker = new DeviceBroker(repo, options, loggerFactory.CreateLogger<DeviceBroker>(), auditService);
+    var settingsFactory = new HostSettingsFormFactory(new InMemoryHostSettingsStore(), auditService);
+    var authenticationService = CreateAuthenticationService(options.Value);
+    var userManagementFactory = new UserManagementFormFactory(authenticationService, auditService);
+    var auditLogFactory = new AuditLogFormFactory(auditService);
+    var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
     var viewerFactory = new RemoteViewerFormFactory(broker);
 
     using var form = new MainForm();
-    form.Bind(repo, options.Value, viewerFactory, settingsFactory, "admin");
+    form.Bind(repo, options.Value, broker, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
     form.Show();
     WaitUntil(() => GetControl<DataGridView>(form, "gridDevices").Rows.Count >= 2, 3000);
 
@@ -181,14 +179,100 @@ static void TestHostMainForm()
     grid.CurrentCell = grid.Rows[0].Cells[0];
     PumpUi();
 
-    if (GetControl<Button>(form, "btnOpenViewer").Enabled != true)
+    if (!GetControl<Button>(form, "btnOpenViewer").Enabled)
     {
-        throw new InvalidOperationException("主控台未針對在線裝置啟用遠端畫面按鈕。");
+        throw new InvalidOperationException("Open Viewer button should be enabled for an online device.");
     }
 
-    if (!string.Equals(GetControl<Label>(form, "lblOnlineCountValue").Text, "1", StringComparison.Ordinal))
+    if (!string.Equals(GetControl<Label>(form, "lblOnlineCountValue").Text, "2", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("主控台在線裝置統計不正確。");
+        throw new InvalidOperationException("Host dashboard did not report the expected online device count.");
+    }
+
+    if (!GetControl<Button>(form, "btnUsers").Visible)
+    {
+        throw new InvalidOperationException("Administrator session should expose the Users button.");
+    }
+
+    if (!GetControl<Button>(form, "btnAudit").Visible)
+    {
+        throw new InvalidOperationException("Administrator session should expose the Audit button.");
+    }
+
+    if (!GetControl<Button>(form, "btnApproveDevice").Visible || !GetControl<Button>(form, "btnRevokeDevice").Visible)
+    {
+        throw new InvalidOperationException("Administrator session should expose device authorization controls.");
+    }
+
+    grid.ClearSelection();
+    grid.Rows[1].Selected = true;
+    grid.CurrentCell = grid.Rows[1].Cells[0];
+    PumpUi();
+
+    if (GetControl<Button>(form, "btnOpenViewer").Enabled)
+    {
+        throw new InvalidOperationException("Open Viewer button should stay disabled for a pending device.");
+    }
+
+    if (!GetControl<Button>(form, "btnApproveDevice").Enabled)
+    {
+        throw new InvalidOperationException("Approve button should be enabled for a pending device.");
+    }
+}
+
+static void TestHostUserManagementForm()
+{
+    var options = CreateHostOptions("UI User Management");
+    var authenticationService = CreateAuthenticationService(options.Value);
+    var auditService = CreateAuditService();
+    var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
+
+    using var form = new UserManagementForm();
+    form.Bind(authenticationService, auditService, currentUser);
+    form.Show();
+    WaitUntil(() => GetControl<DataGridView>(form, "gridUsers").Rows.Count >= 1, 3000);
+
+    GetControl<Button>(form, "btnNew").PerformClick();
+    PumpUi();
+
+    GetControl<TextBox>(form, "txtUserName").Text = "operator1";
+    GetControl<TextBox>(form, "txtDisplayName").Text = "Operator One";
+    GetControl<ComboBox>(form, "cboRole").SelectedItem = UserRole.Operator;
+    GetControl<TextBox>(form, "txtPassword").Text = "OperatorPass!2026";
+    GetControl<CheckBox>(form, "chkEnabled").Checked = true;
+    GetControl<Button>(form, "btnSave").PerformClick();
+
+    WaitUntil(() =>
+    {
+        var accounts = authenticationService.GetAccountsAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return accounts.Any(account => string.Equals(account.UserName, "operator1", StringComparison.Ordinal));
+    }, 3000);
+
+    var saved = authenticationService.GetAccountsAsync(CancellationToken.None).GetAwaiter().GetResult()
+        .FirstOrDefault(account => string.Equals(account.UserName, "operator1", StringComparison.Ordinal));
+
+    if (saved is null || saved.Role != UserRole.Operator || !saved.IsEnabled)
+    {
+        throw new InvalidOperationException("User management form did not persist the new operator account.");
+    }
+}
+
+static void TestHostAuditLogForm()
+{
+    var auditService = CreateAuditService();
+    auditService.WriteAsync("user-sign-in", "admin", "Administrator", "console", "UI Audit", true, "User signed in successfully.", CancellationToken.None)
+        .GetAwaiter().GetResult();
+
+    using var form = new AuditLogForm();
+    form.Bind(auditService);
+    form.Show();
+    WaitUntil(() => GetControl<DataGridView>(form, "gridAuditLogs").Rows.Count >= 1, 3000);
+
+    var grid = GetControl<DataGridView>(form, "gridAuditLogs");
+    var actionText = grid.Rows[0].Cells[2].Value?.ToString() ?? string.Empty;
+    if (!actionText.Contains("使用者登入", StringComparison.Ordinal) || !actionText.Contains("User sign-in", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Audit log form did not render the expected entry.");
     }
 }
 
@@ -219,13 +303,54 @@ static void TestAgentMainForm()
 
     if (!string.Equals(GetControl<Label>(form, "lblDeviceIdValue").Text, "agent-ui-001", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Agent 主畫面未顯示正確的 DeviceId。");
+        throw new InvalidOperationException("Agent main form did not render the expected device id.");
     }
 
-    if (!string.Equals(GetControl<Label>(form, "lblStatusValue").Text, "已連線", StringComparison.Ordinal))
+    var actualStatus = GetControl<Label>(form, "lblStatusValue").Text;
+    if (!actualStatus.Contains("已連線", StringComparison.Ordinal) || !actualStatus.Contains("Connected", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Agent 主畫面未顯示連線狀態。");
+        throw new InvalidOperationException($"Agent main form did not render the expected status. Actual: {actualStatus}");
     }
+}
+
+static IOptions<ControlServerOptions> CreateHostOptions(string consoleName)
+{
+    return Options.Create(new ControlServerOptions
+    {
+        ServerUrl = "http://localhost:5106",
+        ConsoleName = consoleName,
+        AdminUserName = "admin",
+        AdminPassword = "Password!2026",
+        SharedAccessKey = "ChangeMe-Agent-Key",
+        AgentHeartbeatTimeoutSeconds = 45
+    });
+}
+
+static AuthenticationService CreateAuthenticationService(ControlServerOptions options)
+{
+    var store = new InMemoryUserAccountStore(options);
+    return new AuthenticationService(store);
+}
+
+static AuditService CreateAuditService()
+{
+    return new AuditService(new InMemoryAuditLogStore());
+}
+
+static AuthenticatedUserSession AuthenticateOrThrow(AuthenticationService authenticationService, string userName, string password)
+{
+    return authenticationService.AuthenticateAsync(userName, password, CancellationToken.None).GetAwaiter().GetResult()
+        ?? throw new InvalidOperationException($"Authentication failed for user '{userName}'.");
+}
+
+static AuthenticatedUserSession CreateAdministratorSession()
+{
+    return new AuthenticatedUserSession
+    {
+        UserName = "admin",
+        DisplayName = "Administrator",
+        Role = UserRole.Administrator
+    };
 }
 
 static T GetControl<T>(Control root, string name) where T : Control
@@ -244,7 +369,7 @@ static T GetControl<T>(Control root, string name) where T : Control
         }
     }
 
-    throw new InvalidOperationException($"找不到控制項 {name}。");
+    throw new InvalidOperationException($"Control not found: {name}");
 }
 
 static T? TryFindNested<T>(Control root, string name) where T : Control
@@ -316,7 +441,7 @@ static void WaitUntil(Func<bool> predicate, int timeoutMs)
         }
     }
 
-    throw new TimeoutException("等待 UI 狀態逾時。");
+    throw new TimeoutException("Timed out waiting for the UI state to update.");
 }
 
 internal sealed class FakeDeviceRepository : IDeviceRepository
@@ -349,9 +474,143 @@ internal sealed class FakeDeviceRepository : IDeviceRepository
     public Task<Guid> StartPresenceAsync(AgentDescriptor descriptor, CancellationToken cancellationToken) => Task.FromResult(Guid.NewGuid());
     public Task TouchPresenceAsync(Guid presenceId, string deviceId, int screenWidth, int screenHeight, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task ClosePresenceAsync(Guid presenceId, string deviceId, string reason, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
+    {
+        var index = _devices.FindIndex(item => string.Equals(item.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var device = _devices[index];
+        _devices[index] = new DeviceRecord
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.DeviceName,
+            HostName = device.HostName,
+            AgentVersion = device.AgentVersion,
+            ScreenWidth = device.ScreenWidth,
+            ScreenHeight = device.ScreenHeight,
+            IsOnline = device.IsOnline,
+            IsAuthorized = isAuthorized,
+            AuthorizedAt = isAuthorized ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
+            AuthorizedBy = isAuthorized ? changedByUserName : null,
+            CreatedAt = device.CreatedAt,
+            LastSeenAt = device.LastSeenAt,
+            LastConnectedAt = device.LastConnectedAt,
+            LastDisconnectedAt = device.LastDisconnectedAt
+        };
+
+        return Task.CompletedTask;
+    }
     public Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<DeviceRecord>>(_devices.Take(take).ToList());
     public Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken) => Task.FromResult(_devices.FirstOrDefault(x => x.DeviceId == deviceId));
     public Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentPresenceLogRecord>>(_logs.Take(take).ToList());
+}
+
+internal sealed class InMemoryUserAccountStore : IUserAccountStore
+{
+    private readonly List<UserAccount> _accounts;
+
+    public InMemoryUserAccountStore(ControlServerOptions options)
+    {
+        var passwordResult = PasswordHasher.HashPassword(options.AdminPassword);
+        _accounts = new List<UserAccount>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                UserName = options.AdminUserName,
+                DisplayName = "Administrator",
+                Role = UserRole.Administrator,
+                IsEnabled = true,
+                PasswordHash = passwordResult.Hash,
+                PasswordSalt = passwordResult.Salt,
+                PasswordIterations = passwordResult.Iterations,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            }
+        };
+    }
+
+    public Task<IReadOnlyList<UserAccount>> GetAllAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<UserAccount>>(_accounts
+            .OrderBy(static account => account.UserName, StringComparer.OrdinalIgnoreCase)
+            .ToList());
+    }
+
+    public Task<UserAccount?> FindByUserNameAsync(string userName, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_accounts.FirstOrDefault(account => string.Equals(account.UserName, userName, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public Task UpsertAsync(UserAccount account, CancellationToken cancellationToken)
+    {
+        var index = _accounts.FindIndex(existing => string.Equals(existing.UserName, account.UserName, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            _accounts[index] = account;
+        }
+        else
+        {
+            _accounts.Add(account);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(string userName, CancellationToken cancellationToken)
+    {
+        _accounts.RemoveAll(account => string.Equals(account.UserName, userName, StringComparison.OrdinalIgnoreCase));
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateLastLoginAsync(string userName, DateTimeOffset lastLoginAt, CancellationToken cancellationToken)
+    {
+        var index = _accounts.FindIndex(account => string.Equals(account.UserName, userName, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var account = _accounts[index];
+        _accounts[index] = new UserAccount
+        {
+            Id = account.Id,
+            UserName = account.UserName,
+            DisplayName = account.DisplayName,
+            Role = account.Role,
+            IsEnabled = account.IsEnabled,
+            PasswordHash = account.PasswordHash,
+            PasswordSalt = account.PasswordSalt,
+            PasswordIterations = account.PasswordIterations,
+            CreatedAt = account.CreatedAt,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            LastLoginAt = lastLoginAt
+        };
+
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class InMemoryAuditLogStore : IAuditLogStore
+{
+    private readonly List<AuditLogEntry> _entries = new();
+
+    public Task AppendAsync(AuditLogEntry entry, CancellationToken cancellationToken)
+    {
+        _entries.Add(entry);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<AuditLogEntry>> GetRecentAsync(int take, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<AuditLogEntry>>(_entries
+            .OrderByDescending(static entry => entry.OccurredAt)
+            .Take(take)
+            .ToList());
+    }
 }
 
 internal sealed class InMemoryHostSettingsStore : IHostSettingsStore
@@ -393,6 +652,7 @@ internal sealed class InMemoryAgentSettingsStore : IAgentSettingsStore
         DeviceId = _document.DeviceId,
         DeviceName = _document.DeviceName,
         SharedAccessKey = _document.SharedAccessKey,
+        FileTransferDirectory = _document.FileTransferDirectory,
         CaptureFramesPerSecond = _document.CaptureFramesPerSecond,
         JpegQuality = _document.JpegQuality,
         MaxFrameWidth = _document.MaxFrameWidth,
@@ -406,4 +666,3 @@ internal sealed class InMemoryAgentSettingsStore : IAgentSettingsStore
         return Task.CompletedTask;
     }
 }
-
