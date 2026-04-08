@@ -8,3 +8,4 @@
 - [ ] 擴充 smoke test，加入未授權 Agent、重複登入取代與 heartbeat timeout 情境
 - [ ] 為設定檔持久化流程補上獨立的檔案層測試，覆蓋異常 JSON 與缺欄位回復策略
 - [ ] 增加 publish 更新腳本，支援一鍵重建與覆蓋部署目錄
+- [ ] 為 Host 儲存模式切換補上更多自動化測試，覆蓋 `Memory` 與 `SqlServer` 兩種啟動路徑

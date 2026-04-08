@@ -8,7 +8,7 @@
 - `RemoteDesktop.Host`：Windows Forms 主控台
 - `RemoteDesktop.Agent`：Windows Forms 被控端 Agent
 - 通訊方式：Host 背景 `Kestrel` + WebSocket `/ws/agent`
-- 資料庫：SQL Server / LocalDB
+- 儲存模式：預設 `Memory`，可切換為 SQL Server / LocalDB
 
 ## 2. 系統架構
 
@@ -36,7 +36,7 @@
 - Windows 10 / Windows 11
 - 如使用原始碼執行：`.NET 8 SDK`
 - 如使用 `publish` 版本：不需另裝 .NET
-- SQL Server LocalDB 或 SQL Server
+- 若要使用資料庫持久化：SQL Server LocalDB 或 SQL Server
 
 ## 4. 專案目錄
 
@@ -56,6 +56,7 @@
 
 主要欄位：
 - `ConnectionStrings:RemoteDesktopDb`
+- `ControlServer:PersistenceMode`
 - `ControlServer:ServerUrl`
 - `ControlServer:ConsoleName`
 - `ControlServer:AdminUserName`
@@ -72,6 +73,7 @@
     "RemoteDesktopDb": "Server=(localdb)\\MSSQLLocalDB;Database=RemoteDesktopControl;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True;"
   },
   "ControlServer": {
+    "PersistenceMode": "Memory",
     "ServerUrl": "http://localhost:5106",
     "ConsoleName": "RemoteDesk Control",
     "AdminUserName": "admin",
@@ -143,6 +145,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
+- Host 預設以 `Memory` 模式啟動，不會先連資料庫
 
 ### 8.2 使用啟動腳本
 
@@ -176,7 +179,8 @@ Windows 登入後，Agent 會自動啟動。
    - Presence Log
    - 健康檢查位址
 4. 按「設定」可修改 Host 參數
-5. 雙擊在線裝置或按「開啟遠端畫面」即可開啟 Viewer
+5. 若要持久化裝置與歷程，可在設定中勾選「使用 MSSQL 儲存裝置與連線紀錄」
+6. 雙擊在線裝置或按「開啟遠端畫面」即可開啟 Viewer
 
 ## 10. Agent 操作流程
 
@@ -207,6 +211,8 @@ Windows 登入後，Agent 會自動啟動。
 Invoke-WebRequest -UseBasicParsing http://localhost:5106/healthz
 ```
 
+回傳內容會包含目前 `persistenceMode`。
+
 ### 11.3 自動化驗證
 
 核心連線 smoke test：
@@ -227,9 +233,11 @@ WinForms UI automation：
 
 原因：
 - 執行目錄沒有 `appsettings.json`
+- 或目前啟用了 `SqlServer` 模式但連線字串不可用
 
 目前已修正：
 - `publish` 與 `build` 輸出都會自動帶上 `appsettings.json`
+- 預設改為 `Memory` 模式，不會因為沒有 LocalDB 而阻止 Host 啟動
 
 ### 12.2 Agent 無法連上 Host
 
@@ -242,6 +250,7 @@ WinForms UI automation：
 ### 12.3 資料庫初始化失敗
 
 請檢查：
+- `ControlServer:PersistenceMode` 是否真的需要設為 `SqlServer`
 - `ConnectionStrings:RemoteDesktopDb` 是否可連線
 - SQL Server/LocalDB 是否存在
 - 帳號權限是否足夠

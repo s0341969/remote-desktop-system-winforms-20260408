@@ -25,9 +25,21 @@ internal static class Program
             .AddOptions<ControlServerOptions>()
             .Bind(builder.Configuration.GetSection(ControlServerOptions.SectionName))
             .ValidateDataAnnotations()
+            .Validate(static options =>
+                string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeMemory, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase),
+                "ControlServer:PersistenceMode 僅支援 Memory 或 SqlServer。")
             .ValidateOnStart();
 
-        builder.Services.AddSingleton<IDeviceRepository, SqlDeviceRepository>();
+        if (string.Equals(configuredOptions.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Services.AddSingleton<IDeviceRepository, SqlDeviceRepository>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
+        }
+
         builder.Services.AddRemoteDesktopHostCore();
 
         await using var app = builder.Build();

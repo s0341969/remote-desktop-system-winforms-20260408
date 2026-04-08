@@ -6,6 +6,9 @@ public sealed class ControlServerOptions
 {
     public const string SectionName = "ControlServer";
 
+    public const string PersistenceModeMemory = "Memory";
+    public const string PersistenceModeSqlServer = "SqlServer";
+
     [Required]
     [Url]
     public string ServerUrl { get; init; } = "http://localhost:5106";
@@ -30,4 +33,7 @@ public sealed class ControlServerOptions
 
     [Range(15, 300)]
     public int AgentHeartbeatTimeoutSeconds { get; init; } = 45;
+
+    [Required]
+    public string PersistenceMode { get; init; } = PersistenceModeMemory;
 }

@@ -362,6 +362,7 @@ internal sealed class InMemoryHostSettingsStore : IHostSettingsStore
 
     public Task<HostSettingsDocument> LoadAsync(CancellationToken cancellationToken) => Task.FromResult(new HostSettingsDocument
     {
+        EnableDatabase = _document.EnableDatabase,
         RemoteDesktopDbConnectionString = _document.RemoteDesktopDbConnectionString,
         ServerUrl = _document.ServerUrl,
         ConsoleName = _document.ConsoleName,
@@ -405,3 +406,4 @@ internal sealed class InMemoryAgentSettingsStore : IAgentSettingsStore
         return Task.CompletedTask;
     }
 }
+

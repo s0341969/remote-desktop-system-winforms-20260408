@@ -22,6 +22,7 @@ public partial class HostSettingsForm : Form
     {
         _settingsStore = settingsStore;
         _showResultDialogs = showResultDialogs;
+        chkEnableDatabase.Checked = document.EnableDatabase;
         txtConnectionString.Text = document.RemoteDesktopDbConnectionString;
         txtServerUrl.Text = document.ServerUrl;
         txtConsoleName.Text = document.ConsoleName;
@@ -31,6 +32,7 @@ public partial class HostSettingsForm : Form
         chkRequireHttpsRedirect.Checked = document.RequireHttpsRedirect;
         numHeartbeatTimeout.Value = Math.Clamp(document.AgentHeartbeatTimeoutSeconds, (int)numHeartbeatTimeout.Minimum, (int)numHeartbeatTimeout.Maximum);
         lblStatus.Text = "修改後按儲存，重新啟動 Host 後生效。";
+        UpdateDatabaseInputState();
     }
 
     private async void btnSave_Click(object sender, EventArgs e)
@@ -49,6 +51,7 @@ public partial class HostSettingsForm : Form
         {
             var document = new HostSettingsDocument
             {
+                EnableDatabase = chkEnableDatabase.Checked,
                 RemoteDesktopDbConnectionString = txtConnectionString.Text.Trim(),
                 ServerUrl = txtServerUrl.Text.Trim(),
                 ConsoleName = txtConsoleName.Text.Trim(),
@@ -85,5 +88,15 @@ public partial class HostSettingsForm : Form
             btnSave.Enabled = true;
             btnCancel.Enabled = true;
         }
+    }
+
+    private void chkEnableDatabase_CheckedChanged(object sender, EventArgs e)
+    {
+        UpdateDatabaseInputState();
+    }
+
+    private void UpdateDatabaseInputState()
+    {
+        txtConnectionString.Enabled = chkEnableDatabase.Checked;
     }
 }

@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using RemoteDesktop.Host.Forms;
 using RemoteDesktop.Host.Forms.Settings;
+using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
 using RemoteDesktop.Host.Services.Settings;
 
@@ -40,12 +42,13 @@ public static class RemoteDesktopHostCompositionExtensions
             });
         });
 
-        app.MapGet("/healthz", async (IDeviceRepository repository, CancellationToken cancellationToken) =>
+        app.MapGet("/healthz", async (IDeviceRepository repository, IOptions<ControlServerOptions> options, CancellationToken cancellationToken) =>
         {
             var devices = await repository.GetDevicesAsync(200, cancellationToken);
             return Results.Ok(new
             {
                 status = "ok",
+                persistenceMode = options.Value.PersistenceMode,
                 onlineDevices = devices.Count(static item => item.IsOnline),
                 totalDevices = devices.Count
             });

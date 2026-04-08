@@ -35,6 +35,7 @@ public sealed class HostSettingsStore : IHostSettingsStore
     {
         var document = new HostSettingsDocument
         {
+            EnableDatabase = string.Equals(_options.Value.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase),
             RemoteDesktopDbConnectionString = _configuration.GetConnectionString("RemoteDesktopDb") ?? string.Empty,
             ServerUrl = _options.Value.ServerUrl,
             ConsoleName = _options.Value.ConsoleName,
@@ -60,6 +61,10 @@ public sealed class HostSettingsStore : IHostSettingsStore
 
         if (controlServer is not null)
         {
+            document.EnableDatabase = string.Equals(
+                controlServer["PersistenceMode"]?.GetValue<string>(),
+                ControlServerOptions.PersistenceModeSqlServer,
+                StringComparison.OrdinalIgnoreCase);
             document.ServerUrl = controlServer["ServerUrl"]?.GetValue<string>() ?? document.ServerUrl;
             document.ConsoleName = controlServer["ConsoleName"]?.GetValue<string>() ?? document.ConsoleName;
             document.AdminUserName = controlServer["AdminUserName"]?.GetValue<string>() ?? document.AdminUserName;
@@ -81,6 +86,9 @@ public sealed class HostSettingsStore : IHostSettingsStore
         root["ConnectionStrings"] = connectionStrings;
 
         var controlServer = root[ControlServerOptions.SectionName] as JsonObject ?? new JsonObject();
+        controlServer["PersistenceMode"] = document.EnableDatabase
+            ? ControlServerOptions.PersistenceModeSqlServer
+            : ControlServerOptions.PersistenceModeMemory;
         controlServer["ServerUrl"] = document.ServerUrl.Trim();
         controlServer["ConsoleName"] = document.ConsoleName.Trim();
         controlServer["AdminUserName"] = document.AdminUserName.Trim();
@@ -106,6 +114,11 @@ public sealed class HostSettingsStore : IHostSettingsStore
 
     private static void Validate(HostSettingsDocument document)
     {
+        if (document.EnableDatabase && string.IsNullOrWhiteSpace(document.RemoteDesktopDbConnectionString))
+        {
+            throw new ValidationException("啟用資料庫時，必須填寫 MSSQL 連線字串。");
+        }
+
         var validationContext = new ValidationContext(document);
         var validationResults = new List<ValidationResult>();
         if (!Validator.TryValidateObject(document, validationContext, validationResults, validateAllProperties: true))

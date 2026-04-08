@@ -1,6 +1,6 @@
 # RemoteDesktopSystem
 
-`RemoteDesktopSystem` 現在是純 Windows Forms 控制端與 Agent 的遠端桌面系統，保留既有 WebSocket 通訊核心與 MSSQL 裝置紀錄，並移除已停用的 Razor Pages 舊 Web UI。
+`RemoteDesktopSystem` 現在是純 Windows Forms 控制端與 Agent 的遠端桌面系統，保留既有 WebSocket 通訊核心，並提供可切換的記憶體模式或 MSSQL 裝置紀錄儲存。
 
 ## 目前架構
 
@@ -30,6 +30,7 @@
 
 - 補齊 Host 與 Agent 的完整設定表單，改由 UI 編輯 `appsettings.json`。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
+- Host 預設改為 `Memory` 儲存模式，不再要求先安裝 LocalDB 才能啟動；需要持久化時可在 Host 設定中勾選資料庫模式。
 - Host 主畫面新增設定入口，Agent 主畫面新增設定入口。
 - 移除 `src/RemoteDesktop.Host/Pages` 與 `src/RemoteDesktop.Host/wwwroot` 舊碼，Host 專案不再保留停用的 Razor Pages。
 - 新增 `tests/RemoteDesktop.UiAutomation`，把主要 WinForms 使用流程納入自動化驗證。
@@ -55,6 +56,12 @@
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
+- Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
+- 若要改回 MSSQL：
+  1. 開啟 Host 的設定表單
+  2. 勾選「使用 MSSQL 儲存裝置與連線紀錄」
+  3. 填入有效的 `RemoteDesktopDb` 連線字串
+  4. 重新啟動 Host
 
 ### 桌面捷徑
 
