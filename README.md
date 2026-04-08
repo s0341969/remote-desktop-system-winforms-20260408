@@ -144,6 +144,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
   - 在線數量
   - Presence Log
   - Agent 端點與健康檢查位址
+- Host 與 Agent 的 `appsettings.json` 會隨建置結果自動複製到輸出目錄，直接執行 `bin\Debug\net8.0-windows\*.exe` 也能讀到設定。
 - Host 主畫面可直接開啟設定表單，修改連線字串、主控台參數、帳號密碼與共享金鑰。
 - Agent 主畫面可直接開啟設定表單，修改控制端 URL、裝置資訊、影像參數與重連策略。
 - 設定寫入 `appsettings.json` 後，重新啟動對應應用程式即可生效。

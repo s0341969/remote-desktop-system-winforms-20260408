@@ -2,6 +2,7 @@
 
 ## 2026-04-08
 
+- 修正 Host/Agent 專案建置輸出未複製 `appsettings.json` 的問題，避免直接執行 EXE 時讀不到設定。
 - 新增 Host 設定表單 `HostSettingsForm`，可直接在 WinForms UI 內編輯主控台設定與資料庫連線字串。
 - 新增 Agent 設定表單 `AgentSettingsForm`，可直接在 WinForms UI 內編輯控制端 URL、裝置識別與影像參數。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中 `appsettings.json` 讀寫與資料驗證。
