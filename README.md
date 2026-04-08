@@ -32,6 +32,7 @@
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
 - Host 預設改為 `Memory` 儲存模式，不再要求先安裝 LocalDB 才能啟動；需要持久化時可在 Host 設定中勾選資料庫模式。
 - Host 主畫面新增設定入口，Agent 主畫面新增設定入口。
+- 移除 Agent 不需要的 ASP.NET Framework 參考，精簡發佈目錄，清掉多餘的 `Microsoft.AspNetCore.*` DLL。
 - 移除 `src/RemoteDesktop.Host/Pages` 與 `src/RemoteDesktop.Host/wwwroot` 舊碼，Host 專案不再保留停用的 Razor Pages。
 - 新增 `tests/RemoteDesktop.UiAutomation`，把主要 WinForms 使用流程納入自動化驗證。
 - 將 UI automation 專案加入 `RemoteDesktopSystem.sln`。
