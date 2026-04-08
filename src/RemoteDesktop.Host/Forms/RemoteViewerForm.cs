@@ -56,6 +56,7 @@ public partial class RemoteViewerForm : Form
     private Size _frameSize = Size.Empty;
     private bool _attached;
     private long _lastMoveAt;
+    private bool _commandFailed;
 
     public RemoteViewerForm()
     {
@@ -125,7 +126,14 @@ public partial class RemoteViewerForm : Form
         var frameCopy = payload.ToArray();
         if (InvokeRequired)
         {
-            BeginInvoke(new Action(() => ApplyFrame(frameCopy)));
+            try
+            {
+                BeginInvoke(new Action(() => ApplyFrame(frameCopy)));
+            }
+            catch (InvalidOperationException)
+            {
+                return Task.CompletedTask;
+            }
         }
         else
         {
@@ -330,7 +338,26 @@ public partial class RemoteViewerForm : Form
             return;
         }
 
-        await _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, CancellationToken.None);
+        try
+        {
+            await _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, CancellationToken.None);
+            _commandFailed = false;
+        }
+        catch (Exception exception)
+        {
+            lblStatusValue.Text = "控制指令傳送失敗";
+            if (_commandFailed)
+            {
+                return;
+            }
+
+            _commandFailed = true;
+            MessageBox.Show(
+                $"遠端控制指令傳送失敗：{exception.Message}",
+                "RemoteDesktop.Host",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private static string TranslateMouseButton(MouseButtons button)

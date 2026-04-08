@@ -6,4 +6,5 @@
 - [ ] 強化遠端檢視表單，補上縮放比例切換、全螢幕與快捷鍵提示
 - [ ] 增加 Host 與 Agent 的操作日誌匯出功能
 - [ ] 清理已停用的 Razor Pages 舊檔，確認不再需要後再移除
-- [ ] 為 WinForms UI 與 WebSocket 核心補自動化測試
+- [ ] 補 WinForms UI 自動化測試，涵蓋登入、裝置清單刷新與遠端視窗開啟流程
+- [ ] 擴充 smoke test，加入未授權 Agent、重複登入取代與 heartbeat timeout 情境

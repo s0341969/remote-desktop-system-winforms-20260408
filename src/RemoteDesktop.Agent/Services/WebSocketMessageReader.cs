@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net.WebSockets;
 
 namespace RemoteDesktop.Agent.Services;
@@ -6,22 +7,28 @@ internal static class WebSocketMessageReader
 {
     public static async Task<WebSocketMessage> ReadAsync(ClientWebSocket socket, CancellationToken cancellationToken)
     {
-        var buffer = new byte[1024 * 1024 * 2];
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
         using var stream = new MemoryStream();
-
-        while (true)
+        try
         {
-            var result = await socket.ReceiveAsync(buffer, cancellationToken);
-            if (result.MessageType == WebSocketMessageType.Close)
+            while (true)
             {
-                return new WebSocketMessage(WebSocketMessageType.Close, []);
-            }
+                var result = await socket.ReceiveAsync(buffer, cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return new WebSocketMessage(WebSocketMessageType.Close, []);
+                }
 
-            await stream.WriteAsync(buffer.AsMemory(0, result.Count), cancellationToken);
-            if (result.EndOfMessage)
-            {
-                return new WebSocketMessage(result.MessageType, stream.ToArray());
+                await stream.WriteAsync(buffer.AsMemory(0, result.Count), cancellationToken);
+                if (result.EndOfMessage)
+                {
+                    return new WebSocketMessage(result.MessageType, stream.ToArray());
+                }
             }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

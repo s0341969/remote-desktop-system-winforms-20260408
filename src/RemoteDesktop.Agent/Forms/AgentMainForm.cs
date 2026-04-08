@@ -43,13 +43,14 @@ public partial class AgentMainForm : Form
             return;
         }
 
-        lblServerUrlValue.Text = _runtimeState.ServerUrl;
-        lblDeviceIdValue.Text = _runtimeState.DeviceId;
-        lblDeviceNameValue.Text = _runtimeState.DeviceName;
-        lblStatusValue.Text = _runtimeState.CurrentStatus;
-        lblLastConnectedValue.Text = _runtimeState.LastConnectedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-        lblLastFrameValue.Text = _runtimeState.LastFrameSentAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-        txtLastError.Text = string.IsNullOrWhiteSpace(_runtimeState.LastError) ? "無" : _runtimeState.LastError;
-        listEvents.DataSource = _runtimeState.GetRecentEvents().ToList();
+        var snapshot = _runtimeState.GetSnapshot();
+        lblServerUrlValue.Text = snapshot.ServerUrl;
+        lblDeviceIdValue.Text = snapshot.DeviceId;
+        lblDeviceNameValue.Text = snapshot.DeviceName;
+        lblStatusValue.Text = snapshot.CurrentStatus;
+        lblLastConnectedValue.Text = snapshot.LastConnectedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+        lblLastFrameValue.Text = snapshot.LastFrameSentAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+        txtLastError.Text = string.IsNullOrWhiteSpace(snapshot.LastError) ? "無" : snapshot.LastError;
+        listEvents.DataSource = snapshot.RecentEvents.ToList();
     }
 }

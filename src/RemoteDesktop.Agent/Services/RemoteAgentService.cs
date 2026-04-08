@@ -18,6 +18,8 @@ public sealed class RemoteAgentService : BackgroundService
     private readonly DesktopCaptureService _captureService;
     private readonly InputInjectionService _inputInjectionService;
     private readonly ILogger<RemoteAgentService> _logger;
+    private volatile int _lastScreenWidth;
+    private volatile int _lastScreenHeight;
 
     public RemoteAgentService(
         IOptions<AgentOptions> options,
@@ -67,13 +69,25 @@ public sealed class RemoteAgentService : BackgroundService
         _logger.LogInformation("已連線到 Control Server: {ServerUri}", serverUri);
 
         var initialFrame = _captureService.Capture();
+        _lastScreenWidth = initialFrame.Width;
+        _lastScreenHeight = initialFrame.Height;
         await SendTextAsync(socket, sendLock, CreateHelloPayload(initialFrame), cancellationToken);
 
-        var receiveTask = ReceiveLoopAsync(socket, cancellationToken);
-        var heartbeatTask = HeartbeatLoopAsync(socket, sendLock, cancellationToken);
-        var captureTask = CaptureLoopAsync(socket, sendLock, cancellationToken);
+        using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var receiveTask = ReceiveLoopAsync(socket, loopCts.Token);
+        var heartbeatTask = HeartbeatLoopAsync(socket, sendLock, loopCts.Token);
+        var captureTask = CaptureLoopAsync(socket, sendLock, loopCts.Token);
+        var completedTask = await Task.WhenAny(receiveTask, heartbeatTask, captureTask);
+        loopCts.Cancel();
 
-        await Task.WhenAny(receiveTask, heartbeatTask, captureTask);
+        try
+        {
+            await completedTask;
+            await Task.WhenAll(receiveTask, heartbeatTask, captureTask);
+        }
+        catch (OperationCanceledException) when (loopCts.IsCancellationRequested)
+        {
+        }
 
         if (socket.State == WebSocketState.Open)
         {
@@ -117,11 +131,10 @@ public sealed class RemoteAgentService : BackgroundService
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var frame = _captureService.Capture();
             var heartbeat = JsonSerializer.Serialize(new AgentHeartbeatMessage
             {
-                ScreenWidth = frame.Width,
-                ScreenHeight = frame.Height
+                ScreenWidth = _lastScreenWidth,
+                ScreenHeight = _lastScreenHeight
             }, JsonOptions);
 
             await SendTextAsync(socket, sendLock, heartbeat, cancellationToken);
@@ -134,6 +147,8 @@ public sealed class RemoteAgentService : BackgroundService
         while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
             var frame = _captureService.Capture();
+            _lastScreenWidth = frame.Width;
+            _lastScreenHeight = frame.Height;
             await sendLock.WaitAsync(cancellationToken);
             try
             {

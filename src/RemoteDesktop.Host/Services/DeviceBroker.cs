@@ -148,7 +148,7 @@ public sealed class DeviceBroker
         }
 
         var bytes = Encoding.UTF8.GetBytes(jsonPayload);
-        await session.AgentSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+        await session.SendCommandAsync(bytes, cancellationToken);
     }
 
     public Task ForwardViewerCommandAsync(string deviceId, ViewerCommandMessage command, CancellationToken cancellationToken)
@@ -230,6 +230,8 @@ public sealed class DeviceBroker
 
         public WebSocket AgentSocket { get; }
 
+        public SemaphoreSlim SendLock { get; } = new(1, 1);
+
         public Guid PresenceId { get; }
 
         public string DeviceId { get; }
@@ -244,9 +246,30 @@ public sealed class DeviceBroker
 
         public async Task CloseAsync(string reason, CancellationToken cancellationToken)
         {
-            if (AgentSocket.State == WebSocketState.Open)
+            await SendLock.WaitAsync(cancellationToken);
+            try
             {
-                await AgentSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken);
+                if (AgentSocket.State == WebSocketState.Open)
+                {
+                    await AgentSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken);
+                }
+            }
+            finally
+            {
+                SendLock.Release();
+            }
+        }
+
+        public async Task SendCommandAsync(byte[] payload, CancellationToken cancellationToken)
+        {
+            await SendLock.WaitAsync(cancellationToken);
+            try
+            {
+                await AgentSocket.SendAsync(payload, WebSocketMessageType.Text, true, cancellationToken);
+            }
+            finally
+            {
+                SendLock.Release();
             }
         }
     }

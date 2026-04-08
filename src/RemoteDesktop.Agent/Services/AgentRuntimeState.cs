@@ -6,6 +6,7 @@ namespace RemoteDesktop.Agent.Services;
 
 public sealed class AgentRuntimeState
 {
+    private readonly object _sync = new();
     private readonly ConcurrentQueue<string> _recentEvents = new();
     private readonly AgentOptions _options;
 
@@ -32,47 +33,76 @@ public sealed class AgentRuntimeState
 
     public string DeviceName { get; }
 
-    public IReadOnlyList<string> GetRecentEvents()
+    public AgentRuntimeSnapshot GetSnapshot()
     {
-        return _recentEvents.ToArray();
+        lock (_sync)
+        {
+            return new AgentRuntimeSnapshot(
+                CurrentStatus,
+                LastError,
+                LastConnectedAt,
+                LastFrameSentAt,
+                ServerUrl,
+                DeviceId,
+                DeviceName,
+                _recentEvents.ToArray());
+        }
     }
 
     public void MarkStarting()
     {
-        CurrentStatus = "啟動中";
-        Enqueue("Agent 啟動中。");
+        lock (_sync)
+        {
+            CurrentStatus = "啟動中";
+            Enqueue("Agent 啟動中。");
+        }
     }
 
     public void MarkConnecting(Uri serverUri)
     {
-        CurrentStatus = "連線中";
-        Enqueue($"連線至 {serverUri}");
+        lock (_sync)
+        {
+            CurrentStatus = "連線中";
+            Enqueue($"連線至 {serverUri}");
+        }
     }
 
     public void MarkConnected()
     {
-        CurrentStatus = "已連線";
-        LastConnectedAt = DateTimeOffset.Now;
-        LastError = null;
-        Enqueue("已成功連線到控制端。");
+        lock (_sync)
+        {
+            CurrentStatus = "已連線";
+            LastConnectedAt = DateTimeOffset.Now;
+            LastError = null;
+            Enqueue("已成功連線到控制端。");
+        }
     }
 
     public void MarkFrameSent()
     {
-        LastFrameSentAt = DateTimeOffset.Now;
+        lock (_sync)
+        {
+            LastFrameSentAt = DateTimeOffset.Now;
+        }
     }
 
     public void MarkDisconnected(string reason)
     {
-        CurrentStatus = "已中斷";
-        Enqueue($"連線中斷：{reason}");
+        lock (_sync)
+        {
+            CurrentStatus = "已中斷";
+            Enqueue($"連線中斷：{reason}");
+        }
     }
 
     public void MarkError(Exception exception)
     {
-        CurrentStatus = "錯誤";
-        LastError = exception.Message;
-        Enqueue($"錯誤：{exception.Message}");
+        lock (_sync)
+        {
+            CurrentStatus = "錯誤";
+            LastError = exception.Message;
+            Enqueue($"錯誤：{exception.Message}");
+        }
     }
 
     private void Enqueue(string message)
@@ -83,3 +113,13 @@ public sealed class AgentRuntimeState
         }
     }
 }
+
+public sealed record AgentRuntimeSnapshot(
+    string CurrentStatus,
+    string? LastError,
+    DateTimeOffset? LastConnectedAt,
+    DateTimeOffset? LastFrameSentAt,
+    string ServerUrl,
+    string DeviceId,
+    string DeviceName,
+    IReadOnlyList<string> RecentEvents);

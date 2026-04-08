@@ -12,6 +12,7 @@ public partial class MainForm : Form
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
     private string _signedInUserName = string.Empty;
     private bool _refreshing;
+    private string? _lastRefreshErrorMessage;
 
     public MainForm()
     {
@@ -49,7 +50,7 @@ public partial class MainForm : Form
         lblHealthUrlValue.Text = $"{_options.ServerUrl.TrimEnd('/')}/healthz";
         lblSignedInUserValue.Text = _signedInUserName;
 
-        await RefreshDashboardAsync();
+        await RefreshDashboardAsync(showErrorDialog: true);
         _refreshTimer.Start();
     }
 
@@ -62,7 +63,7 @@ public partial class MainForm : Form
 
     private async void btnRefresh_Click(object sender, EventArgs e)
     {
-        await RefreshDashboardAsync();
+        await RefreshDashboardAsync(showErrorDialog: true);
     }
 
     private void btnOpenViewer_Click(object sender, EventArgs e)
@@ -83,7 +84,7 @@ public partial class MainForm : Form
         btnOpenViewer.Enabled = GetSelectedDevice() is { Source.IsOnline: true };
     }
 
-    private async Task RefreshDashboardAsync()
+    private async Task RefreshDashboardAsync(bool showErrorDialog = false)
     {
         if (_repository is null || _refreshing)
         {
@@ -112,16 +113,22 @@ public partial class MainForm : Form
             lblTotalCountValue.Text = devices.Count.ToString();
             lblLastRefreshValue.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             lblStatusValue.Text = "就緒";
+            _lastRefreshErrorMessage = null;
             btnOpenViewer.Enabled = GetSelectedDevice() is { Source.IsOnline: true };
         }
         catch (Exception exception)
         {
             lblStatusValue.Text = "更新失敗";
-            MessageBox.Show(
-                $"讀取儀表板資料失敗：{exception.Message}",
-                "RemoteDesktop.Host",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            if (showErrorDialog && !string.Equals(_lastRefreshErrorMessage, exception.Message, StringComparison.Ordinal))
+            {
+                MessageBox.Show(
+                    $"讀取儀表板資料失敗：{exception.Message}",
+                    "RemoteDesktop.Host",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+
+            _lastRefreshErrorMessage = exception.Message;
         }
         finally
         {
