@@ -271,6 +271,15 @@ static void TestRemoteViewerUploadForm()
             throw new InvalidOperationException("Viewer zoom selector did not switch to the expected preset.");
         }
 
+        var applyLayoutMethod = typeof(RemoteViewerForm).GetMethod("ApplyPictureLayout", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ApplyPictureLayout method not found.");
+        applyLayoutMethod.Invoke(form, null);
+        PumpUi();
+        if (!string.Equals(zoomCombo.SelectedItem?.ToString(), "100%", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Viewer zoom selection did not persist after a layout refresh.");
+        }
+
         var fullscreenButton = GetControl<Button>(form, "btnFullscreen");
         fullscreenButton.PerformClick();
         PumpUi();
@@ -841,6 +850,7 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
 
 
 

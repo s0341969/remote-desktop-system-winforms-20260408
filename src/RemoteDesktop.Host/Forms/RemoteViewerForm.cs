@@ -1105,6 +1105,11 @@ public partial class RemoteViewerForm : Form
             return;
         }
 
+        if (cboZoom.SelectedIndex == selectedIndex || cboZoom.DroppedDown)
+        {
+            return;
+        }
+
         _suppressZoomSelectionChanged = true;
         try
         {
