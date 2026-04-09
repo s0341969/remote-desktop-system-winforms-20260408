@@ -258,6 +258,12 @@ static void TestRemoteViewerUploadForm()
         form.Show();
         PumpUi();
 
+        var actionsButton = GetControl<Button>(form, "btnActions");
+        if (!actionsButton.Text.Contains("功能", StringComparison.Ordinal) || !actionsButton.Text.Contains("Actions", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Viewer did not expose the expected actions dropdown button.");
+        }
+
         var zoomCombo = GetControl<ComboBox>(form, "cboZoom");
         if (zoomCombo.Items.Count < 2)
         {
@@ -280,8 +286,9 @@ static void TestRemoteViewerUploadForm()
             throw new InvalidOperationException("Viewer zoom selection did not persist after a layout refresh.");
         }
 
-        var fullscreenButton = GetControl<Button>(form, "btnFullscreen");
-        fullscreenButton.PerformClick();
+        var toggleFullscreenMethod = typeof(RemoteViewerForm).GetMethod("ToggleFullscreen", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ToggleFullscreen method not found.");
+        toggleFullscreenMethod.Invoke(form, new object[] { false });
         PumpUi();
         if (GetControl<Panel>(form, "panelTop").Visible)
         {
@@ -856,6 +863,8 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
+
 
 
 

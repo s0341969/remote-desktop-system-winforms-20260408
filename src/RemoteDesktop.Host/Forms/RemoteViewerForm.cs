@@ -124,6 +124,7 @@ public partial class RemoteViewerForm : Form
         btnUploadFile.Enabled = viewer.CanControlRemote;
         btnDownloadFile.Enabled = viewer.CanControlRemote;
         btnOpenTransferFolder.Enabled = false;
+        SyncActionMenuState();
         LogTransferTrace("host-viewer-bound", "Remote viewer form bound to device.", new
         {
             deviceId = device.DeviceId,
@@ -173,6 +174,7 @@ public partial class RemoteViewerForm : Form
             : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
         SetTransferPanelVisible(false);
         ConfigureZoomOptions();
+        SyncActionMenuState();
         ApplyPictureLayout();
         pictureStream.Focus();
     }
@@ -609,6 +611,42 @@ public partial class RemoteViewerForm : Form
     private void btnDownloadFile_Click(object sender, EventArgs e)
     {
         _ = HandleDownloadSelectionSafeAsync();
+    }
+
+    private void btnActions_Click(object sender, EventArgs e)
+    {
+        SyncActionMenuState();
+        menuActions.Show(btnActions, new Point(0, btnActions.Height));
+    }
+
+    private void menuOpenTransferFolder_Click(object sender, EventArgs e)
+    {
+        HandleOpenTransferFolder();
+    }
+
+    private void menuSendClipboard_Click(object sender, EventArgs e)
+    {
+        btnSendClipboard_Click(sender, e);
+    }
+
+    private void menuGetClipboard_Click(object sender, EventArgs e)
+    {
+        btnGetClipboard_Click(sender, e);
+    }
+
+    private void menuUploadFile_Click(object sender, EventArgs e)
+    {
+        btnUploadFile_Click(sender, e);
+    }
+
+    private void menuDownloadFile_Click(object sender, EventArgs e)
+    {
+        btnDownloadFile_Click(sender, e);
+    }
+
+    private void menuFullscreen_Click(object sender, EventArgs e)
+    {
+        btnFullscreen_Click(sender, e);
     }
 
     private async Task HandleDownloadSelectionSafeAsync()
@@ -1689,6 +1727,22 @@ public partial class RemoteViewerForm : Form
         {
             layoutRoot.RowStyles[0].Height = visible ? TopPanelExpandedHeight : TopPanelCollapsedHeight;
         }
+
+        SyncActionMenuState();
+    }
+
+    private void SyncActionMenuState()
+    {
+        menuOpenTransferFolder.Enabled = btnOpenTransferFolder.Enabled;
+        menuSendClipboard.Enabled = btnSendClipboard.Enabled;
+        menuGetClipboard.Enabled = btnGetClipboard.Enabled;
+        menuUploadFile.Enabled = btnUploadFile.Enabled;
+        menuDownloadFile.Enabled = btnDownloadFile.Enabled;
+        menuFocusRemote.Enabled = true;
+        menuDisconnect.Enabled = true;
+        menuFullscreen.Text = _isFullscreen
+            ? HostUiText.Bi("離開全螢幕", "Exit Fullscreen")
+            : HostUiText.Bi("全螢幕", "Fullscreen");
     }
 
     private static void TryDeleteFile(string? path)
@@ -1900,6 +1954,15 @@ public partial class RemoteViewerForm : Form
         HostUiText.ApplyButton(btnFullscreen, "全螢幕", "Fullscreen");
         HostUiText.ApplyButton(btnFocusRemote, "聚焦 Viewer", "Focus Viewer");
         HostUiText.ApplyButton(btnDisconnect, "中斷連線", "Disconnect");
+        HostUiText.ApplyButton(btnActions, "功能 v", "Actions v");
+        menuOpenTransferFolder.Text = HostUiText.Bi("開啟資料夾", "Open Folder");
+        menuDownloadFile.Text = HostUiText.Bi("下載檔案", "Download File");
+        menuSendClipboard.Text = HostUiText.Bi("送出剪貼簿", "Send Clipboard");
+        menuGetClipboard.Text = HostUiText.Bi("取得剪貼簿", "Get Clipboard");
+        menuUploadFile.Text = HostUiText.Bi("上傳檔案", "Upload File");
+        menuFocusRemote.Text = HostUiText.Bi("聚焦 Viewer", "Focus Viewer");
+        menuDisconnect.Text = HostUiText.Bi("中斷連線", "Disconnect");
+        menuFullscreen.Text = HostUiText.Bi("全螢幕", "Fullscreen");
         SetTransferPanelVisible(false);
     }
 

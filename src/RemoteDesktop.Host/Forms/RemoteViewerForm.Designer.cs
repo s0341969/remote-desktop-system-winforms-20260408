@@ -7,6 +7,16 @@ partial class RemoteViewerForm
     private TableLayoutPanel layoutRoot;
     private Panel panelTop;
     private Panel panelViewer;
+    private Button btnActions;
+    private ContextMenuStrip menuActions;
+    private ToolStripMenuItem menuOpenTransferFolder;
+    private ToolStripMenuItem menuSendClipboard;
+    private ToolStripMenuItem menuGetClipboard;
+    private ToolStripMenuItem menuUploadFile;
+    private ToolStripMenuItem menuDownloadFile;
+    private ToolStripMenuItem menuFullscreen;
+    private ToolStripMenuItem menuFocusRemote;
+    private ToolStripMenuItem menuDisconnect;
     private Label lblDeviceCaption;
     private Label lblDeviceValue;
     private Label lblHostCaption;
@@ -45,8 +55,19 @@ partial class RemoteViewerForm
 
     private void InitializeComponent()
     {
+        components = new System.ComponentModel.Container();
         layoutRoot = new TableLayoutPanel();
         panelTop = new Panel();
+        btnActions = new Button();
+        menuActions = new ContextMenuStrip(components);
+        menuOpenTransferFolder = new ToolStripMenuItem();
+        menuSendClipboard = new ToolStripMenuItem();
+        menuGetClipboard = new ToolStripMenuItem();
+        menuUploadFile = new ToolStripMenuItem();
+        menuDownloadFile = new ToolStripMenuItem();
+        menuFullscreen = new ToolStripMenuItem();
+        menuFocusRemote = new ToolStripMenuItem();
+        menuDisconnect = new ToolStripMenuItem();
         btnDisconnect = new Button();
         btnFocusRemote = new Button();
         btnFullscreen = new Button();
@@ -96,6 +117,7 @@ partial class RemoteViewerForm
         // 
         // panelTop
         // 
+        panelTop.Controls.Add(btnActions);
         panelTop.Controls.Add(btnDisconnect);
         panelTop.Controls.Add(btnFocusRemote);
         panelTop.Controls.Add(btnFullscreen);
@@ -126,37 +148,113 @@ partial class RemoteViewerForm
         panelTop.Size = new Size(1414, 146);
         panelTop.TabIndex = 0;
         // 
+        // btnActions
+        // 
+        btnActions.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnActions.Location = new Point(1305, 18);
+        btnActions.Name = "btnActions";
+        btnActions.Size = new Size(94, 42);
+        btnActions.TabIndex = 9;
+        btnActions.Text = "Actions";
+        btnActions.UseVisualStyleBackColor = true;
+        btnActions.Click += btnActions_Click;
+        // 
+        // menuActions
+        // 
+        menuActions.Items.AddRange(new ToolStripItem[] { menuOpenTransferFolder, menuSendClipboard, menuGetClipboard, menuUploadFile, menuDownloadFile, menuFullscreen, menuFocusRemote, menuDisconnect });
+        menuActions.Name = "menuActions";
+        menuActions.Size = new Size(181, 202);
+        // 
+        // menuOpenTransferFolder
+        // 
+        menuOpenTransferFolder.Name = "menuOpenTransferFolder";
+        menuOpenTransferFolder.Size = new Size(180, 22);
+        menuOpenTransferFolder.Text = "Open Folder";
+        menuOpenTransferFolder.Click += menuOpenTransferFolder_Click;
+        // 
+        // menuSendClipboard
+        // 
+        menuSendClipboard.Name = "menuSendClipboard";
+        menuSendClipboard.Size = new Size(180, 22);
+        menuSendClipboard.Text = "Send Clipboard";
+        menuSendClipboard.Click += menuSendClipboard_Click;
+        // 
+        // menuGetClipboard
+        // 
+        menuGetClipboard.Name = "menuGetClipboard";
+        menuGetClipboard.Size = new Size(180, 22);
+        menuGetClipboard.Text = "Get Clipboard";
+        menuGetClipboard.Click += menuGetClipboard_Click;
+        // 
+        // menuUploadFile
+        // 
+        menuUploadFile.Name = "menuUploadFile";
+        menuUploadFile.Size = new Size(180, 22);
+        menuUploadFile.Text = "Upload File";
+        menuUploadFile.Click += menuUploadFile_Click;
+        // 
+        // menuDownloadFile
+        // 
+        menuDownloadFile.Name = "menuDownloadFile";
+        menuDownloadFile.Size = new Size(180, 22);
+        menuDownloadFile.Text = "Download File";
+        menuDownloadFile.Click += menuDownloadFile_Click;
+        // 
+        // menuFullscreen
+        // 
+        menuFullscreen.Name = "menuFullscreen";
+        menuFullscreen.Size = new Size(180, 22);
+        menuFullscreen.Text = "Fullscreen";
+        menuFullscreen.Click += menuFullscreen_Click;
+        // 
+        // menuFocusRemote
+        // 
+        menuFocusRemote.Name = "menuFocusRemote";
+        menuFocusRemote.Size = new Size(180, 22);
+        menuFocusRemote.Text = "Focus";
+        menuFocusRemote.Click += btnFocusRemote_Click;
+        // 
+        // menuDisconnect
+        // 
+        menuDisconnect.Name = "menuDisconnect";
+        menuDisconnect.Size = new Size(180, 22);
+        menuDisconnect.Text = "Disconnect";
+        menuDisconnect.Click += btnDisconnect_Click;
+        // 
         // btnDisconnect
         // 
         btnDisconnect.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnDisconnect.Location = new Point(1312, 18);
+        btnDisconnect.Location = new Point(1305, 66);
         btnDisconnect.Name = "btnDisconnect";
         btnDisconnect.Size = new Size(87, 42);
         btnDisconnect.TabIndex = 8;
         btnDisconnect.Text = "Disconnect";
         btnDisconnect.UseVisualStyleBackColor = true;
+        btnDisconnect.Visible = false;
         btnDisconnect.Click += btnDisconnect_Click;
         // 
         // btnFocusRemote
         // 
         btnFocusRemote.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnFocusRemote.Location = new Point(1218, 18);
+        btnFocusRemote.Location = new Point(1211, 66);
         btnFocusRemote.Name = "btnFocusRemote";
         btnFocusRemote.Size = new Size(88, 42);
         btnFocusRemote.TabIndex = 7;
         btnFocusRemote.Text = "Focus";
         btnFocusRemote.UseVisualStyleBackColor = true;
+        btnFocusRemote.Visible = false;
         btnFocusRemote.Click += btnFocusRemote_Click;
         // 
         // btnFullscreen
         // 
         btnFullscreen.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnFullscreen.Location = new Point(1110, 18);
+        btnFullscreen.Location = new Point(1103, 66);
         btnFullscreen.Name = "btnFullscreen";
         btnFullscreen.Size = new Size(102, 42);
         btnFullscreen.TabIndex = 6;
         btnFullscreen.Text = "Fullscreen";
         btnFullscreen.UseVisualStyleBackColor = true;
+        btnFullscreen.Visible = false;
         btnFullscreen.Click += btnFullscreen_Click;
         // 
         // cboZoom
@@ -183,56 +281,61 @@ partial class RemoteViewerForm
         // btnUploadFile
         // 
         btnUploadFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnUploadFile.Location = new Point(810, 18);
+        btnUploadFile.Location = new Point(803, 66);
         btnUploadFile.Name = "btnUploadFile";
         btnUploadFile.Size = new Size(94, 42);
         btnUploadFile.TabIndex = 3;
         btnUploadFile.Text = "Upload File";
         btnUploadFile.UseVisualStyleBackColor = true;
+        btnUploadFile.Visible = false;
         btnUploadFile.Click += btnUploadFile_Click;
         // 
         // btnDownloadFile
         // 
         btnDownloadFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnDownloadFile.Location = new Point(910, 18);
+        btnDownloadFile.Location = new Point(903, 66);
         btnDownloadFile.Name = "btnDownloadFile";
         btnDownloadFile.Size = new Size(100, 42);
         btnDownloadFile.TabIndex = 4;
         btnDownloadFile.Text = "Download File";
         btnDownloadFile.UseVisualStyleBackColor = true;
+        btnDownloadFile.Visible = false;
         btnDownloadFile.Click += btnDownloadFile_Click;
         // 
         // btnGetClipboard
         // 
         btnGetClipboard.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnGetClipboard.Location = new Point(706, 18);
+        btnGetClipboard.Location = new Point(699, 66);
         btnGetClipboard.Name = "btnGetClipboard";
         btnGetClipboard.Size = new Size(98, 42);
         btnGetClipboard.TabIndex = 2;
         btnGetClipboard.Text = "Get Clipboard";
         btnGetClipboard.UseVisualStyleBackColor = true;
+        btnGetClipboard.Visible = false;
         btnGetClipboard.Click += btnGetClipboard_Click;
         // 
         // btnSendClipboard
         // 
         btnSendClipboard.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSendClipboard.Location = new Point(566, 18);
+        btnSendClipboard.Location = new Point(559, 66);
         btnSendClipboard.Name = "btnSendClipboard";
         btnSendClipboard.Size = new Size(134, 42);
         btnSendClipboard.TabIndex = 1;
         btnSendClipboard.Text = "Send Clipboard";
         btnSendClipboard.UseVisualStyleBackColor = true;
+        btnSendClipboard.Visible = false;
         btnSendClipboard.Click += btnSendClipboard_Click;
         // 
         // btnOpenTransferFolder
         // 
         btnOpenTransferFolder.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnOpenTransferFolder.Location = new Point(450, 18);
+        btnOpenTransferFolder.Location = new Point(443, 66);
         btnOpenTransferFolder.Name = "btnOpenTransferFolder";
         btnOpenTransferFolder.Size = new Size(110, 42);
         btnOpenTransferFolder.TabIndex = 0;
         btnOpenTransferFolder.Text = "Open Folder";
         btnOpenTransferFolder.UseVisualStyleBackColor = true;
+        btnOpenTransferFolder.Visible = false;
         btnOpenTransferFolder.Click += btnOpenTransferFolder_Click;
         // 
         // progressFileTransfer
