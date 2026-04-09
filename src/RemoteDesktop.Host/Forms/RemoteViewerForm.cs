@@ -66,11 +66,18 @@ public partial class RemoteViewerForm : Form
     private bool _commandFailed;
     private bool _observeOnlyNoticeShown;
     private string? _activeUploadId;
+    private string? _activeDownloadId;
     private string? _lastUploadedFilePath;
+    private string? _lastDownloadFilePath;
     private FileTransferTraceService? _fileTransferTraceService;
     private TaskCompletionSource<AgentClipboardMessage>? _clipboardSyncSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadStartSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadCompletionSignal;
+    private FileStream? _downloadStream;
+    private string? _downloadTempPath;
+    private string? _downloadTargetPath;
+    private bool _transferPanelVisible;
+    private const int TopPanelCollapsedHeight = 152;
     private const int TopPanelExpandedHeight = 272;
     private static readonly (string Key, double? Factor)[] ZoomPresets =
     {
@@ -115,6 +122,7 @@ public partial class RemoteViewerForm : Form
         btnSendClipboard.Enabled = viewer.CanControlRemote;
         btnGetClipboard.Enabled = viewer.CanControlRemote;
         btnUploadFile.Enabled = viewer.CanControlRemote;
+        btnDownloadFile.Enabled = viewer.CanControlRemote;
         btnOpenTransferFolder.Enabled = false;
         LogTransferTrace("host-viewer-bound", "Remote viewer form bound to device.", new
         {
@@ -163,6 +171,7 @@ public partial class RemoteViewerForm : Form
         lblClipboardValue.Text = _viewer.CanControlRemote
             ? HostUiText.Bi("剪貼簿同步已就緒。", "Clipboard sync is ready.")
             : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
+        SetTransferPanelVisible(false);
         ConfigureZoomOptions();
         ApplyPictureLayout();
         pictureStream.Focus();
@@ -174,6 +183,14 @@ public partial class RemoteViewerForm : Form
         {
             await TryAbortUploadAsync(_activeUploadId);
         }
+
+        if (_downloadStream is not null)
+        {
+            await _downloadStream.DisposeAsync();
+            _downloadStream = null;
+        }
+
+        TryDeleteFile(_downloadTempPath);
 
         if (_attached && _deviceBroker is not null && _device is not null)
         {
@@ -221,6 +238,13 @@ public partial class RemoteViewerForm : Form
     {
         if (IsDisposed)
         {
+            return Task.CompletedTask;
+        }
+
+        if (string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(status.Status, "chunk", StringComparison.OrdinalIgnoreCase))
+        {
+            ReceiveDownloadChunk(status);
             return Task.CompletedTask;
         }
 
@@ -276,6 +300,7 @@ public partial class RemoteViewerForm : Form
             using var stream = new MemoryStream(payload);
             using var source = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
             var bitmap = new Bitmap(source);
+            var frameSizeChanged = _frameSize != bitmap.Size;
             _frameSize = bitmap.Size;
 
             var previous = pictureStream.Image;
@@ -283,7 +308,10 @@ public partial class RemoteViewerForm : Form
             previous?.Dispose();
 
             lblStatusValue.Text = HostUiText.Bi($"串流中 {_frameSize.Width} x {_frameSize.Height}", $"Streaming {_frameSize.Width} x {_frameSize.Height}");
-            ApplyPictureLayout();
+            if (_fitToWindow || frameSizeChanged)
+            {
+                ApplyPictureLayout();
+            }
         }
         catch (Exception exception)
         {
@@ -297,6 +325,7 @@ public partial class RemoteViewerForm : Form
         {
             deviceId = _device?.DeviceId,
             uploadId = status.UploadId,
+            direction = status.Direction,
             status = status.Status,
             fileName = status.FileName,
             storedFileName = status.StoredFileName,
@@ -305,10 +334,18 @@ public partial class RemoteViewerForm : Form
             fileSize = status.FileSize
         });
 
+        if (string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase))
+        {
+            HandleDownloadStatus(status);
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(_activeUploadId) && !string.Equals(_activeUploadId, status.UploadId, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
+
+        SetTransferPanelVisible(true);
 
         switch (status.Status)
         {
@@ -318,6 +355,7 @@ public partial class RemoteViewerForm : Form
                 lblTransferValue.Text = status.Message;
                 lblTransferPathValue.Text = HostUiText.Bi("目的地：等待 Agent 回報儲存位置。", "Destination: waiting for Agent to report the destination path.");
                 _lastUploadedFilePath = null;
+                btnDownloadFile.Enabled = false;
                 btnOpenTransferFolder.Enabled = false;
                 break;
             case "progress":
@@ -333,6 +371,7 @@ public partial class RemoteViewerForm : Form
                 _uploadCompletionSignal?.TrySetResult(status);
                 UpdateTransferProgress(status.FileSize, status.FileSize);
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+                btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
                 _lastUploadedFilePath = string.IsNullOrWhiteSpace(status.StoredFilePath) ? null : status.StoredFilePath;
                 btnOpenTransferFolder.Enabled = !string.IsNullOrWhiteSpace(_lastUploadedFilePath);
                 lblTransferValue.Text = status.Message;
@@ -348,10 +387,47 @@ public partial class RemoteViewerForm : Form
                 lblTransferValue.Text = status.Message;
                 lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+                btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
                 _lastUploadedFilePath = null;
                 btnOpenTransferFolder.Enabled = false;
                 _activeUploadId = null;
                 MessageBox.Show(status.Message, HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                break;
+        }
+    }
+
+    private void HandleDownloadStatus(AgentFileTransferStatusMessage status)
+    {
+        if (!string.IsNullOrWhiteSpace(_activeDownloadId) && !string.Equals(_activeDownloadId, status.UploadId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        SetTransferPanelVisible(true);
+
+        switch (status.Status)
+        {
+            case "started":
+                progressFileTransfer.Value = 0;
+                lblTransferValue.Text = status.Message;
+                lblTransferPathValue.Text = string.IsNullOrWhiteSpace(_downloadTargetPath)
+                    ? HostUiText.Bi("目的地：等待本機儲存位置。", "Destination: waiting for the local save path.")
+                    : HostUiText.Bi($"目的地：{_downloadTargetPath}", $"Destination: {_downloadTargetPath}");
+                btnUploadFile.Enabled = false;
+                btnDownloadFile.Enabled = false;
+                btnOpenTransferFolder.Enabled = false;
+                break;
+            case "chunk":
+                break;
+            case "progress":
+                UpdateTransferProgress(status.BytesTransferred, status.FileSize);
+                lblTransferValue.Text = status.Message;
+                break;
+            case "completed":
+                FinalizeDownload(status);
+                break;
+            case "failed":
+                FailDownload(status.Message);
                 break;
         }
     }
@@ -530,6 +606,48 @@ public partial class RemoteViewerForm : Form
         }
     }
 
+    private void btnDownloadFile_Click(object sender, EventArgs e)
+    {
+        _ = HandleDownloadSelectionSafeAsync();
+    }
+
+    private async Task HandleDownloadSelectionSafeAsync()
+    {
+        try
+        {
+            await HandleDownloadSelectionAsync();
+        }
+        catch (Exception exception)
+        {
+            FailDownload(HostUiText.Bi($"下載初始化失敗：{exception.Message}", $"Download initialization failed: {exception.Message}"), showDialog: true);
+        }
+    }
+
+    protected virtual async Task HandleDownloadSelectionAsync()
+    {
+        if (!EnsureInteractivePermission(HostUiText.Bi("此帳號沒有下載檔案的權限。", "This account does not have permission to download files.")))
+        {
+            return;
+        }
+
+        var suggestedRemotePath = !string.IsNullOrWhiteSpace(_lastUploadedFilePath)
+            ? _lastUploadedFilePath
+            : _lastDownloadFilePath;
+        var remotePath = SelectDownloadSourcePath(this, suggestedRemotePath);
+        if (string.IsNullOrWhiteSpace(remotePath))
+        {
+            return;
+        }
+
+        var localPath = SelectDownloadSavePath(this, Path.GetFileName(remotePath));
+        if (string.IsNullOrWhiteSpace(localPath))
+        {
+            return;
+        }
+
+        await StartDownloadAsync(remotePath, localPath);
+    }
+
     private async void btnSendClipboard_Click(object sender, EventArgs e)
     {
         await HandleSendClipboardSafeAsync();
@@ -664,7 +782,9 @@ public partial class RemoteViewerForm : Form
         _lastUploadedFilePath = null;
         btnOpenTransferFolder.Enabled = false;
         btnUploadFile.Enabled = false;
+        btnDownloadFile.Enabled = false;
         progressFileTransfer.Value = 0;
+        SetTransferPanelVisible(true);
         lblTransferValue.Text = HostUiText.Bi($"正在上傳 {fileInfo.Name}...", $"Uploading {fileInfo.Name}...");
         lblTransferPathValue.Text = HostUiText.Bi("目的地：等待 Agent 建立檔案。", "Destination: waiting for Agent to create the file.");
         LogTransferTrace("host-upload-started", "Started Host-side upload workflow.", new
@@ -707,6 +827,7 @@ public partial class RemoteViewerForm : Form
             await TryAbortUploadAsync(uploadId);
             _activeUploadId = null;
             btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
@@ -811,6 +932,58 @@ public partial class RemoteViewerForm : Form
             lblTransferValue.Text = HostUiText.Bi($"等待 Agent 完成 {fileInfo.Name} 的檔案寫入...", $"Waiting for Agent to finalize {fileInfo.Name}...");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：檔案已建立，等待完成寫入。", "Destination: file created, waiting for finalization.");
         }).ConfigureAwait(false);
+    }
+
+    protected virtual async Task StartDownloadAsync(string remotePath, string localPath)
+    {
+        if (_device is null)
+        {
+            return;
+        }
+
+        var transferId = Guid.NewGuid().ToString("N");
+        _activeDownloadId = transferId;
+        _lastDownloadFilePath = null;
+        _downloadTargetPath = localPath;
+        _downloadTempPath = $"{localPath}.downloading";
+        Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
+        TryDeleteFile(_downloadTempPath);
+        _downloadStream = new FileStream(_downloadTempPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+
+        SetTransferPanelVisible(true);
+        progressFileTransfer.Value = 0;
+        lblTransferValue.Text = HostUiText.Bi($"正在要求下載 {Path.GetFileName(remotePath)}...", $"Requesting download for {Path.GetFileName(remotePath)}...");
+        lblTransferPathValue.Text = HostUiText.Bi($"來源：{remotePath}  目的地：{localPath}", $"Source: {remotePath}  Destination: {localPath}");
+        btnUploadFile.Enabled = false;
+        btnDownloadFile.Enabled = false;
+        btnOpenTransferFolder.Enabled = false;
+
+        LogTransferTrace("host-download-started", "Started Host-side download workflow.", new
+        {
+            deviceId = _device.DeviceId,
+            transferId,
+            remotePath,
+            localPath
+        });
+
+        try
+        {
+            await ExecuteDownloadAsync(transferId, remotePath);
+        }
+        catch (Exception exception)
+        {
+            FailDownload(HostUiText.Bi($"檔案下載失敗：{exception.Message}", $"File download failed: {exception.Message}"), showDialog: true);
+        }
+    }
+
+    protected virtual Task ExecuteDownloadAsync(string transferId, string remotePath)
+    {
+        return SendViewerCommandCoreAsync(new ViewerCommandMessage
+        {
+            Type = "file-download-start",
+            UploadId = transferId,
+            RemotePath = remotePath
+        }, CancellationToken.None);
     }
 
     private async Task TryAbortUploadAsync(string uploadId)
@@ -1001,6 +1174,84 @@ public partial class RemoteViewerForm : Form
         }
     }
 
+    private void ReceiveDownloadChunk(AgentFileTransferStatusMessage status)
+    {
+        if (_downloadStream is null || string.IsNullOrWhiteSpace(status.ChunkBase64))
+        {
+            return;
+        }
+
+        try
+        {
+            var chunk = Convert.FromBase64String(status.ChunkBase64);
+            _downloadStream.Write(chunk, 0, chunk.Length);
+        }
+        catch (Exception exception)
+        {
+            FailDownload(HostUiText.Bi($"寫入下載檔案失敗：{exception.Message}", $"Failed to write the downloaded file: {exception.Message}"));
+        }
+    }
+
+    private void FinalizeDownload(AgentFileTransferStatusMessage status)
+    {
+        try
+        {
+            _downloadStream?.Flush();
+            _downloadStream?.Dispose();
+            _downloadStream = null;
+
+            if (string.IsNullOrWhiteSpace(_downloadTargetPath) || string.IsNullOrWhiteSpace(_downloadTempPath))
+            {
+                throw new InvalidOperationException(HostUiText.Bi("本機下載目的地不存在。", "The local download target was not prepared."));
+            }
+
+            TryDeleteFile(_downloadTargetPath);
+            File.Move(_downloadTempPath, _downloadTargetPath, overwrite: false);
+            _lastDownloadFilePath = _downloadTargetPath;
+            _activeDownloadId = null;
+            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnOpenTransferFolder.Enabled = true;
+            UpdateTransferProgress(status.FileSize, status.FileSize);
+            lblTransferValue.Text = status.Message;
+            lblTransferPathValue.Text = HostUiText.Bi($"已下載到：{_downloadTargetPath}", $"Downloaded to: {_downloadTargetPath}");
+        }
+        catch (Exception exception)
+        {
+            FailDownload(HostUiText.Bi($"無法完成本機下載：{exception.Message}", $"Could not finalize the local download: {exception.Message}"), showDialog: true);
+        }
+    }
+
+    private void FailDownload(string message, bool showDialog = false)
+    {
+        try
+        {
+            _downloadStream?.Dispose();
+        }
+        catch
+        {
+        }
+
+        _downloadStream = null;
+        TryDeleteFile(_downloadTempPath);
+        _downloadTempPath = null;
+        _downloadTargetPath = null;
+        _activeDownloadId = null;
+        _lastDownloadFilePath = null;
+        btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+        btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+        btnOpenTransferFolder.Enabled = false;
+        progressFileTransfer.Value = 0;
+        SetTransferPanelVisible(true);
+        lblTransferValue.Text = message;
+        lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
+
+        if (showDialog)
+        {
+            MessageBox.Show(message, HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void cboZoom_SelectedIndexChanged(object sender, EventArgs e)
     {
         if (_suppressZoomSelectionChanged)
@@ -1070,7 +1321,7 @@ public partial class RemoteViewerForm : Form
             TopMost = _restoreTopMost;
             FormBorderStyle = _restoreBorderStyle;
             panelTop.Visible = true;
-            layoutRoot.RowStyles[0].Height = TopPanelExpandedHeight;
+            layoutRoot.RowStyles[0].Height = _transferPanelVisible ? TopPanelExpandedHeight : TopPanelCollapsedHeight;
             Bounds = _restoreBounds;
             WindowState = _restoreWindowState;
         }
@@ -1311,6 +1562,67 @@ public partial class RemoteViewerForm : Form
         return selectedFilePath;
     }
 
+    protected virtual string? SelectDownloadSourcePath(IWin32Window owner, string? suggestedRemotePath)
+    {
+        using var dialog = new DownloadRequestForm(suggestedRemotePath);
+        return dialog.ShowDialog(owner) == DialogResult.OK
+            ? dialog.RemotePath
+            : null;
+    }
+
+    protected virtual string? SelectDownloadSavePath(IWin32Window owner, string suggestedFileName)
+    {
+        string? selectedFilePath = null;
+        Exception? selectionException = null;
+        using var completed = new ManualResetEventSlim(false);
+
+        var dialogThread = new Thread(() =>
+        {
+            try
+            {
+                using var dialog = new SaveFileDialog
+                {
+                    Title = HostUiText.Window("選擇下載目的地", "Choose where to save the download"),
+                    FileName = string.IsNullOrWhiteSpace(suggestedFileName) ? "download.bin" : suggestedFileName,
+                    RestoreDirectory = true,
+                    AddExtension = true,
+                    OverwritePrompt = true,
+                    AutoUpgradeEnabled = true
+                };
+
+                var result = dialog.ShowDialog();
+                if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
+                {
+                    selectedFilePath = dialog.FileName;
+                }
+            }
+            catch (Exception exception)
+            {
+                selectionException = exception;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "RemoteViewerDownloadSaveDialog"
+        };
+
+        dialogThread.SetApartmentState(ApartmentState.STA);
+        dialogThread.Start();
+        completed.Wait();
+        dialogThread.Join();
+
+        if (selectionException is not null)
+        {
+            throw new InvalidOperationException(HostUiText.Bi($"開啟下載目的地選擇器失敗：{selectionException.Message}", $"Failed to open the save dialog: {selectionException.Message}"), selectionException);
+        }
+
+        return selectedFilePath;
+    }
+
     protected virtual void OpenTransferFolder(string directoryPath)
     {
         Process.Start(new ProcessStartInfo
@@ -1328,7 +1640,7 @@ public partial class RemoteViewerForm : Form
 
     protected void HandleOpenTransferFolder()
     {
-        var filePath = _lastUploadedFilePath;
+        var filePath = _lastDownloadFilePath ?? _lastUploadedFilePath;
         if (string.IsNullOrWhiteSpace(filePath))
         {
             MessageBox.Show(
@@ -1361,6 +1673,37 @@ public partial class RemoteViewerForm : Form
                 HostUiText.Window("檔案傳輸", "File Transfer"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
+        }
+    }
+
+    private void SetTransferPanelVisible(bool visible)
+    {
+        _transferPanelVisible = visible;
+        lblTransferCaption.Visible = visible;
+        lblTransferValue.Visible = visible;
+        lblTransferPathValue.Visible = visible;
+        progressFileTransfer.Visible = visible;
+        btnOpenTransferFolder.Visible = visible;
+
+        if (!_isFullscreen)
+        {
+            layoutRoot.RowStyles[0].Height = visible ? TopPanelExpandedHeight : TopPanelCollapsedHeight;
+        }
+    }
+
+    private static void TryDeleteFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch
+        {
         }
     }
 
@@ -1550,12 +1893,14 @@ public partial class RemoteViewerForm : Form
         lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
         lblZoomCaption.Text = HostUiText.Bi("縮放", "Zoom");
         HostUiText.ApplyButton(btnOpenTransferFolder, "開啟資料夾", "Open Folder");
+        HostUiText.ApplyButton(btnDownloadFile, "下載檔案", "Download File");
         HostUiText.ApplyButton(btnSendClipboard, "送出剪貼簿", "Send Clipboard");
         HostUiText.ApplyButton(btnGetClipboard, "取得剪貼簿", "Get Clipboard");
         HostUiText.ApplyButton(btnUploadFile, "上傳檔案", "Upload File");
         HostUiText.ApplyButton(btnFullscreen, "全螢幕", "Fullscreen");
         HostUiText.ApplyButton(btnFocusRemote, "聚焦 Viewer", "Focus Viewer");
         HostUiText.ApplyButton(btnDisconnect, "中斷連線", "Disconnect");
+        SetTransferPanelVisible(false);
     }
 
     private static string FormatBytes(long bytes)
@@ -1611,6 +1956,61 @@ public partial class RemoteViewerForm : Form
         var key = e.KeyCode;
         var printable = (key is >= Keys.A and <= Keys.Z) || (key is >= Keys.D0 and <= Keys.D9);
         return printable && !e.Control && !e.Alt;
+    }
+
+    private sealed class DownloadRequestForm : Form
+    {
+        private readonly TextBox _txtRemotePath;
+
+        public DownloadRequestForm(string? suggestedRemotePath)
+        {
+            Text = HostUiText.Window("下載檔案", "Download File");
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(580, 154);
+
+            var lblPrompt = new Label
+            {
+                AutoSize = false,
+                Location = new Point(16, 16),
+                Size = new Size(548, 40),
+                Text = HostUiText.Bi("輸入 Agent 端檔案路徑，可使用完整路徑或傳輸資料夾內的相對檔名。", "Enter the Agent file path. You can use a full path or a relative name inside the transfer folder.")
+            };
+
+            _txtRemotePath = new TextBox
+            {
+                Location = new Point(16, 64),
+                Size = new Size(548, 23),
+                Text = suggestedRemotePath ?? string.Empty
+            };
+
+            var btnOk = new Button
+            {
+                DialogResult = DialogResult.OK,
+                Location = new Point(378, 108),
+                Size = new Size(90, 30),
+                Text = HostUiText.Bi("確定", "OK")
+            };
+
+            var btnCancel = new Button
+            {
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(474, 108),
+                Size = new Size(90, 30),
+                Text = HostUiText.Bi("取消", "Cancel")
+            };
+
+            Controls.Add(lblPrompt);
+            Controls.Add(_txtRemotePath);
+            Controls.Add(btnOk);
+            Controls.Add(btnCancel);
+            AcceptButton = btnOk;
+            CancelButton = btnCancel;
+        }
+
+        public string RemotePath => _txtRemotePath.Text.Trim();
     }
 }
 

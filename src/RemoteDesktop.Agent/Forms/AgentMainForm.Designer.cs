@@ -76,7 +76,7 @@ partial class AgentMainForm
         layoutRoot.Location = new Point(0, 0);
         layoutRoot.Name = "layoutRoot";
         layoutRoot.RowCount = 6;
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 82F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 234F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
@@ -90,17 +90,17 @@ partial class AgentMainForm
         panelHeader.Name = "panelHeader";
         // btnSettings
         btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSettings.Location = new Point(724, 18);
+        btnSettings.Location = new Point(738, 16);
         btnSettings.Name = "btnSettings";
-        btnSettings.Size = new Size(100, 46);
+        btnSettings.Size = new Size(86, 38);
         btnSettings.Text = "設定\r\nSettings";
         btnSettings.UseVisualStyleBackColor = true;
         btnSettings.Click += btnSettings_Click;
         // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 16F, FontStyle.Bold, GraphicsUnit.Point);
-        lblTitle.Location = new Point(16, 14);
-        lblTitle.Margin = new Padding(16, 14, 3, 0);
+        lblTitle.Location = new Point(16, 12);
+        lblTitle.Margin = new Padding(16, 12, 3, 0);
         lblTitle.Name = "lblTitle";
         lblTitle.Size = new Size(270, 56);
         lblTitle.Text = "遠端桌面 Agent\r\nRemoteDesktop Agent";

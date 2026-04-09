@@ -181,6 +181,8 @@ public sealed class AuditLogForm : Form
             "viewer-remote-control" => HostUiText.Bi("送出遠端控制輸入", "Send remote control input"),
             "file-upload-start" => HostUiText.Bi("開始檔案上傳", "Start file upload"),
             "file-upload-complete" => HostUiText.Bi("完成檔案上傳", "Complete file upload"),
+            "file-download-start" => HostUiText.Bi("開始檔案下載", "Start file download"),
+            "file-download-complete" => HostUiText.Bi("完成檔案下載", "Complete file download"),
             "clipboard-set-start" => HostUiText.Bi("開始送出剪貼簿", "Start clipboard send"),
             "clipboard-set-complete" => HostUiText.Bi("完成送出剪貼簿", "Complete clipboard send"),
             "clipboard-get-start" => HostUiText.Bi("開始取得剪貼簿", "Start clipboard fetch"),

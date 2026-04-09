@@ -129,22 +129,28 @@ public sealed class DeviceBroker
         {
             await viewerSession.PublishStatusAsync(status, cancellationToken);
 
+            var actionPrefix = string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase)
+                ? "file-download"
+                : "file-upload";
+
             if (string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase))
             {
                 _ = _auditService.WriteAsync(
-                    "file-upload-complete",
+                    $"{actionPrefix}-complete",
                     viewerSession.UserName,
                     viewerSession.UserName,
                     "device",
                     deviceId,
                     true,
-                    HostUiText.Bi($"檔案「{status.StoredFileName}」已成功上傳。", $"Uploaded '{status.StoredFileName}' successfully."),
+                    string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase)
+                        ? HostUiText.Bi($"檔案「{status.StoredFileName}」已成功下載。", $"Downloaded '{status.StoredFileName}' successfully.")
+                        : HostUiText.Bi($"檔案「{status.StoredFileName}」已成功上傳。", $"Uploaded '{status.StoredFileName}' successfully."),
                     CancellationToken.None);
             }
             else if (string.Equals(status.Status, "failed", StringComparison.OrdinalIgnoreCase))
             {
                 _ = _auditService.WriteAsync(
-                    "file-upload-complete",
+                    $"{actionPrefix}-complete",
                     viewerSession.UserName,
                     viewerSession.UserName,
                     "device",
@@ -386,6 +392,20 @@ public sealed class DeviceBroker
                 deviceId,
                 true,
                 HostUiText.Bi($"開始上傳檔案「{command.FileName}」。", $"Started uploading '{command.FileName}'."),
+                CancellationToken.None);
+            return;
+        }
+
+        if (command is not null && string.Equals(command.Type, "file-download-start", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _auditService.WriteAsync(
+                "file-download-start",
+                viewerSession.UserName,
+                viewerSession.UserName,
+                "device",
+                deviceId,
+                true,
+                HostUiText.Bi($"開始下載檔案「{command.RemotePath}」。", $"Started downloading '{command.RemotePath}'."),
                 CancellationToken.None);
             return;
         }

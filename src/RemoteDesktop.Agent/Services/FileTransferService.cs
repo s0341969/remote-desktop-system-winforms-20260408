@@ -9,6 +9,7 @@ namespace RemoteDesktop.Agent.Services;
 public sealed class FileTransferService
 {
     private const int MaxChunkBytes = 16 * 1024;
+    private const int MaxDownloadChunkBytes = 16 * 1024;
     private const int MaxChunkBase64Characters = 24_000;
     private const int ProgressPublishThresholdBytes = 256 * 1024;
     private readonly AgentOptions _options;
@@ -57,6 +58,14 @@ public sealed class FileTransferService
                     uploadId = command.UploadId
                 }, cancellationToken);
                 await HandleAbortAsync(command, publishStatusAsync, cancellationToken);
+                return true;
+            case "file-download-start":
+                await LogAsync("agent-download-command-start", "Received file-download-start command.", new
+                {
+                    transferId = command.UploadId,
+                    remotePath = command.RemotePath
+                }, cancellationToken);
+                await HandleDownloadStartAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             default:
                 return false;
@@ -265,6 +274,116 @@ public sealed class FileTransferService
         }, cancellationToken);
     }
 
+    private async Task HandleDownloadStartAsync(
+        ViewerCommandMessage command,
+        Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
+        CancellationToken cancellationToken)
+    {
+        var transferId = command.UploadId?.Trim() ?? string.Empty;
+        var remotePath = command.RemotePath?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(transferId) || string.IsNullOrWhiteSpace(remotePath))
+        {
+            await PublishFailedAsync(transferId, string.Empty, 0, AgentUiText.Bi("下載要求無效。", "The download request is invalid."), publishStatusAsync, cancellationToken, direction: "download");
+            return;
+        }
+
+        try
+        {
+            var filePath = ResolveDownloadPath(remotePath);
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists)
+            {
+                throw new FileNotFoundException(AgentUiText.Bi("指定的下載檔案不存在。", "The requested download file does not exist."), filePath);
+            }
+
+            await publishStatusAsync(new AgentFileTransferStatusMessage
+            {
+                UploadId = transferId,
+                Direction = "download",
+                Status = "started",
+                FileName = fileInfo.Name,
+                StoredFileName = fileInfo.Name,
+                StoredFilePath = fileInfo.FullName,
+                FileSize = fileInfo.Length,
+                BytesTransferred = 0,
+                Message = AgentUiText.Bi($"開始傳送 {fileInfo.Name}。", $"Started sending {fileInfo.Name}.")
+            }, cancellationToken);
+
+            await using var stream = fileInfo.OpenRead();
+            var buffer = new byte[MaxDownloadChunkBytes];
+            var sequenceNumber = 0;
+            long bytesTransferred = 0;
+            long lastPublishedBytesTransferred = 0;
+
+            while (true)
+            {
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, MaxDownloadChunkBytes), cancellationToken);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                bytesTransferred += bytesRead;
+                await publishStatusAsync(new AgentFileTransferStatusMessage
+                {
+                    UploadId = transferId,
+                    Direction = "download",
+                    Status = "chunk",
+                    FileName = fileInfo.Name,
+                    StoredFileName = fileInfo.Name,
+                    StoredFilePath = fileInfo.FullName,
+                    FileSize = fileInfo.Length,
+                    BytesTransferred = bytesTransferred,
+                    SequenceNumber = sequenceNumber++,
+                    ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead),
+                    Message = AgentUiText.Bi($"正在傳送 {fileInfo.Name}。", $"Sending {fileInfo.Name}.")
+                }, cancellationToken);
+
+                if (bytesTransferred - lastPublishedBytesTransferred >= ProgressPublishThresholdBytes && bytesTransferred < fileInfo.Length)
+                {
+                    lastPublishedBytesTransferred = bytesTransferred;
+                    await publishStatusAsync(new AgentFileTransferStatusMessage
+                    {
+                        UploadId = transferId,
+                        Direction = "download",
+                        Status = "progress",
+                        FileName = fileInfo.Name,
+                        StoredFileName = fileInfo.Name,
+                        StoredFilePath = fileInfo.FullName,
+                        FileSize = fileInfo.Length,
+                        BytesTransferred = bytesTransferred,
+                        Message = AgentUiText.Bi($"已傳送 {bytesTransferred} / {fileInfo.Length} 位元組。", $"Sent {bytesTransferred} of {fileInfo.Length} bytes.")
+                    }, cancellationToken);
+                }
+            }
+
+            await publishStatusAsync(new AgentFileTransferStatusMessage
+            {
+                UploadId = transferId,
+                Direction = "download",
+                Status = "completed",
+                FileName = fileInfo.Name,
+                StoredFileName = fileInfo.Name,
+                StoredFilePath = fileInfo.FullName,
+                FileSize = fileInfo.Length,
+                BytesTransferred = fileInfo.Length,
+                Message = AgentUiText.Bi($"檔案 {fileInfo.Name} 已完成傳送。", $"File {fileInfo.Name} was sent successfully.")
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to process download request {TransferId}.", transferId);
+            await PublishFailedAsync(
+                transferId,
+                Path.GetFileName(remotePath),
+                0,
+                AgentUiText.Bi($"檔案下載失敗：{exception.Message}", $"File download failed: {exception.Message}"),
+                publishStatusAsync,
+                cancellationToken,
+                direction: "download");
+        }
+    }
+
     private async Task FailAndCleanupAsync(
         UploadSession session,
         string message,
@@ -323,11 +442,13 @@ public sealed class FileTransferService
         long fileSize,
         string message,
         Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string direction = "upload")
     {
         await publishStatusAsync(new AgentFileTransferStatusMessage
         {
             UploadId = uploadId,
+            Direction = direction,
             Status = "failed",
             FileName = fileName,
             StoredFileName = string.Empty,
@@ -349,6 +470,17 @@ public sealed class FileTransferService
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads",
             "RemoteDesktop Transfers");
+    }
+
+    private string ResolveDownloadPath(string remotePath)
+    {
+        var trimmed = remotePath.Trim();
+        if (Path.IsPathRooted(trimmed))
+        {
+            return trimmed;
+        }
+
+        return Path.Combine(ResolveTransferDirectory(), trimmed);
     }
 
     private static bool ShouldPublishProgress(UploadSession session)

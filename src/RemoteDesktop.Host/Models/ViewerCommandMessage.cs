@@ -27,4 +27,6 @@ public sealed class ViewerCommandMessage
     public string? ChunkBase64 { get; init; }
 
     public string? ClipboardText { get; init; }
+
+    public string? RemotePath { get; init; }
 }

@@ -24,6 +24,7 @@ partial class RemoteViewerForm
     private ProgressBar progressFileTransfer;
     private ComboBox cboZoom;
     private Button btnOpenTransferFolder;
+    private Button btnDownloadFile;
     private Button btnGetClipboard;
     private Button btnSendClipboard;
     private Button btnUploadFile;
@@ -52,6 +53,7 @@ partial class RemoteViewerForm
         cboZoom = new ComboBox();
         lblZoomCaption = new Label();
         btnUploadFile = new Button();
+        btnDownloadFile = new Button();
         btnGetClipboard = new Button();
         btnSendClipboard = new Button();
         btnOpenTransferFolder = new Button();
@@ -87,7 +89,7 @@ partial class RemoteViewerForm
         layoutRoot.Location = new Point(0, 0);
         layoutRoot.Name = "layoutRoot";
         layoutRoot.RowCount = 2;
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 272F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 152F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.Size = new Size(1420, 860);
         layoutRoot.TabIndex = 0;
@@ -100,6 +102,7 @@ partial class RemoteViewerForm
         panelTop.Controls.Add(cboZoom);
         panelTop.Controls.Add(lblZoomCaption);
         panelTop.Controls.Add(btnUploadFile);
+        panelTop.Controls.Add(btnDownloadFile);
         panelTop.Controls.Add(btnGetClipboard);
         panelTop.Controls.Add(btnSendClipboard);
         panelTop.Controls.Add(btnOpenTransferFolder);
@@ -120,15 +123,15 @@ partial class RemoteViewerForm
         panelTop.Dock = DockStyle.Fill;
         panelTop.Location = new Point(3, 3);
         panelTop.Name = "panelTop";
-        panelTop.Size = new Size(1414, 266);
+        panelTop.Size = new Size(1414, 146);
         panelTop.TabIndex = 0;
         // 
         // btnDisconnect
         // 
         btnDisconnect.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnDisconnect.Location = new Point(1300, 18);
+        btnDisconnect.Location = new Point(1312, 18);
         btnDisconnect.Name = "btnDisconnect";
-        btnDisconnect.Size = new Size(99, 42);
+        btnDisconnect.Size = new Size(87, 42);
         btnDisconnect.TabIndex = 8;
         btnDisconnect.Text = "Disconnect";
         btnDisconnect.UseVisualStyleBackColor = true;
@@ -137,9 +140,9 @@ partial class RemoteViewerForm
         // btnFocusRemote
         // 
         btnFocusRemote.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnFocusRemote.Location = new Point(1198, 18);
+        btnFocusRemote.Location = new Point(1218, 18);
         btnFocusRemote.Name = "btnFocusRemote";
-        btnFocusRemote.Size = new Size(96, 42);
+        btnFocusRemote.Size = new Size(88, 42);
         btnFocusRemote.TabIndex = 7;
         btnFocusRemote.Text = "Focus";
         btnFocusRemote.UseVisualStyleBackColor = true;
@@ -148,9 +151,9 @@ partial class RemoteViewerForm
         // btnFullscreen
         // 
         btnFullscreen.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnFullscreen.Location = new Point(1080, 18);
+        btnFullscreen.Location = new Point(1110, 18);
         btnFullscreen.Name = "btnFullscreen";
-        btnFullscreen.Size = new Size(112, 42);
+        btnFullscreen.Size = new Size(102, 42);
         btnFullscreen.TabIndex = 6;
         btnFullscreen.Text = "Fullscreen";
         btnFullscreen.UseVisualStyleBackColor = true;
@@ -161,7 +164,7 @@ partial class RemoteViewerForm
         cboZoom.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         cboZoom.DropDownStyle = ComboBoxStyle.DropDownList;
         cboZoom.FormattingEnabled = true;
-        cboZoom.Location = new Point(986, 27);
+        cboZoom.Location = new Point(1016, 27);
         cboZoom.Name = "cboZoom";
         cboZoom.Size = new Size(88, 23);
         cboZoom.TabIndex = 5;
@@ -171,7 +174,7 @@ partial class RemoteViewerForm
         // 
         lblZoomCaption.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         lblZoomCaption.AutoSize = true;
-        lblZoomCaption.Location = new Point(942, 31);
+        lblZoomCaption.Location = new Point(972, 31);
         lblZoomCaption.Name = "lblZoomCaption";
         lblZoomCaption.Size = new Size(38, 15);
         lblZoomCaption.TabIndex = 4;
@@ -180,20 +183,31 @@ partial class RemoteViewerForm
         // btnUploadFile
         // 
         btnUploadFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnUploadFile.Location = new Point(828, 18);
+        btnUploadFile.Location = new Point(810, 18);
         btnUploadFile.Name = "btnUploadFile";
-        btnUploadFile.Size = new Size(102, 42);
+        btnUploadFile.Size = new Size(94, 42);
         btnUploadFile.TabIndex = 3;
         btnUploadFile.Text = "Upload File";
         btnUploadFile.UseVisualStyleBackColor = true;
         btnUploadFile.Click += btnUploadFile_Click;
         // 
+        // btnDownloadFile
+        // 
+        btnDownloadFile.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnDownloadFile.Location = new Point(910, 18);
+        btnDownloadFile.Name = "btnDownloadFile";
+        btnDownloadFile.Size = new Size(100, 42);
+        btnDownloadFile.TabIndex = 4;
+        btnDownloadFile.Text = "Download File";
+        btnDownloadFile.UseVisualStyleBackColor = true;
+        btnDownloadFile.Click += btnDownloadFile_Click;
+        // 
         // btnGetClipboard
         // 
         btnGetClipboard.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnGetClipboard.Location = new Point(720, 18);
+        btnGetClipboard.Location = new Point(706, 18);
         btnGetClipboard.Name = "btnGetClipboard";
-        btnGetClipboard.Size = new Size(102, 42);
+        btnGetClipboard.Size = new Size(98, 42);
         btnGetClipboard.TabIndex = 2;
         btnGetClipboard.Text = "Get Clipboard";
         btnGetClipboard.UseVisualStyleBackColor = true;
@@ -202,9 +216,9 @@ partial class RemoteViewerForm
         // btnSendClipboard
         // 
         btnSendClipboard.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSendClipboard.Location = new Point(584, 18);
+        btnSendClipboard.Location = new Point(566, 18);
         btnSendClipboard.Name = "btnSendClipboard";
-        btnSendClipboard.Size = new Size(130, 42);
+        btnSendClipboard.Size = new Size(134, 42);
         btnSendClipboard.TabIndex = 1;
         btnSendClipboard.Text = "Send Clipboard";
         btnSendClipboard.UseVisualStyleBackColor = true;
@@ -213,7 +227,7 @@ partial class RemoteViewerForm
         // btnOpenTransferFolder
         // 
         btnOpenTransferFolder.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnOpenTransferFolder.Location = new Point(468, 18);
+        btnOpenTransferFolder.Location = new Point(450, 18);
         btnOpenTransferFolder.Name = "btnOpenTransferFolder";
         btnOpenTransferFolder.Size = new Size(110, 42);
         btnOpenTransferFolder.TabIndex = 0;
@@ -357,9 +371,9 @@ partial class RemoteViewerForm
         panelViewer.BackColor = Color.Black;
         panelViewer.Controls.Add(pictureStream);
         panelViewer.Dock = DockStyle.Fill;
-        panelViewer.Location = new Point(3, 275);
+        panelViewer.Location = new Point(3, 155);
         panelViewer.Name = "panelViewer";
-        panelViewer.Size = new Size(1414, 582);
+        panelViewer.Size = new Size(1414, 702);
         panelViewer.TabIndex = 1;
         panelViewer.Resize += panelViewer_Resize;
         // 
