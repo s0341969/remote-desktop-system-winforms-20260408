@@ -1,5 +1,6 @@
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Services;
+using System.Buffers;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -485,52 +486,9 @@ public partial class RemoteViewerForm : Form
 
         try
         {
-            await SendCommandAsync(new ViewerCommandMessage
-            {
-                Type = "file-upload-start",
-                UploadId = uploadId,
-                FileName = fileInfo.Name,
-                FileSize = fileInfo.Length
-            });
+            await UploadFileCoreAsync(fileInfo, uploadId);
 
-            var startStatus = await _uploadStartSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            if (string.Equals(startStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(startStatus.Message);
-            }
-
-            await using var stream = fileInfo.OpenRead();
-            var buffer = new byte[UploadChunkBytes];
-            var sequenceNumber = 0;
-            while (true)
-            {
-                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length));
-                if (bytesRead <= 0)
-                {
-                    break;
-                }
-
-                await SendCommandAsync(new ViewerCommandMessage
-                {
-                    Type = "file-upload-chunk",
-                    UploadId = uploadId,
-                    FileName = fileInfo.Name,
-                    FileSize = fileInfo.Length,
-                    SequenceNumber = sequenceNumber++,
-                    ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead)
-                });
-            }
-
-            await SendCommandAsync(new ViewerCommandMessage
-            {
-                Type = "file-upload-complete",
-                UploadId = uploadId,
-                FileName = fileInfo.Name,
-                FileSize = fileInfo.Length
-            });
-
-            lblTransferValue.Text = HostUiText.Bi($"等待 Agent 完成 {fileInfo.Name} 的檔案寫入...", $"Waiting for Agent to finalize {fileInfo.Name}...");
-            var completionStatus = await _uploadCompletionSignal.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var completionStatus = await _uploadCompletionSignal!.Task.WaitAsync(TimeSpan.FromSeconds(30));
             if (string.Equals(completionStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(completionStatus.Message);
@@ -554,6 +512,65 @@ public partial class RemoteViewerForm : Form
             _uploadStartSignal = null;
             _uploadCompletionSignal = null;
         }
+    }
+
+    private async Task UploadFileCoreAsync(FileInfo fileInfo, string uploadId)
+    {
+        await SendViewerCommandCoreAsync(new ViewerCommandMessage
+        {
+            Type = "file-upload-start",
+            UploadId = uploadId,
+            FileName = fileInfo.Name,
+            FileSize = fileInfo.Length
+        }, CancellationToken.None).ConfigureAwait(false);
+
+        var startStatus = await _uploadStartSignal!.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        if (string.Equals(startStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(startStatus.Message);
+        }
+
+        await using var stream = fileInfo.OpenRead();
+        var buffer = ArrayPool<byte>.Shared.Rent(UploadChunkBytes);
+        try
+        {
+            var sequenceNumber = 0;
+            while (true)
+            {
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, UploadChunkBytes)).ConfigureAwait(false);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                await SendViewerCommandCoreAsync(new ViewerCommandMessage
+                {
+                    Type = "file-upload-chunk",
+                    UploadId = uploadId,
+                    FileName = fileInfo.Name,
+                    FileSize = fileInfo.Length,
+                    SequenceNumber = sequenceNumber++,
+                    ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead)
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        await SendViewerCommandCoreAsync(new ViewerCommandMessage
+        {
+            Type = "file-upload-complete",
+            UploadId = uploadId,
+            FileName = fileInfo.Name,
+            FileSize = fileInfo.Length
+        }, CancellationToken.None).ConfigureAwait(false);
+
+        await UpdateUiAsync(() =>
+        {
+            lblTransferValue.Text = HostUiText.Bi($"等待 Agent 完成 {fileInfo.Name} 的檔案寫入...", $"Waiting for Agent to finalize {fileInfo.Name}...");
+        }).ConfigureAwait(false);
     }
 
     private async Task TryAbortUploadAsync(string uploadId)
@@ -779,6 +796,59 @@ public partial class RemoteViewerForm : Form
         }
     }
 
+    private Task SendViewerCommandCoreAsync(ViewerCommandMessage command, CancellationToken cancellationToken)
+    {
+        if (!_attached || _deviceBroker is null || _device is null)
+        {
+            throw new InvalidOperationException(HostUiText.Bi("Viewer 尚未連線到遠端裝置。", "The viewer is not connected to a remote device."));
+        }
+
+        return _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, cancellationToken);
+    }
+
+    private Task UpdateUiAsync(Action action)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!InvokeRequired)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed || Disposing)
+                {
+                    completion.TrySetResult();
+                    return;
+                }
+
+                try
+                {
+                    action();
+                    completion.TrySetResult();
+                }
+                catch (Exception exception)
+                {
+                    completion.TrySetException(exception);
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            completion.TrySetResult();
+        }
+
+        return completion.Task;
+    }
+
     private bool EnsureInteractivePermission(string message)
     {
         if (_viewer is { CanControlRemote: true })
@@ -883,3 +953,4 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+

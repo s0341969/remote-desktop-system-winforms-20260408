@@ -40,6 +40,7 @@
 - 補上 `publish` 發佈版、桌面捷徑與 Agent 開機自動啟動捷徑。
 - 新增 `deploy/scripts/Clean-App.ps1`，可一鍵清理 `bin/obj`、`.dotnet` 與執行期垃圾檔。
 - `deploy/scripts/Publish-App.ps1` 現在會先清空輸出目錄，再以最小必要相依與 `zh-Hant` 資源重建 publish 版，避免舊的 self-contained DLL 殘留。
+- 修正檔案上傳流程造成 Viewer 卡頓的問題：Host 上傳改為背景傳輸，Agent 端進度訊息改為節流回報，避免大檔案傳輸時 UI 看起來當機。
 
 ## 使用 Visual Studio 2022
 

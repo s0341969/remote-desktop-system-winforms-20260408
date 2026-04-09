@@ -9,6 +9,7 @@ namespace RemoteDesktop.Agent.Services;
 public sealed class FileTransferService
 {
     private const int MaxChunkBytes = 64 * 1024;
+    private const int ProgressPublishThresholdBytes = 256 * 1024;
     private readonly AgentOptions _options;
     private readonly ILogger<FileTransferService> _logger;
     private readonly ConcurrentDictionary<string, UploadSession> _uploads = new(StringComparer.OrdinalIgnoreCase);
@@ -127,16 +128,20 @@ public sealed class FileTransferService
             session.BytesTransferred += chunk.Length;
             session.NextSequenceNumber++;
 
-            await publishStatusAsync(new AgentFileTransferStatusMessage
+            if (ShouldPublishProgress(session))
             {
-                UploadId = session.UploadId,
-                Status = "progress",
-                FileName = session.FileName,
-                StoredFileName = session.StoredFileName,
-                FileSize = session.FileSize,
-                BytesTransferred = session.BytesTransferred,
-                Message = AgentUiText.Bi($"已接收 {session.BytesTransferred} / {session.FileSize} 位元組。", $"Received {session.BytesTransferred} of {session.FileSize} bytes.")
-            }, cancellationToken);
+                session.LastPublishedBytesTransferred = session.BytesTransferred;
+                await publishStatusAsync(new AgentFileTransferStatusMessage
+                {
+                    UploadId = session.UploadId,
+                    Status = "progress",
+                    FileName = session.FileName,
+                    StoredFileName = session.StoredFileName,
+                    FileSize = session.FileSize,
+                    BytesTransferred = session.BytesTransferred,
+                    Message = AgentUiText.Bi($"已接收 {session.BytesTransferred} / {session.FileSize} 位元組。", $"Received {session.BytesTransferred} of {session.FileSize} bytes.")
+                }, cancellationToken);
+            }
         }
         catch (Exception exception)
         {
@@ -286,6 +291,21 @@ public sealed class FileTransferService
             "RemoteDesktop Transfers");
     }
 
+    private static bool ShouldPublishProgress(UploadSession session)
+    {
+        if (session.BytesTransferred <= 0)
+        {
+            return false;
+        }
+
+        if (session.FileSize > 0 && session.BytesTransferred >= session.FileSize)
+        {
+            return false;
+        }
+
+        return session.BytesTransferred - session.LastPublishedBytesTransferred >= ProgressPublishThresholdBytes;
+    }
+
     private static string ResolveUniqueTargetPath(string directory, string fileName)
     {
         var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
@@ -321,6 +341,8 @@ public sealed class FileTransferService
         public long FileSize { get; }
         public FileStream Stream { get; }
         public long BytesTransferred { get; set; }
+        public long LastPublishedBytesTransferred { get; set; }
         public int NextSequenceNumber { get; set; }
     }
 }
+

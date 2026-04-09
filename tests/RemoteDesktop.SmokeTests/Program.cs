@@ -168,7 +168,8 @@ static async Task RunFileTransferSmokeTestAsync()
             return Task.CompletedTask;
         };
 
-        var content = Encoding.UTF8.GetBytes("smoke-file-transfer-payload");
+        var repeatedContent = Enumerable.Repeat("smoke-file-transfer-payload-", 24_000);
+        var content = Encoding.UTF8.GetBytes(string.Concat(repeatedContent));
         var uploadId = Guid.NewGuid().ToString("N");
 
         await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
@@ -179,15 +180,26 @@ static async Task RunFileTransferSmokeTestAsync()
             FileSize = content.Length
         }, publishStatusAsync, CancellationToken.None);
 
-        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+        const int chunkBytes = 48 * 1024;
+        var offset = 0;
+        var sequenceNumber = 0;
+        while (offset < content.Length)
         {
-            Type = "file-upload-chunk",
-            UploadId = uploadId,
-            FileName = "smoke.txt",
-            FileSize = content.Length,
-            SequenceNumber = 0,
-            ChunkBase64 = Convert.ToBase64String(content)
-        }, publishStatusAsync, CancellationToken.None);
+            var bytesToSend = Math.Min(chunkBytes, content.Length - offset);
+            var chunk = new byte[bytesToSend];
+            Buffer.BlockCopy(content, offset, chunk, 0, bytesToSend);
+            offset += bytesToSend;
+
+            await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+            {
+                Type = "file-upload-chunk",
+                UploadId = uploadId,
+                FileName = "smoke.txt",
+                FileSize = content.Length,
+                SequenceNumber = sequenceNumber++,
+                ChunkBase64 = Convert.ToBase64String(chunk)
+            }, publishStatusAsync, CancellationToken.None);
+        }
 
         await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
         {
@@ -213,6 +225,12 @@ static async Task RunFileTransferSmokeTestAsync()
         if (!savedBytes.SequenceEqual(content))
         {
             throw new InvalidOperationException("File transfer service saved unexpected file contents.");
+        }
+
+        var progressStatuses = statuses.Count(static item => string.Equals(item.Status, "progress", StringComparison.Ordinal));
+        if (progressStatuses <= 0)
+        {
+            throw new InvalidOperationException("File transfer service did not emit any throttled progress status.");
         }
     }
     finally
@@ -530,3 +548,6 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
+
