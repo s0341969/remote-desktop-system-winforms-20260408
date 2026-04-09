@@ -109,8 +109,8 @@ public partial class LoginForm : Form
 
     private void InitializeUiText()
     {
-        Text = HostUiText.Window("主控台登入", "Console Sign-in");
-        lblTitle.Text = HostUiText.Bi("登入主控台", "Sign in to Console");
+        Text = AppBuildInfo.AppendToWindowTitle(HostUiText.Window("主控台登入", "Console Sign-in"));
+        lblTitle.Text = AppBuildInfo.AppendToHeading(HostUiText.Bi("登入主控台", "Sign in to Console"));
         lblConsoleCaption.Text = HostUiText.Bi("主控台", "Console");
         lblUserName.Text = HostUiText.Bi("帳號", "User name");
         lblPassword.Text = HostUiText.Bi("密碼", "Password");
@@ -118,3 +118,4 @@ public partial class LoginForm : Form
         HostUiText.ApplyButton(btnCancel, "取消", "Cancel");
     }
 }
+

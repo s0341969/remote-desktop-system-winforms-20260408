@@ -87,8 +87,8 @@ public partial class AgentMainForm : Form
 
     private void InitializeUiText()
     {
-        Text = AgentUiText.Window("遠端桌面 Agent", "RemoteDesktop Agent");
-        lblTitle.Text = AgentUiText.Bi("遠端桌面 Agent", "RemoteDesktop Agent");
+        Text = AppBuildInfo.AppendToWindowTitle(AgentUiText.Window("遠端桌面 Agent", "RemoteDesktop Agent"));
+        lblTitle.Text = AppBuildInfo.AppendToHeading(AgentUiText.Bi("遠端桌面 Agent", "RemoteDesktop Agent"));
         AgentUiText.ApplyButton(btnSettings, "設定", "Settings");
         lblServerUrlCaption.Text = AgentUiText.Bi("Server 位址", "Server URL");
         lblDeviceIdCaption.Text = AgentUiText.Bi("裝置 ID", "Device ID");
@@ -100,3 +100,4 @@ public partial class AgentMainForm : Form
         lblEventsCaption.Text = AgentUiText.Bi("最近事件", "Recent events");
     }
 }
+

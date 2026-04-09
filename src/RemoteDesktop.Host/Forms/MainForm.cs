@@ -351,8 +351,8 @@ public partial class MainForm : Form
 
     private void InitializeUiText()
     {
-        Text = HostUiText.Window("遠端桌面 Windows 主控台", "RemoteDesktop Windows Console");
-        lblTitle.Text = HostUiText.Bi("遠端桌面 Windows 主控台", "RemoteDesktop Windows Console");
+        Text = AppBuildInfo.AppendToWindowTitle(HostUiText.Window("遠端桌面 Windows 主控台", "RemoteDesktop Windows Console"));
+        lblTitle.Text = AppBuildInfo.AppendToHeading(HostUiText.Bi("遠端桌面 Windows 主控台", "RemoteDesktop Windows Console"));
         HostUiText.ApplyButton(btnApproveDevice, "核准", "Approve");
         HostUiText.ApplyButton(btnAudit, "稽核", "Audit");
         HostUiText.ApplyButton(btnRevokeDevice, "撤銷", "Revoke");
@@ -466,3 +466,4 @@ public partial class MainForm : Form
         };
     }
 }
+

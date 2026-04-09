@@ -1219,7 +1219,7 @@ public partial class RemoteViewerForm : Form
 
     private void InitializeUiText()
     {
-        Text = HostUiText.Window("遠端檢視", "Remote Viewer");
+        Text = AppBuildInfo.AppendToWindowTitle(HostUiText.Window("遠端檢視", "Remote Viewer"));
         lblDeviceCaption.Text = HostUiText.Bi("裝置", "Device");
         lblHostCaption.Text = HostUiText.Bi("主機", "Host");
         lblResolutionCaption.Text = HostUiText.Bi("解析度", "Resolution");
@@ -1292,5 +1292,6 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
 
 
