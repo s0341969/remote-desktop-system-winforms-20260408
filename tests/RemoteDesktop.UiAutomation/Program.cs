@@ -258,6 +258,36 @@ static void TestRemoteViewerUploadForm()
         form.Show();
         PumpUi();
 
+        var zoomCombo = GetControl<ComboBox>(form, "cboZoom");
+        if (zoomCombo.Items.Count < 2)
+        {
+            throw new InvalidOperationException("Viewer zoom presets were not initialized.");
+        }
+
+        zoomCombo.SelectedIndex = 3;
+        PumpUi();
+        if (!string.Equals(zoomCombo.SelectedItem?.ToString(), "100%", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Viewer zoom selector did not switch to the expected preset.");
+        }
+
+        var fullscreenButton = GetControl<Button>(form, "btnFullscreen");
+        fullscreenButton.PerformClick();
+        PumpUi();
+        if (GetControl<Panel>(form, "panelTop").Visible)
+        {
+            throw new InvalidOperationException("Viewer did not enter fullscreen mode.");
+        }
+
+        var keyDownHandler = typeof(RemoteViewerForm).GetMethod("RemoteViewerForm_KeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("RemoteViewerForm_KeyDown method not found.");
+        keyDownHandler.Invoke(form, new object[] { form, new KeyEventArgs(Keys.Escape) });
+        PumpUi();
+        if (!GetControl<Panel>(form, "panelTop").Visible)
+        {
+            throw new InvalidOperationException("Viewer did not exit fullscreen mode.");
+        }
+
         var uploadButton = GetControl<Button>(form, "btnUploadFile");
         var workflowTask = form.TriggerUploadWorkflowAsync();
         WaitUntil(() => !uploadButton.Enabled, 3000);
@@ -754,7 +784,14 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
 
     protected override void OnShown(EventArgs e)
     {
-        // Skip the real broker attach path in UI automation; this test validates the Viewer UI workflow.
+
+        var configureZoom = typeof(RemoteViewerForm).GetMethod("ConfigureZoomOptions", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ConfigureZoomOptions method not found.");
+        var applyLayout = typeof(RemoteViewerForm).GetMethod("ApplyPictureLayout", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ApplyPictureLayout method not found.");
+
+        configureZoom.Invoke(this, null);
+        applyLayout.Invoke(this, null);
     }
 
     public Task TriggerUploadWorkflowAsync()
@@ -804,6 +841,9 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
+
+
 
 
 

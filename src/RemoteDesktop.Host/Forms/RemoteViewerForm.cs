@@ -71,6 +71,26 @@ public partial class RemoteViewerForm : Form
     private TaskCompletionSource<AgentClipboardMessage>? _clipboardSyncSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadStartSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadCompletionSignal;
+    private const int TopPanelExpandedHeight = 272;
+    private static readonly (string Key, double? Factor)[] ZoomPresets =
+    {
+        ("fit", null),
+        ("50", 0.5d),
+        ("75", 0.75d),
+        ("100", 1.0d),
+        ("125", 1.25d),
+        ("150", 1.5d),
+        ("200", 2.0d)
+    };
+
+    private bool _fitToWindow = true;
+    private double _manualZoomFactor = 1d;
+    private bool _suppressZoomSelectionChanged;
+    private bool _isFullscreen;
+    private FormBorderStyle _restoreBorderStyle;
+    private FormWindowState _restoreWindowState;
+    private Rectangle _restoreBounds;
+    private bool _restoreTopMost;
 
     public RemoteViewerForm()
     {
@@ -85,9 +105,10 @@ public partial class RemoteViewerForm : Form
         _viewer = viewer;
         _deviceBroker = deviceBroker;
         _fileTransferTraceService = fileTransferTraceService;
-        Text = viewer.CanControlRemote
+        var baseWindowTitle = viewer.CanControlRemote
             ? $"{device.DeviceName} - {HostUiText.Window("遠端檢視", "Remote Viewer")}"
             : $"{device.DeviceName} - {HostUiText.Window("遠端檢視（僅觀看）", "Remote Viewer (Observe Only)")}";
+        Text = AppBuildInfo.AppendToWindowTitle(baseWindowTitle);
         lblDeviceValue.Text = $"{device.DeviceName} ({device.DeviceId})";
         lblHostValue.Text = device.HostName;
         lblResolutionValue.Text = $"{device.ScreenWidth} x {device.ScreenHeight}";
@@ -142,6 +163,8 @@ public partial class RemoteViewerForm : Form
         lblClipboardValue.Text = _viewer.CanControlRemote
             ? HostUiText.Bi("剪貼簿同步已就緒。", "Clipboard sync is ready.")
             : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
+        ConfigureZoomOptions();
+        ApplyPictureLayout();
         pictureStream.Focus();
     }
 
@@ -260,6 +283,7 @@ public partial class RemoteViewerForm : Form
             previous?.Dispose();
 
             lblStatusValue.Text = HostUiText.Bi($"串流中 {_frameSize.Width} x {_frameSize.Height}", $"Streaming {_frameSize.Width} x {_frameSize.Height}");
+            ApplyPictureLayout();
         }
         catch (Exception exception)
         {
@@ -498,7 +522,6 @@ public partial class RemoteViewerForm : Form
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
-            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
             MessageBox.Show(
                 HostUiText.Bi($"檔案上傳流程發生未預期錯誤：{exception.Message}", $"The upload flow failed with an unexpected error: {exception.Message}"),
                 HostUiText.Window("檔案傳輸", "File Transfer"),
@@ -687,7 +710,6 @@ public partial class RemoteViewerForm : Form
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
-            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
             if (shouldShowDialog)
             {
                 MessageBox.Show(HostUiText.Bi($"檔案上傳失敗：{exception.Message}", $"Failed to upload file: {exception.Message}"), HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -788,7 +810,6 @@ public partial class RemoteViewerForm : Form
         {
             lblTransferValue.Text = HostUiText.Bi($"等待 Agent 完成 {fileInfo.Name} 的檔案寫入...", $"Waiting for Agent to finalize {fileInfo.Name}...");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：檔案已建立，等待完成寫入。", "Destination: file created, waiting for finalization.");
-            lblTransferPathValue.Text = HostUiText.Bi("目的地：檔案已建立，等待完成寫入。", "Destination: file created, waiting for finalization.");
         }).ConfigureAwait(false);
     }
 
@@ -887,6 +908,20 @@ public partial class RemoteViewerForm : Form
 
     private async void RemoteViewerForm_KeyDown(object sender, KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.F11)
+        {
+            e.SuppressKeyPress = true;
+            ToggleFullscreen();
+            return;
+        }
+
+        if (e.KeyCode == Keys.Escape && _isFullscreen)
+        {
+            e.SuppressKeyPress = true;
+            ToggleFullscreen(forceExit: true);
+            return;
+        }
+
         if (IsPlainPrintableKey(e))
         {
             return;
@@ -941,8 +976,197 @@ public partial class RemoteViewerForm : Form
         });
     }
 
+    private void ConfigureZoomOptions()
+    {
+        if (cboZoom.Items.Count == ZoomPresets.Length)
+        {
+            UpdateZoomSelection();
+            return;
+        }
+
+        _suppressZoomSelectionChanged = true;
+        try
+        {
+            cboZoom.Items.Clear();
+            foreach (var preset in ZoomPresets)
+            {
+                cboZoom.Items.Add(FormatZoomPreset(preset.Factor));
+            }
+
+            cboZoom.SelectedIndex = 0;
+        }
+        finally
+        {
+            _suppressZoomSelectionChanged = false;
+        }
+    }
+
+    private void cboZoom_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        if (_suppressZoomSelectionChanged)
+        {
+            return;
+        }
+
+        if (cboZoom.SelectedIndex < 0 || cboZoom.SelectedIndex >= ZoomPresets.Length)
+        {
+            return;
+        }
+
+        var preset = ZoomPresets[cboZoom.SelectedIndex];
+        if (preset.Factor is null)
+        {
+            _fitToWindow = true;
+        }
+        else
+        {
+            _fitToWindow = false;
+            _manualZoomFactor = preset.Factor.Value;
+        }
+
+        ApplyPictureLayout();
+    }
+
+    private void panelViewer_Resize(object sender, EventArgs e)
+    {
+        ApplyPictureLayout();
+    }
+
+    private void pictureStream_DoubleClick(object sender, EventArgs e)
+    {
+        ToggleFullscreen();
+    }
+
+    private void btnFullscreen_Click(object sender, EventArgs e)
+    {
+        ToggleFullscreen();
+    }
+
+    private void ToggleFullscreen(bool forceExit = false)
+    {
+        if (forceExit && !_isFullscreen)
+        {
+            return;
+        }
+
+        if (!_isFullscreen)
+        {
+            _restoreBorderStyle = FormBorderStyle;
+            _restoreWindowState = WindowState;
+            _restoreBounds = Bounds;
+            _restoreTopMost = TopMost;
+
+            _isFullscreen = true;
+            panelTop.Visible = false;
+            layoutRoot.RowStyles[0].Height = 0;
+            FormBorderStyle = FormBorderStyle.None;
+            WindowState = FormWindowState.Normal;
+            Bounds = Screen.FromControl(this).Bounds;
+            TopMost = true;
+        }
+        else
+        {
+            _isFullscreen = false;
+            TopMost = _restoreTopMost;
+            FormBorderStyle = _restoreBorderStyle;
+            panelTop.Visible = true;
+            layoutRoot.RowStyles[0].Height = TopPanelExpandedHeight;
+            Bounds = _restoreBounds;
+            WindowState = _restoreWindowState;
+        }
+
+        btnFullscreen.Text = _isFullscreen
+            ? HostUiText.Bi("離開全螢幕", "Exit Fullscreen")
+            : HostUiText.Bi("全螢幕", "Fullscreen");
+        ApplyPictureLayout();
+        pictureStream.Focus();
+    }
+
+    private void UpdateZoomSelection()
+    {
+        if (cboZoom.Items.Count == 0)
+        {
+            return;
+        }
+
+        var selectedKey = _fitToWindow ? "fit" : ((int)Math.Round(_manualZoomFactor * 100d)).ToString();
+        var selectedIndex = -1;
+        for (var index = 0; index < ZoomPresets.Length; index++)
+        {
+            if (ZoomPresets[index].Key == selectedKey)
+            {
+                selectedIndex = index;
+                break;
+            }
+        }
+
+        if (selectedIndex < 0)
+        {
+            return;
+        }
+
+        _suppressZoomSelectionChanged = true;
+        try
+        {
+            cboZoom.SelectedIndex = selectedIndex;
+        }
+        finally
+        {
+            _suppressZoomSelectionChanged = false;
+        }
+    }
+
+    private void ApplyPictureLayout()
+    {
+        if (_fitToWindow)
+        {
+            panelViewer.AutoScroll = false;
+            panelViewer.AutoScrollMinSize = Size.Empty;
+            pictureStream.Dock = DockStyle.Fill;
+            pictureStream.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureStream.Location = Point.Empty;
+            pictureStream.Size = panelViewer.ClientSize;
+            UpdateZoomSelection();
+            return;
+        }
+
+        if (_frameSize.Width <= 0 || _frameSize.Height <= 0)
+        {
+            return;
+        }
+
+        panelViewer.AutoScroll = true;
+        pictureStream.Dock = DockStyle.None;
+        pictureStream.SizeMode = PictureBoxSizeMode.StretchImage;
+
+        var scaledWidth = Math.Max(1, (int)Math.Round(_frameSize.Width * _manualZoomFactor));
+        var scaledHeight = Math.Max(1, (int)Math.Round(_frameSize.Height * _manualZoomFactor));
+        pictureStream.Size = new Size(scaledWidth, scaledHeight);
+
+        if (scaledWidth <= panelViewer.ClientSize.Width && scaledHeight <= panelViewer.ClientSize.Height)
+        {
+            panelViewer.AutoScrollMinSize = Size.Empty;
+            pictureStream.Location = new Point(
+                Math.Max(0, (panelViewer.ClientSize.Width - scaledWidth) / 2),
+                Math.Max(0, (panelViewer.ClientSize.Height - scaledHeight) / 2));
+        }
+        else
+        {
+            panelViewer.AutoScrollMinSize = pictureStream.Size;
+            pictureStream.Location = Point.Empty;
+        }
+
+        UpdateZoomSelection();
+    }
+
+    private static string FormatZoomPreset(double? factor)
+    {
+        return factor is null ? HostUiText.Bi("符合視窗", "Fit to Window") : $"{Math.Round(factor.Value * 100d):0}%";
+    }
+
     private void btnFocusRemote_Click(object sender, EventArgs e)
     {
+        panelViewer.Focus();
         pictureStream.Focus();
     }
 
@@ -1319,12 +1543,12 @@ public partial class RemoteViewerForm : Form
         lblTransferCaption.Text = HostUiText.Bi("傳輸", "Transfer");
         lblTransferValue.Text = HostUiText.Bi("目前沒有進行中的傳輸。", "No active transfer.");
         lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
-        lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
-        lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
+        lblZoomCaption.Text = HostUiText.Bi("縮放", "Zoom");
         HostUiText.ApplyButton(btnOpenTransferFolder, "開啟資料夾", "Open Folder");
         HostUiText.ApplyButton(btnSendClipboard, "送出剪貼簿", "Send Clipboard");
         HostUiText.ApplyButton(btnGetClipboard, "取得剪貼簿", "Get Clipboard");
         HostUiText.ApplyButton(btnUploadFile, "上傳檔案", "Upload File");
+        HostUiText.ApplyButton(btnFullscreen, "全螢幕", "Fullscreen");
         HostUiText.ApplyButton(btnFocusRemote, "聚焦 Viewer", "Focus Viewer");
         HostUiText.ApplyButton(btnDisconnect, "中斷連線", "Disconnect");
     }
@@ -1384,6 +1608,16 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
