@@ -22,6 +22,7 @@ var tests = new (string Name, Action Body)[]
     ("Host Settings UI", TestHostSettingsForm),
     ("Agent Settings UI", TestAgentSettingsForm),
     ("Host Main Dashboard UI", TestHostMainForm),
+    ("Host Viewer File Upload UI", TestRemoteViewerUploadForm),
     ("Host User Management UI", TestHostUserManagementForm),
     ("Host Audit Log UI", TestHostAuditLogForm),
     ("Agent Main Runtime UI", TestAgentMainForm)
@@ -217,6 +218,77 @@ static void TestHostMainForm()
     if (!GetControl<Button>(form, "btnApproveDevice").Enabled)
     {
         throw new InvalidOperationException("Approve button should be enabled for a pending device.");
+    }
+}
+
+static void TestRemoteViewerUploadForm()
+{
+    var repo = new FakeDeviceRepository();
+    var loggerFactory = LoggerFactory.Create(static builder => { });
+    var options = CreateHostOptions("UI Viewer");
+    var auditService = CreateAuditService();
+    var broker = new DeviceBroker(repo, options, loggerFactory.CreateLogger<DeviceBroker>(), auditService);
+    var currentUser = CreateAdministratorSession();
+    var device = new DeviceRecord
+    {
+        DeviceId = "viewer-device-001",
+        DeviceName = "Viewer Device",
+        HostName = "HOST-VIEWER",
+        AgentVersion = "1.0.0",
+        ScreenWidth = 1920,
+        ScreenHeight = 1080,
+        IsOnline = true,
+        IsAuthorized = true,
+        AuthorizedAt = DateTimeOffset.UtcNow,
+        AuthorizedBy = "admin",
+        CreatedAt = DateTimeOffset.UtcNow,
+        LastSeenAt = DateTimeOffset.UtcNow,
+        LastConnectedAt = DateTimeOffset.UtcNow
+    };
+
+    var uploadFilePath = Path.Combine(Path.GetTempPath(), $"viewer-upload-{Guid.NewGuid():N}.txt");
+    File.WriteAllText(uploadFilePath, "viewer-upload-ui-test");
+    var storedFilePath = Path.Combine(Path.GetTempPath(), "RemoteDesktop Transfers", Path.GetFileName(uploadFilePath));
+    Directory.CreateDirectory(Path.GetDirectoryName(storedFilePath)!);
+
+    try
+    {
+        using var form = new TestRemoteViewerForm(uploadFilePath, storedFilePath);
+        form.Bind(device, currentUser, broker);
+        form.Show();
+        PumpUi();
+
+        var uploadButton = GetControl<Button>(form, "btnUploadFile");
+        var workflowTask = form.TriggerUploadWorkflowAsync();
+        WaitUntil(() => !uploadButton.Enabled, 3000);
+        WaitUntil(() => GetControl<Label>(form, "lblTransferValue").Text.Contains(storedFilePath, StringComparison.Ordinal), 3000);
+        WaitUntil(() => GetControl<Button>(form, "btnOpenTransferFolder").Enabled, 3000);
+        workflowTask.GetAwaiter().GetResult();
+
+        form.TriggerOpenTransferFolder();
+        if (!string.Equals(form.OpenedFolderPath, Path.GetDirectoryName(storedFilePath), StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Viewer did not try to open the expected transfer folder.");
+        }
+    }
+    finally
+    {
+        try
+        {
+            if (File.Exists(uploadFilePath))
+            {
+                File.Delete(uploadFilePath);
+            }
+
+            var transferDirectory = Path.GetDirectoryName(storedFilePath);
+            if (!string.IsNullOrWhiteSpace(transferDirectory) && Directory.Exists(transferDirectory))
+            {
+                Directory.Delete(transferDirectory, recursive: false);
+            }
+        }
+        catch
+        {
+        }
     }
 }
 
@@ -666,3 +738,80 @@ internal sealed class InMemoryAgentSettingsStore : IAgentSettingsStore
         return Task.CompletedTask;
     }
 }
+
+internal sealed class TestRemoteViewerForm : RemoteViewerForm
+{
+    private readonly string _selectedFilePath;
+    private readonly string _storedFilePath;
+
+    public TestRemoteViewerForm(string selectedFilePath, string storedFilePath)
+    {
+        _selectedFilePath = selectedFilePath;
+        _storedFilePath = storedFilePath;
+    }
+
+    public string? OpenedFolderPath { get; private set; }
+
+    protected override void OnShown(EventArgs e)
+    {
+        // Skip the real broker attach path in UI automation; this test validates the Viewer UI workflow.
+    }
+
+    public Task TriggerUploadWorkflowAsync() => HandleUploadSelectionAsync();
+
+    public void TriggerOpenTransferFolder() => HandleOpenTransferFolder();
+
+    protected override string? SelectUploadFilePath(IWin32Window owner)
+    {
+        return _selectedFilePath;
+    }
+
+    protected override async Task UploadFileCoreAsync(FileInfo fileInfo, string uploadId)
+    {
+        ApplyTransferStatus(new RemoteDesktop.Host.Models.AgentFileTransferStatusMessage
+        {
+            UploadId = uploadId,
+            Status = "started",
+            FileName = fileInfo.Name,
+            StoredFileName = Path.GetFileName(_storedFilePath),
+            StoredFilePath = _storedFilePath,
+            FileSize = fileInfo.Length,
+            BytesTransferred = 0,
+            Message = $"開始接收 {fileInfo.Name}"
+        });
+
+        await Task.Delay(600);
+
+        ApplyTransferStatus(new RemoteDesktop.Host.Models.AgentFileTransferStatusMessage
+        {
+            UploadId = uploadId,
+            Status = "completed",
+            FileName = fileInfo.Name,
+            StoredFileName = Path.GetFileName(_storedFilePath),
+            StoredFilePath = _storedFilePath,
+            FileSize = fileInfo.Length,
+            BytesTransferred = fileInfo.Length,
+            Message = $"檔案已儲存到 {Path.GetFileName(_storedFilePath)}。"
+        });
+    }
+
+    protected override void OpenTransferFolder(string directoryPath)
+    {
+        OpenedFolderPath = directoryPath;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

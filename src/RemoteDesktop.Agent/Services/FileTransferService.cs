@@ -87,6 +87,7 @@ public sealed class FileTransferService
                 Status = "started",
                 FileName = originalFileName,
                 StoredFileName = session.StoredFileName,
+                StoredFilePath = session.TargetPath,
                 FileSize = command.FileSize,
                 BytesTransferred = 0,
                 Message = AgentUiText.Bi($"正在接收檔案到 {session.StoredFileName}。", $"Receiving file to {session.StoredFileName}.")
@@ -137,6 +138,7 @@ public sealed class FileTransferService
                     Status = "progress",
                     FileName = session.FileName,
                     StoredFileName = session.StoredFileName,
+                    StoredFilePath = session.TargetPath,
                     FileSize = session.FileSize,
                     BytesTransferred = session.BytesTransferred,
                     Message = AgentUiText.Bi($"已接收 {session.BytesTransferred} / {session.FileSize} 位元組。", $"Received {session.BytesTransferred} of {session.FileSize} bytes.")
@@ -180,6 +182,7 @@ public sealed class FileTransferService
                 Status = "completed",
                 FileName = session.FileName,
                 StoredFileName = session.StoredFileName,
+                StoredFilePath = session.TargetPath,
                 FileSize = session.FileSize,
                 BytesTransferred = session.BytesTransferred,
                 Message = AgentUiText.Bi($"檔案已儲存到 {session.StoredFileName}。", $"Saved file to {session.StoredFileName}.")
@@ -210,6 +213,7 @@ public sealed class FileTransferService
             Status = "failed",
             FileName = session.FileName,
             StoredFileName = session.StoredFileName,
+            StoredFilePath = session.TargetPath,
             FileSize = session.FileSize,
             BytesTransferred = session.BytesTransferred,
             Message = AgentUiText.Bi("檔案尚未完成即被取消上傳。", "The file upload was cancelled before completion.")
@@ -230,6 +234,7 @@ public sealed class FileTransferService
             Status = "failed",
             FileName = session.FileName,
             StoredFileName = session.StoredFileName,
+            StoredFilePath = session.TargetPath,
             FileSize = session.FileSize,
             BytesTransferred = session.BytesTransferred,
             Message = message
@@ -272,6 +277,7 @@ public sealed class FileTransferService
             Status = "failed",
             FileName = fileName,
             StoredFileName = string.Empty,
+            StoredFilePath = string.Empty,
             FileSize = fileSize,
             BytesTransferred = 0,
             Message = message

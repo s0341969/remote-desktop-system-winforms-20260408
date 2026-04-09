@@ -1,6 +1,7 @@
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Services;
 using System.Buffers;
+using System.Diagnostics;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -62,6 +63,7 @@ public partial class RemoteViewerForm : Form
     private bool _commandFailed;
     private bool _observeOnlyNoticeShown;
     private string? _activeUploadId;
+    private string? _lastUploadedFilePath;
     private TaskCompletionSource<AgentClipboardMessage>? _clipboardSyncSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadStartSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadCompletionSignal;
@@ -87,6 +89,7 @@ public partial class RemoteViewerForm : Form
         btnSendClipboard.Enabled = viewer.CanControlRemote;
         btnGetClipboard.Enabled = viewer.CanControlRemote;
         btnUploadFile.Enabled = viewer.CanControlRemote;
+        btnOpenTransferFolder.Enabled = false;
     }
 
     protected override async void OnShown(EventArgs e)
@@ -253,7 +256,7 @@ public partial class RemoteViewerForm : Form
         }
     }
 
-    private void ApplyTransferStatus(AgentFileTransferStatusMessage status)
+    protected void ApplyTransferStatus(AgentFileTransferStatusMessage status)
     {
         if (!string.IsNullOrWhiteSpace(_activeUploadId) && !string.Equals(_activeUploadId, status.UploadId, StringComparison.OrdinalIgnoreCase))
         {
@@ -266,6 +269,8 @@ public partial class RemoteViewerForm : Form
                 _uploadStartSignal?.TrySetResult(status);
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
+                _lastUploadedFilePath = null;
+                btnOpenTransferFolder.Enabled = false;
                 break;
             case "progress":
                 UpdateTransferProgress(status.BytesTransferred, status.FileSize);
@@ -276,8 +281,12 @@ public partial class RemoteViewerForm : Form
             case "completed":
                 _uploadCompletionSignal?.TrySetResult(status);
                 UpdateTransferProgress(status.FileSize, status.FileSize);
-                lblTransferValue.Text = status.Message;
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+                _lastUploadedFilePath = string.IsNullOrWhiteSpace(status.StoredFilePath) ? null : status.StoredFilePath;
+                btnOpenTransferFolder.Enabled = !string.IsNullOrWhiteSpace(_lastUploadedFilePath);
+                lblTransferValue.Text = string.IsNullOrWhiteSpace(_lastUploadedFilePath)
+                    ? status.Message
+                    : HostUiText.Bi($"{status.Message} 位置：{_lastUploadedFilePath}", $"{status.Message} Location: {_lastUploadedFilePath}");
                 _activeUploadId = null;
                 break;
             case "failed":
@@ -286,6 +295,8 @@ public partial class RemoteViewerForm : Form
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+                _lastUploadedFilePath = null;
+                btnOpenTransferFolder.Enabled = false;
                 _activeUploadId = null;
                 MessageBox.Show(status.Message, HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 break;
@@ -338,24 +349,23 @@ public partial class RemoteViewerForm : Form
 
     private async void btnUploadFile_Click(object sender, EventArgs e)
     {
+        await HandleUploadSelectionAsync();
+    }
+
+    protected async Task HandleUploadSelectionAsync()
+    {
         if (!EnsureInteractivePermission(HostUiText.Bi("此帳號可開啟 Viewer，但沒有傳送檔案的權限。", "This account can open viewer sessions but does not have permission to transfer files.")))
         {
             return;
         }
 
-        using var dialog = new OpenFileDialog
-        {
-            Title = HostUiText.Window("選擇要上傳的檔案", "Select a file to upload"),
-            CheckFileExists = true,
-            Multiselect = false
-        };
-
-        if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
+        var filePath = SelectUploadFilePath(this);
+        if (string.IsNullOrWhiteSpace(filePath))
         {
             return;
         }
 
-        await UploadFileAsync(dialog.FileName);
+        await UploadFileAsync(filePath);
     }
 
     private async void btnSendClipboard_Click(object sender, EventArgs e)
@@ -462,7 +472,7 @@ public partial class RemoteViewerForm : Form
         }
     }
 
-    private async Task UploadFileAsync(string filePath)
+    protected virtual async Task UploadFileAsync(string filePath)
     {
         if (_device is null)
         {
@@ -480,6 +490,8 @@ public partial class RemoteViewerForm : Form
         _activeUploadId = uploadId;
         _uploadStartSignal = new TaskCompletionSource<AgentFileTransferStatusMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         _uploadCompletionSignal = new TaskCompletionSource<AgentFileTransferStatusMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _lastUploadedFilePath = null;
+        btnOpenTransferFolder.Enabled = false;
         btnUploadFile.Enabled = false;
         progressFileTransfer.Value = 0;
         lblTransferValue.Text = HostUiText.Bi($"正在上傳 {fileInfo.Name}...", $"Uploading {fileInfo.Name}...");
@@ -514,7 +526,7 @@ public partial class RemoteViewerForm : Form
         }
     }
 
-    private async Task UploadFileCoreAsync(FileInfo fileInfo, string uploadId)
+    protected virtual async Task UploadFileCoreAsync(FileInfo fileInfo, string uploadId)
     {
         await SendViewerCommandCoreAsync(new ViewerCommandMessage
         {
@@ -806,6 +818,73 @@ public partial class RemoteViewerForm : Form
         return _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, cancellationToken);
     }
 
+    protected virtual string? SelectUploadFilePath(IWin32Window owner)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = HostUiText.Window("選擇要上傳的檔案", "Select a file to upload"),
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        return dialog.ShowDialog(owner) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName)
+            ? dialog.FileName
+            : null;
+    }
+
+    protected virtual void OpenTransferFolder(string directoryPath)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"\"{directoryPath}\"",
+            UseShellExecute = true
+        });
+    }
+
+    private void btnOpenTransferFolder_Click(object sender, EventArgs e)
+    {
+        HandleOpenTransferFolder();
+    }
+
+    protected void HandleOpenTransferFolder()
+    {
+        var filePath = _lastUploadedFilePath;
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            MessageBox.Show(
+                HostUiText.Bi("目前沒有可開啟的上傳目的地。", "There is no upload destination to open."),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var directoryPath = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+        {
+            MessageBox.Show(
+                HostUiText.Bi($"找不到上傳資料夾：{filePath}", $"Upload folder was not found: {filePath}"),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            OpenTransferFolder(directoryPath);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                HostUiText.Bi($"無法開啟資料夾：{exception.Message}", $"Failed to open folder: {exception.Message}"),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
     private Task UpdateUiAsync(Action action)
     {
         if (IsDisposed || Disposing)
@@ -891,6 +970,7 @@ public partial class RemoteViewerForm : Form
         lblClipboardValue.Text = HostUiText.Bi("尚未執行剪貼簿操作。", "No clipboard action yet.");
         lblTransferCaption.Text = HostUiText.Bi("傳輸", "Transfer");
         lblTransferValue.Text = HostUiText.Bi("目前沒有進行中的傳輸。", "No active transfer.");
+        HostUiText.ApplyButton(btnOpenTransferFolder, "開啟資料夾", "Open Folder");
         HostUiText.ApplyButton(btnSendClipboard, "送出剪貼簿", "Send Clipboard");
         HostUiText.ApplyButton(btnGetClipboard, "取得剪貼簿", "Get Clipboard");
         HostUiText.ApplyButton(btnUploadFile, "上傳檔案", "Upload File");
