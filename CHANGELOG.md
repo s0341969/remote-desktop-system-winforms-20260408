@@ -2,6 +2,7 @@
 
 ## 2026-04-09
 
+- 將 Viewer 上傳入口的權限判定改為非阻塞式狀態更新與診斷日誌，不再透過 modal 對話框卡住上傳流程，並補上 `host-upload-permission-check` / `host-upload-selection-failed` 事件。
 - 將 Host 檔案選擇對話框改回同步 UI 執行緒開啟，實際上傳維持背景工作執行，修正按下「上傳檔案」後只留下 `host-upload-clicked` 診斷事件、卻沒有開啟檔案選擇器的卡點。
 - 修正 Viewer 檔案上傳完成後的狀態呈現，Host 端現在會顯示 Agent 實際儲存路徑，並提供「開啟資料夾」按鈕。
 - 擴充 `tests/RemoteDesktop.UiAutomation`，新增 Remote Viewer 檔案上傳 UI 自動化測試，覆蓋上傳中狀態、完成後路徑顯示與開啟資料夾流程。

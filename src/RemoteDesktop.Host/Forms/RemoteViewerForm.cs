@@ -375,44 +375,71 @@ public partial class RemoteViewerForm : Form
 
     protected void HandleUploadSelection()
     {
-        if (!EnsureInteractivePermission(HostUiText.Bi("此帳號可開啟 Viewer，但沒有傳送檔案的權限。", "This account can open viewer sessions but does not have permission to transfer files.")))
+        try
         {
-            LogTransferTrace("host-upload-blocked", "Upload request was blocked by permission check.", new
+            LogTransferTrace("host-upload-permission-check", "Checking upload permission.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                canControlRemote = _viewer?.CanControlRemote == true
+            });
+
+            if (_viewer?.CanControlRemote != true)
+            {
+                lblStatusValue.Text = HostUiText.Bi("僅觀看工作階段", "Observe-only session");
+                lblTransferValue.Text = HostUiText.Bi("此帳號沒有傳送檔案的權限。", "This account does not have permission to transfer files.");
+                LogTransferTrace("host-upload-blocked", "Upload request was blocked by permission check.", new
+                {
+                    deviceId = _device?.DeviceId,
+                    viewer = _viewer?.UserName
+                });
+                return;
+            }
+
+            LogTransferTrace("host-upload-dialog-open", "Opening file selection dialog.", new
             {
                 deviceId = _device?.DeviceId,
                 viewer = _viewer?.UserName
             });
-            return;
-        }
-
-        LogTransferTrace("host-upload-dialog-open", "Opening file selection dialog.", new
-        {
-            deviceId = _device?.DeviceId,
-            viewer = _viewer?.UserName
-        });
-        var filePath = SelectUploadFilePath(this);
-        LogTransferTrace("host-upload-dialog-closed", "File selection dialog returned.", new
-        {
-            deviceId = _device?.DeviceId,
-            viewer = _viewer?.UserName,
-            hasSelection = !string.IsNullOrWhiteSpace(filePath),
-            filePath
-        });
-        if (string.IsNullOrWhiteSpace(filePath))
-        {
-            LogTransferTrace("host-upload-cancelled", "Upload file selection was cancelled.", new
+            var filePath = SelectUploadFilePath(this);
+            LogTransferTrace("host-upload-dialog-closed", "File selection dialog returned.", new
             {
-                deviceId = _device?.DeviceId
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                hasSelection = !string.IsNullOrWhiteSpace(filePath),
+                filePath
             });
-            return;
-        }
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                LogTransferTrace("host-upload-cancelled", "Upload file selection was cancelled.", new
+                {
+                    deviceId = _device?.DeviceId
+                });
+                return;
+            }
 
-        LogTransferTrace("host-upload-selected", "Selected a local file for upload.", new
+            LogTransferTrace("host-upload-selected", "Selected a local file for upload.", new
+            {
+                deviceId = _device?.DeviceId,
+                filePath
+            });
+            _ = UploadFileWithGuardAsync(filePath);
+        }
+        catch (Exception exception)
         {
-            deviceId = _device?.DeviceId,
-            filePath
-        });
-        _ = UploadFileWithGuardAsync(filePath);
+            LogTransferTrace("host-upload-selection-failed", "Upload selection flow failed before transfer started.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                exception = exception.ToString()
+            });
+            lblTransferValue.Text = HostUiText.Bi($"上傳初始化失敗：{exception.Message}", $"Upload initialization failed: {exception.Message}");
+            MessageBox.Show(
+                HostUiText.Bi($"開啟檔案上傳流程失敗：{exception.Message}", $"Failed to open the upload flow: {exception.Message}"),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private async Task UploadFileWithGuardAsync(string filePath)
@@ -1265,4 +1292,5 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
 
