@@ -365,36 +365,39 @@ public partial class RemoteViewerForm : Form
 
     private void btnUploadFile_Click(object sender, EventArgs e)
     {
-        _ = HandleUploadSelectionSafeAsync();
+        LogTransferTrace("host-upload-clicked", "Upload button was clicked.", new
+        {
+            deviceId = _device?.DeviceId,
+            viewer = _viewer?.UserName
+        });
+        HandleUploadSelection();
     }
 
-    private async Task HandleUploadSelectionSafeAsync()
-    {
-        try
-        {
-            await HandleUploadSelectionAsync();
-        }
-        catch (Exception exception)
-        {
-            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-            progressFileTransfer.Value = 0;
-            lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
-            MessageBox.Show(
-                HostUiText.Bi($"檔案上傳流程發生未預期錯誤：{exception.Message}", $"The upload flow failed with an unexpected error: {exception.Message}"),
-                HostUiText.Window("檔案傳輸", "File Transfer"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-    }
-
-    protected async Task HandleUploadSelectionAsync()
+    protected void HandleUploadSelection()
     {
         if (!EnsureInteractivePermission(HostUiText.Bi("此帳號可開啟 Viewer，但沒有傳送檔案的權限。", "This account can open viewer sessions but does not have permission to transfer files.")))
         {
+            LogTransferTrace("host-upload-blocked", "Upload request was blocked by permission check.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName
+            });
             return;
         }
 
+        LogTransferTrace("host-upload-dialog-open", "Opening file selection dialog.", new
+        {
+            deviceId = _device?.DeviceId,
+            viewer = _viewer?.UserName
+        });
         var filePath = SelectUploadFilePath(this);
+        LogTransferTrace("host-upload-dialog-closed", "File selection dialog returned.", new
+        {
+            deviceId = _device?.DeviceId,
+            viewer = _viewer?.UserName,
+            hasSelection = !string.IsNullOrWhiteSpace(filePath),
+            filePath
+        });
         if (string.IsNullOrWhiteSpace(filePath))
         {
             LogTransferTrace("host-upload-cancelled", "Upload file selection was cancelled.", new
@@ -409,7 +412,26 @@ public partial class RemoteViewerForm : Form
             deviceId = _device?.DeviceId,
             filePath
         });
-        await UploadFileAsync(filePath);
+        _ = UploadFileWithGuardAsync(filePath);
+    }
+
+    private async Task UploadFileWithGuardAsync(string filePath)
+    {
+        try
+        {
+            await UploadFileAsync(filePath);
+        }
+        catch (Exception exception)
+        {
+            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+            progressFileTransfer.Value = 0;
+            lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
+            MessageBox.Show(
+                HostUiText.Bi($"檔案上傳流程發生未預期錯誤：{exception.Message}", $"The upload flow failed with an unexpected error: {exception.Message}"),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private async void btnSendClipboard_Click(object sender, EventArgs e)

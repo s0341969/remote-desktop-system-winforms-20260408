@@ -757,7 +757,11 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         // Skip the real broker attach path in UI automation; this test validates the Viewer UI workflow.
     }
 
-    public Task TriggerUploadWorkflowAsync() => HandleUploadSelectionAsync();
+    public Task TriggerUploadWorkflowAsync()
+    {
+        HandleUploadSelection();
+        return Task.CompletedTask;
+    }
 
     public void TriggerOpenTransferFolder() => HandleOpenTransferFolder();
 
@@ -800,6 +804,7 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
 
 
 

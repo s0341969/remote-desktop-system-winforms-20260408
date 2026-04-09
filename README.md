@@ -47,6 +47,7 @@
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
 - Host 的本機剪貼簿讀寫改為專用 STA 路徑執行，不再因目前執行緒 apartment 狀態不同而直接失敗。
+- Host 的檔案選擇對話框改回同步 UI 執行緒開啟，實際上傳仍維持背景工作執行，修正真機上傳時只留下 host-upload-clicked 而沒有開啟檔案選擇器的卡點。
 - Host / Agent 現在都會將檔案傳輸流程寫入 `logs` 目錄，方便追查 `start/chunk/complete/abort` 卡在哪一段。
 - Host 日誌：`deploy/publish/Host/logs/host-file-transfer.ndjson`
 - Agent 日誌：`deploy/publish/Agent/logs/agent-file-transfer.ndjson`
@@ -145,6 +146,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
 
 
 
