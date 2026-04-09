@@ -419,12 +419,26 @@ public partial class RemoteViewerForm : Form
                 return;
             }
 
+            TryWriteFallbackTransferTrace("host-upload-dialog-open-fallback", "Opening file selection dialog via fallback marker.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                uiThreadId = Environment.CurrentManagedThreadId
+            });
             LogTransferTrace("host-upload-dialog-open", "Opening file selection dialog.", new
             {
                 deviceId = _device?.DeviceId,
                 viewer = _viewer?.UserName
             });
             var filePath = SelectUploadFilePath(this);
+            TryWriteFallbackTransferTrace("host-upload-dialog-closed-fallback", "File selection dialog returned via fallback marker.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                hasSelection = !string.IsNullOrWhiteSpace(filePath),
+                filePath,
+                uiThreadId = Environment.CurrentManagedThreadId
+            });
             LogTransferTrace("host-upload-dialog-closed", "File selection dialog returned.", new
             {
                 deviceId = _device?.DeviceId,
@@ -1004,16 +1018,54 @@ public partial class RemoteViewerForm : Form
 
     protected virtual string? SelectUploadFilePath(IWin32Window owner)
     {
-        using var dialog = new OpenFileDialog
+        string? selectedFilePath = null;
+        Exception? selectionException = null;
+        using var completed = new ManualResetEventSlim(false);
+
+        var dialogThread = new Thread(() =>
         {
-            Title = HostUiText.Window("選擇要上傳的檔案", "Select a file to upload"),
-            CheckFileExists = true,
-            Multiselect = false
+            try
+            {
+                using var dialog = new OpenFileDialog
+                {
+                    Title = HostUiText.Window("選擇要上傳的檔案", "Select a file to upload"),
+                    CheckFileExists = true,
+                    Multiselect = false,
+                    RestoreDirectory = true,
+                    AutoUpgradeEnabled = true
+                };
+
+                var result = dialog.ShowDialog();
+                if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
+                {
+                    selectedFilePath = dialog.FileName;
+                }
+            }
+            catch (Exception exception)
+            {
+                selectionException = exception;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "RemoteViewerUploadFileDialog"
         };
 
-        return dialog.ShowDialog(owner) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName)
-            ? dialog.FileName
-            : null;
+        dialogThread.SetApartmentState(ApartmentState.STA);
+        dialogThread.Start();
+        completed.Wait();
+        dialogThread.Join();
+
+        if (selectionException is not null)
+        {
+            throw new InvalidOperationException(HostUiText.Bi($"開啟檔案選擇器失敗：{selectionException.Message}", $"Failed to open the file picker: {selectionException.Message}"), selectionException);
+        }
+
+        return selectedFilePath;
     }
 
     protected virtual void OpenTransferFolder(string directoryPath)
@@ -1315,6 +1367,7 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
 
 
 

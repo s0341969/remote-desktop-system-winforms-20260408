@@ -2,6 +2,7 @@
 
 ## 2026-04-09
 
+- 將 Host 的上傳選檔視窗改為獨立 STA 執行緒開啟，避開 Viewer 既有 UI 執行緒上的 modal/owner 互鎖問題，修正按下「上傳檔案」後整個視窗卡住卻沒有真正開出檔案選擇器。
 - 將 Viewer 的上傳按鈕改為先 `BeginInvoke` 回到 UI 訊息迴圈後再進入選檔流程，並補上同步 fallback marker，降低 click 事件與檔案對話框重入造成整個 Viewer 卡死的風險。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面新增 build 版本與 EXE 建置時間顯示，方便現場直接辨識是否正在執行最新 publish。
 - 將 Viewer 上傳入口的權限判定改為非阻塞式狀態更新與診斷日誌，不再透過 modal 對話框卡住上傳流程，並補上 `host-upload-permission-check` / `host-upload-selection-failed` 事件。

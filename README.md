@@ -46,6 +46,7 @@
 - Viewer 在上傳完成後會直接顯示 Agent 端實際儲存位置，並提供「開啟資料夾」按鈕快速打開目的資料夾。
 - Upload 路徑的權限不足情境改為非阻塞式狀態更新與診斷日誌，不再透過可能被遮住的 modal 對話框卡住整個 Viewer。
 - Upload 按鈕現在會先回到 UI 訊息迴圈再開啟選檔流程，並額外寫入同步 fallback marker，避免 click 事件與 modal 對話框重入時整個 Viewer 無回應。
+- Host 的檔案選擇器現在改由獨立 STA 執行緒開啟，不再依賴 Viewer 當前 UI 執行緒的 modal 狀態，避免選檔視窗無法彈出導致上傳流程卡死。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
