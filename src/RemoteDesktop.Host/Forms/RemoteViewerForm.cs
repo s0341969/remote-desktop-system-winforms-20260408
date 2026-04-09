@@ -8,7 +8,8 @@ namespace RemoteDesktop.Host.Forms;
 public partial class RemoteViewerForm : Form
 {
     private const int MaxClipboardCharacters = 32_768;
-    private const int UploadChunkBytes = 48 * 1024;
+    // Keep each Base64 payload well below the LOH threshold to avoid large transient string allocations.
+    private const int UploadChunkBytes = 16 * 1024;
     private static readonly IReadOnlyDictionary<Keys, string> KeyCodeMap = new Dictionary<Keys, string>
     {
         [Keys.Enter] = "Enter",
@@ -500,7 +501,8 @@ public partial class RemoteViewerForm : Form
         {
             await UploadFileCoreAsync(fileInfo, uploadId);
 
-            var completionStatus = await _uploadCompletionSignal!.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var completionTimeout = TimeSpan.FromSeconds(Math.Clamp(30 + (int)Math.Ceiling(fileInfo.Length / (1024d * 1024d * 4d)), 30, 180));
+            var completionStatus = await _uploadCompletionSignal!.Task.WaitAsync(completionTimeout);
             if (string.Equals(completionStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(completionStatus.Message);
@@ -536,7 +538,7 @@ public partial class RemoteViewerForm : Form
             FileSize = fileInfo.Length
         }, CancellationToken.None).ConfigureAwait(false);
 
-        var startStatus = await _uploadStartSignal!.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        var startStatus = await _uploadStartSignal!.Task.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         if (string.Equals(startStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(startStatus.Message);
@@ -564,6 +566,11 @@ public partial class RemoteViewerForm : Form
                     SequenceNumber = sequenceNumber++,
                     ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead)
                 }, CancellationToken.None).ConfigureAwait(false);
+
+                if (sequenceNumber % 8 == 0)
+                {
+                    await Task.Delay(1).ConfigureAwait(false);
+                }
             }
         }
         finally

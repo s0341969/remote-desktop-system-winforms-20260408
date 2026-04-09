@@ -72,6 +72,13 @@ public sealed class RemoteAgentService : BackgroundService
         _runtimeState.MarkConnecting(serverUri);
         await socket.ConnectAsync(serverUri, cancellationToken);
         _runtimeState.MarkConnected();
+        if (!_inputInjectionService.IsProcessElevated())
+        {
+            _runtimeState.MarkWarning(AgentUiText.Bi(
+                "Agent 目前未以系統管理員權限執行。一般視窗可正常控制，但較高權限程式、UAC 或安全桌面可能拒絕接收輸入。",
+                "The Agent is not running elevated. Standard windows can still be controlled, but higher-privilege apps, UAC prompts, or the secure desktop may reject input."));
+        }
+
         _logger.LogInformation("Connected to Control Server: {ServerUri}", serverUri);
 
         var screenSize = _captureService.GetVirtualScreenSize();

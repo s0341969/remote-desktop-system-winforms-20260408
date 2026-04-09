@@ -180,7 +180,7 @@ static async Task RunFileTransferSmokeTestAsync()
             FileSize = content.Length
         }, publishStatusAsync, CancellationToken.None);
 
-        const int chunkBytes = 48 * 1024;
+        const int chunkBytes = 16 * 1024;
         var offset = 0;
         var sequenceNumber = 0;
         while (offset < content.Length)
@@ -548,6 +548,7 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
 
 
 

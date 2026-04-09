@@ -8,7 +8,8 @@ namespace RemoteDesktop.Agent.Services;
 
 public sealed class FileTransferService
 {
-    private const int MaxChunkBytes = 64 * 1024;
+    private const int MaxChunkBytes = 16 * 1024;
+    private const int MaxChunkBase64Characters = 24_000;
     private const int ProgressPublishThresholdBytes = 256 * 1024;
     private readonly AgentOptions _options;
     private readonly ILogger<FileTransferService> _logger;
@@ -119,7 +120,13 @@ public sealed class FileTransferService
                 throw new InvalidOperationException(AgentUiText.Bi("檔案分塊順序無效。", "The file chunk sequence is invalid."));
             }
 
-            var chunk = Convert.FromBase64String(command.ChunkBase64 ?? string.Empty);
+            var chunkBase64 = command.ChunkBase64 ?? string.Empty;
+            if (chunkBase64.Length == 0 || chunkBase64.Length > MaxChunkBase64Characters)
+            {
+                throw new InvalidOperationException(AgentUiText.Bi("檔案分塊大小無效。", "The file chunk size is invalid."));
+            }
+
+            var chunk = Convert.FromBase64String(chunkBase64);
             if (chunk.Length == 0 || chunk.Length > MaxChunkBytes)
             {
                 throw new InvalidOperationException(AgentUiText.Bi("檔案分塊大小無效。", "The file chunk size is invalid."));

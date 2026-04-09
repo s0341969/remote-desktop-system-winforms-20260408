@@ -78,6 +78,23 @@ public sealed class AgentRuntimeState
         }
     }
 
+    public void MarkInfo(string message)
+    {
+        lock (_sync)
+        {
+            Enqueue(message);
+        }
+    }
+
+    public void MarkWarning(string message)
+    {
+        lock (_sync)
+        {
+            LastError = message;
+            Enqueue(message);
+        }
+    }
+
     public void MarkFrameSent()
     {
         lock (_sync)

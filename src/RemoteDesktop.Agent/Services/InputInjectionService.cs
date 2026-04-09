@@ -1,90 +1,128 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
+using System.Security.Principal;
+using Microsoft.Extensions.Logging;
 using RemoteDesktop.Agent.Models;
 
 namespace RemoteDesktop.Agent.Services;
 
 public sealed class InputInjectionService
 {
-    private static readonly IReadOnlyDictionary<string, ushort> KeyMap = new Dictionary<string, ushort>(StringComparer.Ordinal)
+    private static readonly IReadOnlyDictionary<string, KeySpec> KeyMap = new Dictionary<string, KeySpec>(StringComparer.Ordinal)
     {
-        ["Backspace"] = 0x08,
-        ["Tab"] = 0x09,
-        ["Enter"] = 0x0D,
-        ["ShiftLeft"] = 0x10,
-        ["ShiftRight"] = 0x10,
-        ["ControlLeft"] = 0x11,
-        ["ControlRight"] = 0x11,
-        ["AltLeft"] = 0x12,
-        ["AltRight"] = 0x12,
-        ["Escape"] = 0x1B,
-        ["Space"] = 0x20,
-        ["PageUp"] = 0x21,
-        ["PageDown"] = 0x22,
-        ["End"] = 0x23,
-        ["Home"] = 0x24,
-        ["ArrowLeft"] = 0x25,
-        ["ArrowUp"] = 0x26,
-        ["ArrowRight"] = 0x27,
-        ["ArrowDown"] = 0x28,
-        ["Insert"] = 0x2D,
-        ["Delete"] = 0x2E,
-        ["MetaLeft"] = 0x5B,
-        ["MetaRight"] = 0x5C,
-        ["F1"] = 0x70,
-        ["F2"] = 0x71,
-        ["F3"] = 0x72,
-        ["F4"] = 0x73,
-        ["F5"] = 0x74,
-        ["F6"] = 0x75,
-        ["F7"] = 0x76,
-        ["F8"] = 0x77,
-        ["F9"] = 0x78,
-        ["F10"] = 0x79,
-        ["F11"] = 0x7A,
-        ["F12"] = 0x7B,
-        ["Semicolon"] = 0xBA,
-        ["Equal"] = 0xBB,
-        ["Comma"] = 0xBC,
-        ["Minus"] = 0xBD,
-        ["Period"] = 0xBE,
-        ["Slash"] = 0xBF,
-        ["Backquote"] = 0xC0,
-        ["BracketLeft"] = 0xDB,
-        ["Backslash"] = 0xDC,
-        ["BracketRight"] = 0xDD,
-        ["Quote"] = 0xDE
+        ["Backspace"] = new(0x08, false),
+        ["Tab"] = new(0x09, false),
+        ["Enter"] = new(0x0D, false),
+        ["ShiftLeft"] = new(0x10, false),
+        ["ShiftRight"] = new(0x10, false),
+        ["ControlLeft"] = new(0x11, false),
+        ["ControlRight"] = new(0x11, true),
+        ["AltLeft"] = new(0x12, false),
+        ["AltRight"] = new(0x12, true),
+        ["Escape"] = new(0x1B, false),
+        ["Space"] = new(0x20, false),
+        ["PageUp"] = new(0x21, true),
+        ["PageDown"] = new(0x22, true),
+        ["End"] = new(0x23, true),
+        ["Home"] = new(0x24, true),
+        ["ArrowLeft"] = new(0x25, true),
+        ["ArrowUp"] = new(0x26, true),
+        ["ArrowRight"] = new(0x27, true),
+        ["ArrowDown"] = new(0x28, true),
+        ["Insert"] = new(0x2D, true),
+        ["Delete"] = new(0x2E, true),
+        ["MetaLeft"] = new(0x5B, true),
+        ["MetaRight"] = new(0x5C, true),
+        ["F1"] = new(0x70, false),
+        ["F2"] = new(0x71, false),
+        ["F3"] = new(0x72, false),
+        ["F4"] = new(0x73, false),
+        ["F5"] = new(0x74, false),
+        ["F6"] = new(0x75, false),
+        ["F7"] = new(0x76, false),
+        ["F8"] = new(0x77, false),
+        ["F9"] = new(0x78, false),
+        ["F10"] = new(0x79, false),
+        ["F11"] = new(0x7A, false),
+        ["F12"] = new(0x7B, false),
+        ["Semicolon"] = new(0xBA, false),
+        ["Equal"] = new(0xBB, false),
+        ["Comma"] = new(0xBC, false),
+        ["Minus"] = new(0xBD, false),
+        ["Period"] = new(0xBE, false),
+        ["Slash"] = new(0xBF, false),
+        ["Backquote"] = new(0xC0, false),
+        ["BracketLeft"] = new(0xDB, false),
+        ["Backslash"] = new(0xDC, false),
+        ["BracketRight"] = new(0xDD, false),
+        ["Quote"] = new(0xDE, false)
     };
+
+    private readonly AgentRuntimeState _runtimeState;
+    private readonly ILogger<InputInjectionService> _logger;
+    private int _lastPrivilegeWarningTick;
+
+    public InputInjectionService(AgentRuntimeState runtimeState, ILogger<InputInjectionService> logger)
+    {
+        _runtimeState = runtimeState;
+        _logger = logger;
+    }
 
     public void Apply(ViewerCommandMessage request)
     {
-        switch (request.Type)
+        try
         {
-            case "move":
-                MovePointer(request.X, request.Y);
-                break;
-            case "mousedown":
-                MovePointer(request.X, request.Y);
-                SendMouseButton(request.Button, true);
-                break;
-            case "mouseup":
-                MovePointer(request.X, request.Y);
-                SendMouseButton(request.Button, false);
-                break;
-            case "wheel":
-                MovePointer(request.X, request.Y);
-                SendMouseWheel(request.DeltaY);
-                break;
-            case "keydown":
-                SendKey(request.Code, false);
-                break;
-            case "keyup":
-                SendKey(request.Code, true);
-                break;
-            case "text":
-                SendUnicodeText(request.Key);
-                break;
+            switch (request.Type)
+            {
+                case "move":
+                    MovePointer(request.X, request.Y);
+                    break;
+                case "mousedown":
+                    MovePointer(request.X, request.Y);
+                    SendMouseButton(request.Button, true);
+                    break;
+                case "mouseup":
+                    MovePointer(request.X, request.Y);
+                    SendMouseButton(request.Button, false);
+                    break;
+                case "wheel":
+                    MovePointer(request.X, request.Y);
+                    SendMouseWheel(request.DeltaY);
+                    break;
+                case "keydown":
+                    SendKey(request.Code, false);
+                    break;
+                case "keyup":
+                    SendKey(request.Code, true);
+                    break;
+                case "text":
+                    SendUnicodeText(request.Key);
+                    break;
+            }
         }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Input injection failed for command type {CommandType}.", request.Type);
+            PublishInjectionWarning(exception.Message);
+        }
+    }
+
+    public bool IsProcessElevated() => IsCurrentProcessElevated();
+
+    private void PublishInjectionWarning(string reason)
+    {
+        var suffix = IsCurrentProcessElevated()
+            ? string.Empty
+            : AgentUiText.Bi(" 目前 Agent 並未以系統管理員權限執行，較高權限視窗可能拒絕接收輸入。", " The Agent is not running elevated, so higher-privilege windows may reject input.");
+
+        var now = Environment.TickCount;
+        if (unchecked(now - _lastPrivilegeWarningTick) < 5000)
+        {
+            return;
+        }
+
+        _lastPrivilegeWarningTick = now;
+        _runtimeState.MarkWarning(AgentUiText.Bi($"遠端控制輸入失敗：{reason}.{suffix}", $"Remote control input failed: {reason}.{suffix}"));
     }
 
     private static void MovePointer(double x, double y)
@@ -92,7 +130,11 @@ public sealed class InputInjectionService
         var bounds = SystemInformation.VirtualScreen;
         var absoluteX = bounds.Left + (int)Math.Round(Math.Clamp(x, 0d, 1d) * Math.Max(bounds.Width - 1, 1));
         var absoluteY = bounds.Top + (int)Math.Round(Math.Clamp(y, 0d, 1d) * Math.Max(bounds.Height - 1, 1));
-        SetCursorPos(absoluteX, absoluteY);
+
+        var normalizedX = NormalizeAbsoluteCoordinate(absoluteX, bounds.Left, bounds.Width);
+        var normalizedY = NormalizeAbsoluteCoordinate(absoluteY, bounds.Top, bounds.Height);
+
+        SendMouseInput(MouseEventFMove | MouseEventFAbsolute | MouseEventFVirtualDesk, 0, normalizedX, normalizedY);
     }
 
     private static void SendMouseButton(string? button, bool isDown)
@@ -104,16 +146,16 @@ public sealed class InputInjectionService
             _ => isDown ? MouseEventFLeftDown : MouseEventFLeftUp
         };
 
-        SendMouseInput(flag, 0);
+        SendMouseInput(flag, 0, 0, 0);
     }
 
     private static void SendMouseWheel(int deltaY)
     {
-        var wheelDelta = deltaY < 0 ? 120 : -120;
-        SendMouseInput(MouseEventFWheel, wheelDelta);
+        var wheelDelta = deltaY < 0 ? unchecked((uint)-120) : 120u;
+        SendMouseInput(MouseEventFWheel, wheelDelta, 0, 0);
     }
 
-    private static void SendMouseInput(uint flags, int mouseData)
+    private static void SendMouseInput(uint flags, uint mouseData, int dx, int dy)
     {
         var input = new INPUT
         {
@@ -122,21 +164,35 @@ public sealed class InputInjectionService
             {
                 mi = new MOUSEINPUT
                 {
-                    dwFlags = flags,
-                    mouseData = mouseData
+                    dx = dx,
+                    dy = dy,
+                    mouseData = mouseData,
+                    dwFlags = flags
                 }
             }
         };
 
-        SendInput(1, [input], Marshal.SizeOf<INPUT>());
+        EnsureSent([input]);
     }
 
     private static void SendKey(string? code, bool isKeyUp)
     {
-        var virtualKey = ResolveVirtualKey(code);
-        if (virtualKey == 0)
+        var keySpec = ResolveKeySpec(code);
+        if (keySpec is null)
         {
             return;
+        }
+
+        var scanCode = MapVirtualKey(keySpec.Value.VirtualKey, MapvkVkToVsc);
+        if (scanCode == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), $"Could not resolve scan code for key '{code}'.");
+        }
+
+        var flags = KeyeventfScancode | (isKeyUp ? KeyeventfKeyup : 0u);
+        if (keySpec.Value.IsExtended)
+        {
+            flags |= KeyeventfExtendedKey;
         }
 
         var input = new INPUT
@@ -146,13 +202,14 @@ public sealed class InputInjectionService
             {
                 ki = new KEYBDINPUT
                 {
-                    wVk = virtualKey,
-                    dwFlags = isKeyUp ? KeyeventfKeyup : 0
+                    wVk = 0,
+                    wScan = (ushort)scanCode,
+                    dwFlags = flags
                 }
             }
         };
 
-        SendInput(1, [input], Marshal.SizeOf<INPUT>());
+        EnsureSent([input]);
     }
 
     private static void SendUnicodeText(string? text)
@@ -190,15 +247,32 @@ public sealed class InputInjectionService
                 }
             };
 
-            SendInput(2, [keyDown, keyUp], Marshal.SizeOf<INPUT>());
+            EnsureSent([keyDown, keyUp]);
         }
     }
 
-    private static ushort ResolveVirtualKey(string? code)
+    private static void EnsureSent(INPUT[] inputs)
+    {
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        if (sent == inputs.Length)
+        {
+            return;
+        }
+
+        var error = Marshal.GetLastWin32Error();
+        if (error == 0)
+        {
+            throw new InvalidOperationException("SendInput reported a partial send.");
+        }
+
+        throw new Win32Exception(error);
+    }
+
+    private static KeySpec? ResolveKeySpec(string? code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            return 0;
+            return null;
         }
 
         if (KeyMap.TryGetValue(code, out var mapped))
@@ -208,19 +282,47 @@ public sealed class InputInjectionService
 
         if (code.Length == 4 && code.StartsWith("Key", StringComparison.Ordinal))
         {
-            return code[3];
+            return new KeySpec((ushort)char.ToUpperInvariant(code[3]), false);
         }
 
         if (code.Length == 6 && code.StartsWith("Digit", StringComparison.Ordinal))
         {
-            return code[5];
+            return new KeySpec((ushort)code[5], false);
         }
 
-        return 0;
+        return null;
     }
+
+    private static int NormalizeAbsoluteCoordinate(int actualCoordinate, int offset, int span)
+    {
+        if (span <= 1)
+        {
+            return 0;
+        }
+
+        var relative = actualCoordinate - offset;
+        return (int)Math.Round(relative * 65535d / Math.Max(span - 1, 1));
+    }
+
+    private static bool IsCurrentProcessElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private readonly record struct KeySpec(ushort VirtualKey, bool IsExtended);
 
     private const int InputMouse = 0;
     private const int InputKeyboard = 1;
+    private const uint MouseEventFMove = 0x0001;
     private const uint MouseEventFLeftDown = 0x0002;
     private const uint MouseEventFLeftUp = 0x0004;
     private const uint MouseEventFRightDown = 0x0008;
@@ -228,14 +330,19 @@ public sealed class InputInjectionService
     private const uint MouseEventFMiddleDown = 0x0020;
     private const uint MouseEventFMiddleUp = 0x0040;
     private const uint MouseEventFWheel = 0x0800;
+    private const uint MouseEventFVirtualDesk = 0x4000;
+    private const uint MouseEventFAbsolute = 0x8000;
+    private const uint KeyeventfExtendedKey = 0x0001;
     private const uint KeyeventfKeyup = 0x0002;
     private const uint KeyeventfUnicode = 0x0004;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetCursorPos(int x, int y);
+    private const uint KeyeventfScancode = 0x0008;
+    private const uint MapvkVkToVsc = 0;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint MapVirtualKey(uint uCode, uint uMapType);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
@@ -259,7 +366,7 @@ public sealed class InputInjectionService
     {
         public int dx;
         public int dy;
-        public int mouseData;
+        public uint mouseData;
         public uint dwFlags;
         public int time;
         public nint dwExtraInfo;
