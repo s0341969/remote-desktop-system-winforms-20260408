@@ -350,7 +350,21 @@ public partial class RemoteViewerForm : Form
 
     private async void btnUploadFile_Click(object sender, EventArgs e)
     {
-        await HandleUploadSelectionAsync();
+        try
+        {
+            await HandleUploadSelectionAsync();
+        }
+        catch (Exception exception)
+        {
+            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+            progressFileTransfer.Value = 0;
+            lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
+            MessageBox.Show(
+                HostUiText.Bi($"檔案上傳流程發生未預期錯誤：{exception.Message}", $"The upload flow failed with an unexpected error: {exception.Message}"),
+                HostUiText.Window("檔案傳輸", "File Transfer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     protected async Task HandleUploadSelectionAsync()

@@ -8,6 +8,7 @@
 - 將 Host 檔案上傳 chunk 降為 16 KB，並延長檔案傳輸啟動/完成等待容忍度，降低大檔案上傳時的 GC 壓力與假性逾時。
 - 重寫 Agent 輸入注入流程，滑鼠改用絕對座標 `SendInput`，鍵盤改用 scan code / extended key，並補上 Win32 失敗檢查。
 - Agent 新增 `highestAvailable` manifest；若未提權，主畫面會明確提示高權限視窗、UAC 與安全桌面可能拒絕接收輸入。
+- Host 的檔案上傳按鈕事件補上最外層未處理例外保護，避免真機上傳異常時直接讓 Viewer 視窗崩潰。
 
 ## 2026-04-08
 
@@ -28,6 +29,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 
