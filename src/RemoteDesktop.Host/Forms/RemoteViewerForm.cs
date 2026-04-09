@@ -292,6 +292,7 @@ public partial class RemoteViewerForm : Form
                 _uploadStartSignal?.TrySetResult(status);
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
+                lblTransferPathValue.Text = HostUiText.Bi("目的地：等待 Agent 回報儲存位置。", "Destination: waiting for Agent to report the destination path.");
                 _lastUploadedFilePath = null;
                 btnOpenTransferFolder.Enabled = false;
                 break;
@@ -300,6 +301,9 @@ public partial class RemoteViewerForm : Form
                 lblTransferValue.Text = HostUiText.Bi(
                     $"{status.StoredFileName}：{FormatBytes(status.BytesTransferred)} / {FormatBytes(status.FileSize)}",
                     $"{status.StoredFileName}: {FormatBytes(status.BytesTransferred)} / {FormatBytes(status.FileSize)}");
+                lblTransferPathValue.Text = string.IsNullOrWhiteSpace(status.StoredFilePath)
+                    ? HostUiText.Bi("目的地：等待 Agent 建立檔案。", "Destination: waiting for Agent to create the file.")
+                    : HostUiText.Bi($"目的地：{status.StoredFilePath}", $"Destination: {status.StoredFilePath}");
                 break;
             case "completed":
                 _uploadCompletionSignal?.TrySetResult(status);
@@ -307,9 +311,10 @@ public partial class RemoteViewerForm : Form
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
                 _lastUploadedFilePath = string.IsNullOrWhiteSpace(status.StoredFilePath) ? null : status.StoredFilePath;
                 btnOpenTransferFolder.Enabled = !string.IsNullOrWhiteSpace(_lastUploadedFilePath);
-                lblTransferValue.Text = string.IsNullOrWhiteSpace(_lastUploadedFilePath)
-                    ? status.Message
-                    : HostUiText.Bi($"{status.Message} 位置：{_lastUploadedFilePath}", $"{status.Message} Location: {_lastUploadedFilePath}");
+                lblTransferValue.Text = status.Message;
+                lblTransferPathValue.Text = string.IsNullOrWhiteSpace(_lastUploadedFilePath)
+                    ? HostUiText.Bi("目的地：Agent 未回報完整路徑。", "Destination: Agent did not report a full path.")
+                    : HostUiText.Bi($"目的地：{_lastUploadedFilePath}", $"Destination: {_lastUploadedFilePath}");
                 _activeUploadId = null;
                 break;
             case "failed":
@@ -317,6 +322,7 @@ public partial class RemoteViewerForm : Form
                 _uploadCompletionSignal?.TrySetResult(status);
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
+                lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
                 btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
                 _lastUploadedFilePath = null;
                 btnOpenTransferFolder.Enabled = false;
@@ -471,6 +477,7 @@ public partial class RemoteViewerForm : Form
                 exception = exception.ToString()
             });
             lblTransferValue.Text = HostUiText.Bi($"上傳初始化失敗：{exception.Message}", $"Upload initialization failed: {exception.Message}");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
             MessageBox.Show(
                 HostUiText.Bi($"開啟檔案上傳流程失敗：{exception.Message}", $"Failed to open the upload flow: {exception.Message}"),
                 HostUiText.Window("檔案傳輸", "File Transfer"),
@@ -490,6 +497,8 @@ public partial class RemoteViewerForm : Form
             btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
             MessageBox.Show(
                 HostUiText.Bi($"檔案上傳流程發生未預期錯誤：{exception.Message}", $"The upload flow failed with an unexpected error: {exception.Message}"),
                 HostUiText.Window("檔案傳輸", "File Transfer"),
@@ -634,6 +643,7 @@ public partial class RemoteViewerForm : Form
         btnUploadFile.Enabled = false;
         progressFileTransfer.Value = 0;
         lblTransferValue.Text = HostUiText.Bi($"正在上傳 {fileInfo.Name}...", $"Uploading {fileInfo.Name}...");
+        lblTransferPathValue.Text = HostUiText.Bi("目的地：等待 Agent 建立檔案。", "Destination: waiting for Agent to create the file.");
         LogTransferTrace("host-upload-started", "Started Host-side upload workflow.", new
         {
             deviceId = _device?.DeviceId,
@@ -676,6 +686,8 @@ public partial class RemoteViewerForm : Form
             btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
             if (shouldShowDialog)
             {
                 MessageBox.Show(HostUiText.Bi($"檔案上傳失敗：{exception.Message}", $"Failed to upload file: {exception.Message}"), HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -775,6 +787,8 @@ public partial class RemoteViewerForm : Form
         await UpdateUiAsync(() =>
         {
             lblTransferValue.Text = HostUiText.Bi($"等待 Agent 完成 {fileInfo.Name} 的檔案寫入...", $"Waiting for Agent to finalize {fileInfo.Name}...");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：檔案已建立，等待完成寫入。", "Destination: file created, waiting for finalization.");
+            lblTransferPathValue.Text = HostUiText.Bi("目的地：檔案已建立，等待完成寫入。", "Destination: file created, waiting for finalization.");
         }).ConfigureAwait(false);
     }
 
@@ -1304,6 +1318,9 @@ public partial class RemoteViewerForm : Form
         lblClipboardValue.Text = HostUiText.Bi("尚未執行剪貼簿操作。", "No clipboard action yet.");
         lblTransferCaption.Text = HostUiText.Bi("傳輸", "Transfer");
         lblTransferValue.Text = HostUiText.Bi("目前沒有進行中的傳輸。", "No active transfer.");
+        lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
+        lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
+        lblTransferPathValue.Text = HostUiText.Bi("目的地：尚未傳送檔案。", "Destination: no file transferred yet.");
         HostUiText.ApplyButton(btnOpenTransferFolder, "開啟資料夾", "Open Folder");
         HostUiText.ApplyButton(btnSendClipboard, "送出剪貼簿", "Send Clipboard");
         HostUiText.ApplyButton(btnGetClipboard, "取得剪貼簿", "Get Clipboard");
@@ -1367,6 +1384,12 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
+
+
+
+
+
 
 
 

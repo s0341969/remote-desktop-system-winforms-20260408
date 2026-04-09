@@ -2,6 +2,7 @@
 
 ## 2026-04-09
 
+- 調整 Remote Viewer 傳輸區塊版面，將狀態訊息與目的地路徑拆成兩行顯示，並下移進度列，修正上傳成功後長路徑遮住文字與進度列的問題。
 - 將 Host 的上傳選檔視窗改為獨立 STA 執行緒開啟，避開 Viewer 既有 UI 執行緒上的 modal/owner 互鎖問題，修正按下「上傳檔案」後整個視窗卡住卻沒有真正開出檔案選擇器。
 - 將 Viewer 的上傳按鈕改為先 `BeginInvoke` 回到 UI 訊息迴圈後再進入選檔流程，並補上同步 fallback marker，降低 click 事件與檔案對話框重入造成整個 Viewer 卡死的風險。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面新增 build 版本與 EXE 建置時間顯示，方便現場直接辨識是否正在執行最新 publish。

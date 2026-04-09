@@ -261,7 +261,7 @@ static void TestRemoteViewerUploadForm()
         var uploadButton = GetControl<Button>(form, "btnUploadFile");
         var workflowTask = form.TriggerUploadWorkflowAsync();
         WaitUntil(() => !uploadButton.Enabled, 3000);
-        WaitUntil(() => GetControl<Label>(form, "lblTransferValue").Text.Contains(storedFilePath, StringComparison.Ordinal), 3000);
+        WaitUntil(() => GetControl<Label>(form, "lblTransferPathValue").Text.Contains(storedFilePath, StringComparison.Ordinal), 3000);
         WaitUntil(() => GetControl<Button>(form, "btnOpenTransferFolder").Enabled, 3000);
         workflowTask.GetAwaiter().GetResult();
 
@@ -804,6 +804,7 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
 
 
 
