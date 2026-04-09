@@ -9,12 +9,33 @@ BEGIN
         ScreenWidth INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenWidth DEFAULT (0),
         ScreenHeight INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenHeight DEFAULT (0),
         IsOnline BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsOnline DEFAULT (0),
+        IsAuthorized BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsAuthorized DEFAULT (0),
+        AuthorizedAt DATETIMEOFFSET(0) NULL,
+        AuthorizedBy NVARCHAR(128) NULL,
         CreatedAt DATETIMEOFFSET(0) NOT NULL,
         UpdatedAt DATETIMEOFFSET(0) NOT NULL,
         LastSeenAt DATETIMEOFFSET(0) NOT NULL,
         LastConnectedAt DATETIMEOFFSET(0) NULL,
         LastDisconnectedAt DATETIMEOFFSET(0) NULL
     );
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'IsAuthorized') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD IsAuthorized BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsAuthorized_Compat DEFAULT (0);
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'AuthorizedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD AuthorizedAt DATETIMEOFFSET(0) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'AuthorizedBy') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD AuthorizedBy NVARCHAR(128) NULL;
 END;
 
 IF OBJECT_ID(N'dbo.RemoteDesktopAgentPresenceLogs', N'U') IS NULL

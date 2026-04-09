@@ -2,5 +2,13 @@
 .vs/
 bin/
 obj/
+TestResults/
+*.log
+*.tmp
+*.bak
+*.user
+*.suo
 audit-log.ndjson
 users.json
+deploy/publish/**/audit-log.ndjson
+deploy/publish/**/users.json

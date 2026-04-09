@@ -10,7 +10,9 @@ param(
 
     [string]$Configuration = "Release",
 
-    [string]$Framework = "net8.0-windows"
+    [string]$Framework = "net8.0-windows",
+
+    [string]$SatelliteResourceLanguages = "zh-Hant"
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,8 +42,10 @@ $publishArgs = @(
     "-o", $outputPath,
     "-p:SelfContained=false",
     "-p:UseAppHost=true",
+    "-p:CopyOutputSymbolsToPublishDirectory=false",
     "-p:DebugSymbols=false",
-    "-p:DebugType=None"
+    "-p:DebugType=None",
+    "-p:SatelliteResourceLanguages=$SatelliteResourceLanguages"
 )
 
 Push-Location $repoRoot

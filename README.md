@@ -14,11 +14,11 @@
   - Windows Forms Agent。
   - 提供桌面截圖、心跳、輸入回放、自動重連與 Agent 設定表單。
 - `deploy/publish/Host`
-  - Host 的 `win-x64 self-contained` 發佈版。
+  - Host 的精簡 `win-x64 framework-dependent` 發佈版。
 - `deploy/publish/Agent`
-  - Agent 的 `win-x64 self-contained` 發佈版。
+  - Agent 的精簡 `win-x64 framework-dependent` 發佈版。
 - `deploy/scripts`
-  - 啟動腳本。
+  - 發佈與清理腳本。
 - `tests/RemoteDesktop.SmokeTests`
   - 核心通訊 smoke test。
 - `tests/RemoteDesktop.UiAutomation`
@@ -38,6 +38,8 @@
 - 將 UI automation 專案加入 `RemoteDesktopSystem.sln`。
 - 保留既有 smoke test，持續驗證核心 WebSocket 與 broker 流程。
 - 補上 `publish` 發佈版、桌面捷徑與 Agent 開機自動啟動捷徑。
+- 新增 `deploy/scripts/Clean-App.ps1`，可一鍵清理 `bin/obj`、`.dotnet` 與執行期垃圾檔。
+- `deploy/scripts/Publish-App.ps1` 現在會先清空輸出目錄，再以最小必要相依與 `zh-Hant` 資源重建 publish 版，避免舊的 self-contained DLL 殘留。
 
 ## 使用 Visual Studio 2022
 
@@ -58,6 +60,7 @@
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
+- Publish 目錄會在每次重建時完整覆蓋；若有自訂設定，應修改 `src/.../appsettings.json` 或在發佈後另外備份部署設定。
 - 若要改回 MSSQL：
   1. 開啟 Host 的設定表單
   2. 勾選「使用 MSSQL 儲存裝置與連線紀錄」
@@ -86,6 +89,32 @@ $env:DOTNET_CLI_HOME="$PWD\\.dotnet"
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\dotnet\dotnet.exe' build .\RemoteDesktopSystem.sln
+```
+
+### Clean
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Clean-App.ps1 -IncludeDotnetHome
+```
+
+若要連 `deploy/publish` 也一起清空：
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Clean-App.ps1 -IncludeDotnetHome -IncludePublish
+```
+
+### Publish
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Host\RemoteDesktop.Host.csproj' `
+  -OutputRelativePath 'deploy\publish\Host' `
+  -ExecutableName 'RemoteDesktop.Host.exe'
+
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
+  -OutputRelativePath 'deploy\publish\Agent' `
+  -ExecutableName 'RemoteDesktop.Agent.exe'
 ```
 
 ### Smoke Test
