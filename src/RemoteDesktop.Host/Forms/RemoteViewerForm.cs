@@ -2,6 +2,7 @@ using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Services;
 using System.Buffers;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -10,6 +11,7 @@ public partial class RemoteViewerForm : Form
     private const int MaxClipboardCharacters = 32_768;
     // Keep each Base64 payload well below the LOH threshold to avoid large transient string allocations.
     private const int UploadChunkBytes = 16 * 1024;
+    private static readonly JsonSerializerOptions TraceJsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyDictionary<Keys, string> KeyCodeMap = new Dictionary<Keys, string>
     {
         [Keys.Enter] = "Enter",
@@ -93,6 +95,12 @@ public partial class RemoteViewerForm : Form
         btnGetClipboard.Enabled = viewer.CanControlRemote;
         btnUploadFile.Enabled = viewer.CanControlRemote;
         btnOpenTransferFolder.Enabled = false;
+        LogTransferTrace("host-viewer-bound", "Remote viewer form bound to device.", new
+        {
+            deviceId = device.DeviceId,
+            deviceName = device.DeviceName,
+            hostName = device.HostName
+        });
     }
 
     protected override async void OnShown(EventArgs e)
@@ -992,12 +1000,36 @@ public partial class RemoteViewerForm : Form
     private void LogTransferTrace(string eventName, string message, object? data = null)
     {
         var service = _fileTransferTraceService;
-        if (service is null)
+        if (service is not null)
         {
+            _ = service.WriteAsync(eventName, message, data);
             return;
         }
 
-        _ = service.WriteAsync(eventName, message, data);
+        TryWriteFallbackTransferTrace(eventName, message, data);
+    }
+
+    private static void TryWriteFallbackTransferTrace(string eventName, string message, object? data)
+    {
+        try
+        {
+            var logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+            Directory.CreateDirectory(logDirectory);
+            var logPath = Path.Combine(logDirectory, "host-file-transfer.ndjson");
+            var entry = new
+            {
+                occurredAt = DateTimeOffset.Now,
+                eventName,
+                message,
+                data
+            };
+
+            var json = JsonSerializer.Serialize(entry, TraceJsonOptions) + Environment.NewLine;
+            File.AppendAllText(logPath, json);
+        }
+        catch
+        {
+        }
     }
 
     private static string ReadLocalClipboardText()
