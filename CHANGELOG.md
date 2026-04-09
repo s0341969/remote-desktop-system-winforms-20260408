@@ -9,7 +9,7 @@
 - 重寫 Agent 輸入注入流程，滑鼠改用絕對座標 `SendInput`，鍵盤改用 scan code / extended key，並補上 Win32 失敗檢查。
 - Agent 新增 `highestAvailable` manifest；若未提權，主畫面會明確提示高權限視窗、UAC 與安全桌面可能拒絕接收輸入。
 - Host 的檔案上傳按鈕事件補上最外層未處理例外保護，避免真機上傳異常時直接讓 Viewer 視窗崩潰。
-- Host 的上傳按鈕事件改為非阻塞背景工作，避免真機上傳時出現點擊後整個 Viewer 沒反應。
+- Host 的上傳按鈕事件改為非阻塞背景工作，避免真機上傳時出現點擊後整個 Viewer 沒反應。`r`n- Host 的本機剪貼簿讀寫改為專用 STA 路徑執行，修正「Clipboard ... 目前的執行緒必須先設為 STA」錯誤。
 
 ## 2026-04-08
 
@@ -30,6 +30,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 

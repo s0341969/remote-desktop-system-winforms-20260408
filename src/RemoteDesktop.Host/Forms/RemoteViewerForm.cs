@@ -319,14 +319,7 @@ public partial class RemoteViewerForm : Form
         {
             try
             {
-                if (string.IsNullOrEmpty(message.Text))
-                {
-                    Clipboard.Clear();
-                }
-                else
-                {
-                    Clipboard.SetText(message.Text);
-                }
+                WriteLocalClipboardText(message.Text);
 
                 lblClipboardValue.Text = message.Truncated
                     ? HostUiText.Bi("已將遠端剪貼簿複製到本機（已截斷）。", "Remote clipboard copied locally (truncated).")
@@ -390,6 +383,11 @@ public partial class RemoteViewerForm : Form
 
     private async void btnSendClipboard_Click(object sender, EventArgs e)
     {
+        await HandleSendClipboardSafeAsync();
+    }
+
+    private async Task HandleSendClipboardSafeAsync()
+    {
         if (!EnsureInteractivePermission(HostUiText.Bi("此帳號可開啟 Viewer，但沒有同步剪貼簿的權限。", "This account can open viewer sessions but does not have permission to sync clipboard text.")))
         {
             return;
@@ -398,13 +396,12 @@ public partial class RemoteViewerForm : Form
         string text;
         try
         {
-            if (!Clipboard.ContainsText())
+            text = ReadLocalClipboardText();
+            if (string.IsNullOrEmpty(text))
             {
                 MessageBox.Show(HostUiText.Bi("本機剪貼簿沒有純文字內容。", "Local clipboard does not contain plain text."), HostUiText.Window("剪貼簿同步", "Clipboard Sync"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-
-            text = Clipboard.GetText();
         }
         catch (Exception exception)
         {
@@ -455,6 +452,11 @@ public partial class RemoteViewerForm : Form
     }
 
     private async void btnGetClipboard_Click(object sender, EventArgs e)
+    {
+        await HandleGetClipboardSafeAsync();
+    }
+
+    private async Task HandleGetClipboardSafeAsync()
     {
         if (!EnsureInteractivePermission(HostUiText.Bi("此帳號可開啟 Viewer，但沒有同步剪貼簿的權限。", "This account can open viewer sessions but does not have permission to sync clipboard text.")))
         {
@@ -909,6 +911,69 @@ public partial class RemoteViewerForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
+    }
+
+    private static string ReadLocalClipboardText()
+    {
+        return RunStaClipboard(() =>
+        {
+            return Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty;
+        });
+    }
+
+    private static void WriteLocalClipboardText(string? text)
+    {
+        RunStaClipboard(() =>
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                Clipboard.Clear();
+            }
+            else
+            {
+                Clipboard.SetText(text);
+            }
+
+            return 0;
+        });
+    }
+
+    private static T RunStaClipboard<T>(Func<T> action)
+    {
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            return action();
+        }
+
+        T? result = default;
+        Exception? captured = null;
+        using var completed = new ManualResetEventSlim(false);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                result = action();
+            }
+            catch (Exception exception)
+            {
+                captured = exception;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        completed.Wait();
+
+        if (captured is not null)
+        {
+            throw captured;
+        }
+
+        return result!;
     }
 
     private Task UpdateUiAsync(Action action)

@@ -45,7 +45,7 @@
 - 上傳按鈕事件改為非阻塞背景工作，避免 WinForms 事件本身長時間佔住 UI 訊息迴圈。
 - Viewer 在上傳完成後會直接顯示 Agent 端實際儲存位置，並提供「開啟資料夾」按鈕快速打開目的資料夾。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
-- Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
+- Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。`r`n- Host 的本機剪貼簿讀寫改為專用 STA 路徑執行，不再因目前執行緒 apartment 狀態不同而直接失敗。
 - `tests/RemoteDesktop.UiAutomation` 現在已涵蓋 Viewer 檔案上傳、目的地顯示與開啟資料夾流程。
 
 ## 使用 Visual Studio 2022
@@ -141,6 +141,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
 
 
 
