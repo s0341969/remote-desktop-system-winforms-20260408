@@ -41,7 +41,12 @@ public partial class AgentMainForm : Form
         base.OnFormClosed(e);
     }
 
-    private async void btnSettings_Click(object sender, EventArgs e)
+    private void btnActions_Click(object sender, EventArgs e)
+    {
+        menuActions.Show(btnActions, new Point(0, btnActions.Height));
+    }
+
+    private async void menuSettings_Click(object sender, EventArgs e)
     {
         if (_agentSettingsFormFactory is null)
         {
@@ -57,6 +62,31 @@ public partial class AgentMainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
+    }
+
+    private void menuCopyDeviceId_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(lblDeviceIdValue.Text) || lblDeviceIdValue.Text == "-")
+        {
+            return;
+        }
+
+        Clipboard.SetText(lblDeviceIdValue.Text);
+    }
+
+    private void menuCopyServerUrl_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(lblServerUrlValue.Text) || lblServerUrlValue.Text == "-")
+        {
+            return;
+        }
+
+        Clipboard.SetText(lblServerUrlValue.Text);
+    }
+
+    private void menuRefresh_Click(object sender, EventArgs e)
+    {
+        RefreshRuntimeState();
     }
 
     private void RefreshRuntimeState()
@@ -89,7 +119,11 @@ public partial class AgentMainForm : Form
     {
         Text = AppBuildInfo.AppendToWindowTitle(AgentUiText.Window("遠端桌面 Agent", "RemoteDesktop Agent"));
         lblTitle.Text = AppBuildInfo.AppendToHeading(AgentUiText.Bi("遠端桌面 Agent", "RemoteDesktop Agent"));
-        AgentUiText.ApplyButton(btnSettings, "設定", "Settings");
+        AgentUiText.ApplyButton(btnActions, "功能 v", "Actions v");
+        menuSettings.Text = AgentUiText.Bi("設定", "Settings");
+        menuCopyDeviceId.Text = AgentUiText.Bi("複製裝置 ID", "Copy device ID");
+        menuCopyServerUrl.Text = AgentUiText.Bi("複製 Server 位址", "Copy server URL");
+        menuRefresh.Text = AgentUiText.Bi("立即重新整理", "Refresh now");
         lblServerUrlCaption.Text = AgentUiText.Bi("Server 位址", "Server URL");
         lblDeviceIdCaption.Text = AgentUiText.Bi("裝置 ID", "Device ID");
         lblDeviceNameCaption.Text = AgentUiText.Bi("裝置名稱", "Device name");

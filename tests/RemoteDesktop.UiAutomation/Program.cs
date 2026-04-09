@@ -422,7 +422,13 @@ static void TestAgentMainForm()
     {
         throw new InvalidOperationException($"Agent main form did not render the expected status. Actual: {actualStatus}");
     }
-}
+
+    var actionsButton = GetControl<Button>(form, "btnActions");
+    if (!actionsButton.Text.Contains("功能", StringComparison.Ordinal) || !actionsButton.Text.Contains("Actions", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Agent main form did not expose the expected actions dropdown button.");
+    }
+} 
 
 static IOptions<ControlServerOptions> CreateHostOptions(string consoleName)
 {
@@ -850,6 +856,7 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
 
 
 

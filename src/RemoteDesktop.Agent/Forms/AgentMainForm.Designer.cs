@@ -7,7 +7,12 @@ partial class AgentMainForm
     private TableLayoutPanel layoutRoot;
     private Panel panelHeader;
     private Label lblTitle;
-    private Button btnSettings;
+    private Button btnActions;
+    private ContextMenuStrip menuActions;
+    private ToolStripMenuItem menuSettings;
+    private ToolStripMenuItem menuCopyDeviceId;
+    private ToolStripMenuItem menuCopyServerUrl;
+    private ToolStripMenuItem menuRefresh;
     private TableLayoutPanel layoutSummary;
     private Label lblServerUrlCaption;
     private Label lblServerUrlValue;
@@ -38,9 +43,15 @@ partial class AgentMainForm
 
     private void InitializeComponent()
     {
+        components = new System.ComponentModel.Container();
         layoutRoot = new TableLayoutPanel();
         panelHeader = new Panel();
-        btnSettings = new Button();
+        btnActions = new Button();
+        menuActions = new ContextMenuStrip(components);
+        menuSettings = new ToolStripMenuItem();
+        menuCopyDeviceId = new ToolStripMenuItem();
+        menuCopyServerUrl = new ToolStripMenuItem();
+        menuRefresh = new ToolStripMenuItem();
         lblTitle = new Label();
         layoutSummary = new TableLayoutPanel();
         lblServerUrlCaption = new Label();
@@ -84,18 +95,42 @@ partial class AgentMainForm
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.Size = new Size(840, 560);
         // panelHeader
-        panelHeader.Controls.Add(btnSettings);
+        panelHeader.Controls.Add(btnActions);
         panelHeader.Controls.Add(lblTitle);
         panelHeader.Dock = DockStyle.Fill;
         panelHeader.Name = "panelHeader";
-        // btnSettings
-        btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSettings.Location = new Point(738, 16);
-        btnSettings.Name = "btnSettings";
-        btnSettings.Size = new Size(86, 38);
-        btnSettings.Text = "設定\r\nSettings";
-        btnSettings.UseVisualStyleBackColor = true;
-        btnSettings.Click += btnSettings_Click;
+        // btnActions
+        btnActions.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnActions.Location = new Point(724, 16);
+        btnActions.Name = "btnActions";
+        btnActions.Size = new Size(100, 38);
+        btnActions.Text = "功能 v\r\nActions";
+        btnActions.UseVisualStyleBackColor = true;
+        btnActions.Click += btnActions_Click;
+        // menuActions
+        menuActions.Items.AddRange(new ToolStripItem[] { menuSettings, menuCopyDeviceId, menuCopyServerUrl, menuRefresh });
+        menuActions.Name = "menuActions";
+        menuActions.Size = new Size(181, 114);
+        // menuSettings
+        menuSettings.Name = "menuSettings";
+        menuSettings.Size = new Size(180, 22);
+        menuSettings.Text = "設定";
+        menuSettings.Click += menuSettings_Click;
+        // menuCopyDeviceId
+        menuCopyDeviceId.Name = "menuCopyDeviceId";
+        menuCopyDeviceId.Size = new Size(180, 22);
+        menuCopyDeviceId.Text = "複製裝置 ID";
+        menuCopyDeviceId.Click += menuCopyDeviceId_Click;
+        // menuCopyServerUrl
+        menuCopyServerUrl.Name = "menuCopyServerUrl";
+        menuCopyServerUrl.Size = new Size(180, 22);
+        menuCopyServerUrl.Text = "複製 Server 位址";
+        menuCopyServerUrl.Click += menuCopyServerUrl_Click;
+        // menuRefresh
+        menuRefresh.Name = "menuRefresh";
+        menuRefresh.Size = new Size(180, 22);
+        menuRefresh.Text = "立即重新整理";
+        menuRefresh.Click += menuRefresh_Click;
         // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 16F, FontStyle.Bold, GraphicsUnit.Point);
