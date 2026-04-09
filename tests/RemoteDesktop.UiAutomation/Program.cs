@@ -168,7 +168,7 @@ static void TestHostMainForm()
     var userManagementFactory = new UserManagementFormFactory(authenticationService, auditService);
     var auditLogFactory = new AuditLogFormFactory(auditService);
     var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
-    var viewerFactory = new RemoteViewerFormFactory(broker);
+    var viewerFactory = new RemoteViewerFormFactory(broker, new RemoteDesktop.Host.Services.FileTransferTraceService());
 
     using var form = new MainForm();
     form.Bind(repo, options.Value, broker, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
@@ -800,6 +800,7 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
         OpenedFolderPath = directoryPath;
     }
 }
+
 
 
 

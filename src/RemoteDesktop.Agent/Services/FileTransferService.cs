@@ -13,12 +13,14 @@ public sealed class FileTransferService
     private const int ProgressPublishThresholdBytes = 256 * 1024;
     private readonly AgentOptions _options;
     private readonly ILogger<FileTransferService> _logger;
+    private readonly FileTransferTraceService _fileTransferTraceService;
     private readonly ConcurrentDictionary<string, UploadSession> _uploads = new(StringComparer.OrdinalIgnoreCase);
 
-    public FileTransferService(IOptions<AgentOptions> options, ILogger<FileTransferService> logger)
+    public FileTransferService(IOptions<AgentOptions> options, ILogger<FileTransferService> logger, FileTransferTraceService fileTransferTraceService)
     {
         _options = options.Value;
         _logger = logger;
+        _fileTransferTraceService = fileTransferTraceService;
     }
 
     public async Task<bool> TryHandleAsync(
@@ -29,15 +31,31 @@ public sealed class FileTransferService
         switch (command.Type)
         {
             case "file-upload-start":
+                await LogAsync("agent-upload-command-start", "Received file-upload-start command.", new
+                {
+                    uploadId = command.UploadId,
+                    fileName = command.FileName,
+                    fileSize = command.FileSize
+                }, cancellationToken);
                 await HandleStartAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             case "file-upload-chunk":
                 await HandleChunkAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             case "file-upload-complete":
+                await LogAsync("agent-upload-command-complete", "Received file-upload-complete command.", new
+                {
+                    uploadId = command.UploadId,
+                    fileName = command.FileName,
+                    fileSize = command.FileSize
+                }, cancellationToken);
                 await HandleCompleteAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             case "file-upload-abort":
+                await LogAsync("agent-upload-command-abort", "Received file-upload-abort command.", new
+                {
+                    uploadId = command.UploadId
+                }, cancellationToken);
                 await HandleAbortAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             default:
@@ -136,6 +154,18 @@ public sealed class FileTransferService
             session.BytesTransferred += chunk.Length;
             session.NextSequenceNumber++;
 
+            if (session.NextSequenceNumber == 1 || session.NextSequenceNumber % 32 == 0)
+            {
+                await LogAsync("agent-upload-command-chunk", "Processed upload chunk.", new
+                {
+                    uploadId = session.UploadId,
+                    sequenceNumber = session.NextSequenceNumber - 1,
+                    chunkBytes = chunk.Length,
+                    bytesTransferred = session.BytesTransferred,
+                    fileSize = session.FileSize
+                }, cancellationToken);
+            }
+
             if (ShouldPublishProgress(session))
             {
                 session.LastPublishedBytesTransferred = session.BytesTransferred;
@@ -181,6 +211,14 @@ public sealed class FileTransferService
             await session.Stream.FlushAsync(cancellationToken);
             await session.Stream.DisposeAsync();
             File.Move(session.TempPath, session.TargetPath, overwrite: false);
+            await LogAsync("agent-upload-saved", "Saved uploaded file to disk.", new
+            {
+                uploadId = session.UploadId,
+                fileName = session.FileName,
+                storedFileName = session.StoredFileName,
+                storedFilePath = session.TargetPath,
+                fileSize = session.FileSize
+            }, cancellationToken);
 
             _logger.LogInformation("Completed file upload {UploadId} to {TargetPath}.", uploadId, session.TargetPath);
             await publishStatusAsync(new AgentFileTransferStatusMessage
@@ -234,6 +272,15 @@ public sealed class FileTransferService
         CancellationToken cancellationToken)
     {
         _uploads.TryRemove(session.UploadId, out _);
+        await LogAsync("agent-upload-failed", message, new
+        {
+            uploadId = session.UploadId,
+            fileName = session.FileName,
+            storedFileName = session.StoredFileName,
+            storedFilePath = session.TargetPath,
+            bytesTransferred = session.BytesTransferred,
+            fileSize = session.FileSize
+        }, cancellationToken);
         await CleanupSessionFilesAsync(session);
         await publishStatusAsync(new AgentFileTransferStatusMessage
         {
@@ -331,6 +378,11 @@ public sealed class FileTransferService
         }
 
         return candidate;
+    }
+
+    private Task LogAsync(string eventName, string message, object? data, CancellationToken cancellationToken)
+    {
+        return _fileTransferTraceService.WriteAsync(eventName, message, data, cancellationToken);
     }
 
     private sealed class UploadSession

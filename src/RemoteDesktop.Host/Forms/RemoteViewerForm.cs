@@ -65,6 +65,7 @@ public partial class RemoteViewerForm : Form
     private bool _observeOnlyNoticeShown;
     private string? _activeUploadId;
     private string? _lastUploadedFilePath;
+    private FileTransferTraceService? _fileTransferTraceService;
     private TaskCompletionSource<AgentClipboardMessage>? _clipboardSyncSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadStartSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadCompletionSignal;
@@ -76,11 +77,12 @@ public partial class RemoteViewerForm : Form
         KeyPreview = true;
     }
 
-    public void Bind(DeviceRecord device, AuthenticatedUserSession viewer, DeviceBroker deviceBroker)
+    public void Bind(DeviceRecord device, AuthenticatedUserSession viewer, DeviceBroker deviceBroker, FileTransferTraceService? fileTransferTraceService = null)
     {
         _device = device;
         _viewer = viewer;
         _deviceBroker = deviceBroker;
+        _fileTransferTraceService = fileTransferTraceService;
         Text = viewer.CanControlRemote
             ? $"{device.DeviceName} - {HostUiText.Window("遠端檢視", "Remote Viewer")}"
             : $"{device.DeviceName} - {HostUiText.Window("遠端檢視（僅觀看）", "Remote Viewer (Observe Only)")}";
@@ -259,6 +261,18 @@ public partial class RemoteViewerForm : Form
 
     protected void ApplyTransferStatus(AgentFileTransferStatusMessage status)
     {
+        LogTransferTrace("host-status-received", $"Received Agent transfer status '{status.Status}'.", new
+        {
+            deviceId = _device?.DeviceId,
+            uploadId = status.UploadId,
+            status = status.Status,
+            fileName = status.FileName,
+            storedFileName = status.StoredFileName,
+            storedFilePath = status.StoredFilePath,
+            bytesTransferred = status.BytesTransferred,
+            fileSize = status.FileSize
+        });
+
         if (!string.IsNullOrWhiteSpace(_activeUploadId) && !string.Equals(_activeUploadId, status.UploadId, StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -375,9 +389,18 @@ public partial class RemoteViewerForm : Form
         var filePath = SelectUploadFilePath(this);
         if (string.IsNullOrWhiteSpace(filePath))
         {
+            LogTransferTrace("host-upload-cancelled", "Upload file selection was cancelled.", new
+            {
+                deviceId = _device?.DeviceId
+            });
             return;
         }
 
+        LogTransferTrace("host-upload-selected", "Selected a local file for upload.", new
+        {
+            deviceId = _device?.DeviceId,
+            filePath
+        });
         await UploadFileAsync(filePath);
     }
 
@@ -517,6 +540,13 @@ public partial class RemoteViewerForm : Form
         btnUploadFile.Enabled = false;
         progressFileTransfer.Value = 0;
         lblTransferValue.Text = HostUiText.Bi($"正在上傳 {fileInfo.Name}...", $"Uploading {fileInfo.Name}...");
+        LogTransferTrace("host-upload-started", "Started Host-side upload workflow.", new
+        {
+            deviceId = _device?.DeviceId,
+            uploadId,
+            fileName = fileInfo.FullName,
+            fileSize = fileInfo.Length
+        });
 
         try
         {
@@ -528,9 +558,24 @@ public partial class RemoteViewerForm : Form
             {
                 throw new InvalidOperationException(completionStatus.Message);
             }
+
+            LogTransferTrace("host-upload-completed", "Host-side upload workflow completed.", new
+            {
+                deviceId = _device?.DeviceId,
+                uploadId,
+                fileName = fileInfo.FullName,
+                storedFilePath = completionStatus.StoredFilePath
+            });
         }
         catch (Exception exception)
         {
+            LogTransferTrace("host-upload-failed", $"Host-side upload workflow failed: {exception.Message}", new
+            {
+                deviceId = _device?.DeviceId,
+                uploadId,
+                fileName = fileInfo.FullName,
+                exception = exception.ToString()
+            });
             var shouldShowDialog = !string.IsNullOrWhiteSpace(_activeUploadId);
             await TryAbortUploadAsync(uploadId);
             _activeUploadId = null;
@@ -558,6 +603,13 @@ public partial class RemoteViewerForm : Form
             FileName = fileInfo.Name,
             FileSize = fileInfo.Length
         }, CancellationToken.None).ConfigureAwait(false);
+        LogTransferTrace("host-upload-command-start", "Sent file-upload-start command to Agent.", new
+        {
+            deviceId = _device?.DeviceId,
+            uploadId,
+            fileName = fileInfo.FullName,
+            fileSize = fileInfo.Length
+        });
 
         var startStatus = await _uploadStartSignal!.Task.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         if (string.Equals(startStatus.Status, "failed", StringComparison.OrdinalIgnoreCase))
@@ -588,6 +640,18 @@ public partial class RemoteViewerForm : Form
                     ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead)
                 }, CancellationToken.None).ConfigureAwait(false);
 
+                if (sequenceNumber == 1 || sequenceNumber % 32 == 0)
+                {
+                    LogTransferTrace("host-upload-command-chunk", "Sent upload chunk to Agent.", new
+                    {
+                        deviceId = _device?.DeviceId,
+                        uploadId,
+                        sequenceNumber,
+                        bytesRead,
+                        fileSize = fileInfo.Length
+                    });
+                }
+
                 if (sequenceNumber % 8 == 0)
                 {
                     await Task.Delay(1).ConfigureAwait(false);
@@ -606,6 +670,13 @@ public partial class RemoteViewerForm : Form
             FileName = fileInfo.Name,
             FileSize = fileInfo.Length
         }, CancellationToken.None).ConfigureAwait(false);
+        LogTransferTrace("host-upload-command-complete", "Sent file-upload-complete command to Agent.", new
+        {
+            deviceId = _device?.DeviceId,
+            uploadId,
+            fileName = fileInfo.FullName,
+            fileSize = fileInfo.Length
+        });
 
         await UpdateUiAsync(() =>
         {
@@ -617,6 +688,11 @@ public partial class RemoteViewerForm : Form
     {
         try
         {
+            LogTransferTrace("host-upload-command-abort", "Sent file-upload-abort command to Agent.", new
+            {
+                deviceId = _device?.DeviceId,
+                uploadId
+            });
             await SendCommandAsync(new ViewerCommandMessage
             {
                 Type = "file-upload-abort",
@@ -911,6 +987,17 @@ public partial class RemoteViewerForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
+    }
+
+    private void LogTransferTrace(string eventName, string message, object? data = null)
+    {
+        var service = _fileTransferTraceService;
+        if (service is null)
+        {
+            return;
+        }
+
+        _ = service.WriteAsync(eventName, message, data);
     }
 
     private static string ReadLocalClipboardText()

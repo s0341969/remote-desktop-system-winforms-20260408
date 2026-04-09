@@ -160,7 +160,8 @@ static async Task RunFileTransferSmokeTestAsync()
             ReconnectDelaySeconds = 5
         });
 
-        var fileTransferService = new FileTransferService(options, loggerFactory.CreateLogger<FileTransferService>());
+        var fileTransferTraceService = new RemoteDesktop.Agent.Services.FileTransferTraceService();
+        var fileTransferService = new FileTransferService(options, loggerFactory.CreateLogger<FileTransferService>(), fileTransferTraceService);
         var statuses = new List<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage>();
         Func<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync = (status, cancellationToken) =>
         {
@@ -231,6 +232,11 @@ static async Task RunFileTransferSmokeTestAsync()
         if (progressStatuses <= 0)
         {
             throw new InvalidOperationException("File transfer service did not emit any throttled progress status.");
+        }
+
+        if (!File.Exists(fileTransferTraceService.LogPath))
+        {
+            throw new InvalidOperationException("File transfer trace log was not created.");
         }
     }
     finally
@@ -548,6 +554,8 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
 
 
 

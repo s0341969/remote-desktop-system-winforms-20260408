@@ -28,6 +28,7 @@ internal static class Program
         builder.Services.AddSingleton<DesktopCaptureService>();
         builder.Services.AddSingleton<ClipboardSyncService>();
         builder.Services.AddSingleton<InputInjectionService>();
+        builder.Services.AddSingleton<FileTransferTraceService>();
         builder.Services.AddSingleton<FileTransferService>();
         builder.Services.AddSingleton<IAgentSettingsStore, AgentSettingsStore>();
         builder.Services.AddSingleton<AgentMainFormFactory>();
