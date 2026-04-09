@@ -348,7 +348,12 @@ public partial class RemoteViewerForm : Form
         lblClipboardValue.Text = message.Message;
     }
 
-    private async void btnUploadFile_Click(object sender, EventArgs e)
+    private void btnUploadFile_Click(object sender, EventArgs e)
+    {
+        _ = HandleUploadSelectionSafeAsync();
+    }
+
+    private async Task HandleUploadSelectionSafeAsync()
     {
         try
         {
