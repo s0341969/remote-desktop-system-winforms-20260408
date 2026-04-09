@@ -370,13 +370,36 @@ public partial class RemoteViewerForm : Form
             deviceId = _device?.DeviceId,
             viewer = _viewer?.UserName
         });
-        HandleUploadSelection();
+        TryWriteFallbackTransferTrace("host-upload-click-dispatch", "Dispatching upload selection back onto the UI message loop.", new
+        {
+            deviceId = _device?.DeviceId,
+            viewer = _viewer?.UserName,
+            invokeRequired = InvokeRequired,
+            uiThreadId = Environment.CurrentManagedThreadId
+        });
+
+        BeginInvoke(new Action(() =>
+        {
+            TryWriteFallbackTransferTrace("host-upload-dispatched", "Upload selection was dispatched from the click handler.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                uiThreadId = Environment.CurrentManagedThreadId
+            });
+            HandleUploadSelection();
+        }));
     }
 
     protected void HandleUploadSelection()
     {
         try
         {
+            TryWriteFallbackTransferTrace("host-upload-selection-entered", "Entered HandleUploadSelection.", new
+            {
+                deviceId = _device?.DeviceId,
+                viewer = _viewer?.UserName,
+                uiThreadId = Environment.CurrentManagedThreadId
+            });
             LogTransferTrace("host-upload-permission-check", "Checking upload permission.", new
             {
                 deviceId = _device?.DeviceId,
@@ -1292,6 +1315,7 @@ public partial class RemoteViewerForm : Form
         return printable && !e.Control && !e.Alt;
     }
 }
+
 
 
 
