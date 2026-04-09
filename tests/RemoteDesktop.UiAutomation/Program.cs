@@ -23,10 +23,12 @@ var tests = new (string Name, Action Body)[]
     ("Agent Settings UI", TestAgentSettingsForm),
     ("Host Main Dashboard UI", TestHostMainForm),
     ("Host Viewer File Upload UI", TestRemoteViewerUploadForm),
+    ("Host Remote File Browser UI", TestRemoteFileBrowserFormV2),
     ("Host User Management UI", TestHostUserManagementForm),
     ("Host Audit Log UI", TestHostAuditLogForm),
     ("Agent Main Runtime UI", TestAgentMainForm)
 };
+var _legacyRemoteFileBrowserTestReference = (Action)TestRemoteFileBrowserForm;
 
 var failures = new List<string>();
 foreach (var test in tests)
@@ -335,6 +337,267 @@ static void TestRemoteViewerUploadForm()
         catch
         {
         }
+    }
+}
+
+static void TestRemoteFileBrowserForm()
+{
+    const string rootPath = "C:\\RemoteData";
+    var docsPath = Path.Combine(rootPath, "Docs");
+    var rootFilePath = Path.Combine(rootPath, "root.txt");
+    var reportFilePath = Path.Combine(docsPath, "report.txt");
+    var loadRequests = new List<string?>();
+
+    RemoteDirectoryListingResult LoadDirectory(string? path)
+    {
+        loadRequests.Add(path);
+        if (string.IsNullOrWhiteSpace(path) || string.Equals(path, rootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return new RemoteDirectoryListingResult
+            {
+                DirectoryPath = rootPath,
+                ParentDirectoryPath = "C:\\",
+                CanNavigateUp = true,
+                Message = "已列出 2 個項目。\r\nListed 2 items.",
+                Entries = new[]
+                {
+                    new RemoteFileBrowserEntry
+                    {
+                        Name = "Docs",
+                        FullPath = docsPath,
+                        IsDirectory = true,
+                        LastModifiedAt = DateTimeOffset.UtcNow
+                    },
+                    new RemoteFileBrowserEntry
+                    {
+                        Name = "root.txt",
+                        FullPath = rootFilePath,
+                        IsDirectory = false,
+                        Size = 128,
+                        LastModifiedAt = DateTimeOffset.UtcNow
+                    }
+                }
+            };
+        }
+
+        if (string.Equals(path, docsPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return new RemoteDirectoryListingResult
+            {
+                DirectoryPath = docsPath,
+                ParentDirectoryPath = rootPath,
+                CanNavigateUp = true,
+                Message = "已列出 1 個項目。\r\nListed 1 item.",
+                Entries = new[]
+                {
+                    new RemoteFileBrowserEntry
+                    {
+                        Name = "report.txt",
+                        FullPath = reportFilePath,
+                        IsDirectory = false,
+                        Size = 256,
+                        LastModifiedAt = DateTimeOffset.UtcNow
+                    }
+                }
+            };
+        }
+
+        throw new InvalidOperationException($"Unexpected remote path: {path}");
+    }
+
+    using var form = new RemoteFileBrowserForm(null, (path, _) => Task.FromResult(LoadDirectory(path)));
+    form.Show();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 2, 3000);
+
+    if (!string.Equals(GetControl<TextBox>(form, "txtPath").Text, rootPath, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not render the expected initial path.");
+    }
+
+    GetControl<TextBox>(form, "txtPath").Text = docsPath;
+    GetControl<Button>(form, "btnLoad").PerformClick();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 1, 3000);
+
+    if (!string.Equals(GetControl<ListView>(form, "listEntries").Items[0].Text, "report.txt", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not load the expected child directory entries.");
+    }
+
+    GetControl<Button>(form, "btnUp").PerformClick();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 2, 3000);
+
+    var listEntries = GetControl<ListView>(form, "listEntries");
+    listEntries.Items[1].Selected = true;
+    listEntries.Select();
+    PumpUi();
+
+    var confirmMethod = typeof(RemoteFileBrowserForm).GetMethod("ConfirmSelectedFile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("ConfirmSelectedFile method not found.");
+    confirmMethod.Invoke(form, null);
+    PumpUi();
+
+    if (!string.Equals(form.SelectedFilePath, rootFilePath, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not return the selected file path.");
+    }
+
+    if (loadRequests.Count < 3)
+    {
+        throw new InvalidOperationException("Remote file browser did not perform the expected directory load sequence.");
+    }
+}
+
+static void TestRemoteFileBrowserFormV2()
+{
+    const string rootPath = "C:\\RemoteData";
+    var docsPath = Path.Combine(rootPath, "Docs");
+    var rootFilePath = Path.Combine(rootPath, "root.txt");
+    var reportFilePath = Path.Combine(docsPath, "report.txt");
+    var loadRequests = new List<string?>();
+    var moveRequests = new List<(string SourcePath, string DestinationPath)>();
+    var rootEntries = new List<RemoteFileBrowserEntry>
+    {
+        new()
+        {
+            Name = "Docs",
+            FullPath = docsPath,
+            IsDirectory = true,
+            LastModifiedAt = DateTimeOffset.UtcNow
+        },
+        new()
+        {
+            Name = "root.txt",
+            FullPath = rootFilePath,
+            IsDirectory = false,
+            Size = 128,
+            LastModifiedAt = DateTimeOffset.UtcNow
+        }
+    };
+    var docsEntries = new List<RemoteFileBrowserEntry>
+    {
+        new()
+        {
+            Name = "report.txt",
+            FullPath = reportFilePath,
+            IsDirectory = false,
+            Size = 256,
+            LastModifiedAt = DateTimeOffset.UtcNow
+        }
+    };
+
+    RemoteDirectoryListingResult LoadDirectory(string? path)
+    {
+        loadRequests.Add(path);
+        if (string.IsNullOrWhiteSpace(path) || string.Equals(path, rootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return new RemoteDirectoryListingResult
+            {
+                DirectoryPath = rootPath,
+                ParentDirectoryPath = "C:\\",
+                CanNavigateUp = true,
+                Message = "Listed 2 items.",
+                Entries = rootEntries.ToArray()
+            };
+        }
+
+        if (string.Equals(path, docsPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return new RemoteDirectoryListingResult
+            {
+                DirectoryPath = docsPath,
+                ParentDirectoryPath = rootPath,
+                CanNavigateUp = true,
+                Message = "Listed 1 item.",
+                Entries = docsEntries.ToArray()
+            };
+        }
+
+        throw new InvalidOperationException($"Unexpected remote path: {path}");
+    }
+
+    using var form = new TestRemoteFileBrowserForm(
+        null,
+        (path, _) => Task.FromResult(LoadDirectory(path)),
+        (sourcePath, destinationPath, _) =>
+        {
+            moveRequests.Add((sourcePath, destinationPath));
+            rootEntries.RemoveAll(entry => string.Equals(entry.FullPath, sourcePath, StringComparison.OrdinalIgnoreCase));
+            docsEntries.Add(new RemoteFileBrowserEntry
+            {
+                Name = Path.GetFileName(sourcePath),
+                FullPath = Path.Combine(destinationPath, Path.GetFileName(sourcePath)),
+                IsDirectory = false,
+                Size = 128,
+                LastModifiedAt = DateTimeOffset.UtcNow
+            });
+
+            return Task.FromResult(new RemoteMoveResult
+            {
+                DestinationPath = Path.Combine(destinationPath, Path.GetFileName(sourcePath)),
+                Message = $"Moved {Path.GetFileName(sourcePath)}"
+            });
+        },
+        docsPath);
+    form.Show();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 2, 3000);
+
+    if (!string.Equals(GetControl<TextBox>(form, "txtPath").Text, rootPath, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not render the expected initial path.");
+    }
+
+    GetControl<Button>(form, "btnRefresh").PerformClick();
+    WaitUntil(() => loadRequests.Count >= 2, 3000);
+
+    GetControl<TextBox>(form, "txtPath").Text = docsPath;
+    GetControl<Button>(form, "btnLoad").PerformClick();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 1, 3000);
+
+    if (!string.Equals(GetControl<ListView>(form, "listEntries").Items[0].Text, "report.txt", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not load the expected child directory entries.");
+    }
+
+    GetControl<Button>(form, "btnUp").PerformClick();
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 2, 3000);
+
+    var listEntries = GetControl<ListView>(form, "listEntries");
+    listEntries.Items[1].Selected = true;
+    listEntries.Select();
+    PumpUi();
+
+    GetControl<Button>(form, "btnMove").PerformClick();
+    WaitUntil(() => moveRequests.Count == 1, 3000);
+    if (!string.Equals(moveRequests[0].SourcePath, rootFilePath, StringComparison.Ordinal)
+        || !string.Equals(moveRequests[0].DestinationPath, docsPath, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not issue the expected move request.");
+    }
+
+    WaitUntil(() => GetControl<ListView>(form, "listEntries").Items.Count == 1, 3000);
+    if (!string.Equals(GetControl<ListView>(form, "listEntries").Items[0].Text, "Docs", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Remote file browser did not refresh after moving the selected item.");
+    }
+
+    listEntries = GetControl<ListView>(form, "listEntries");
+    listEntries.Items[0].Selected = true;
+    listEntries.Select();
+    PumpUi();
+
+    var confirmMethod = typeof(RemoteFileBrowserForm).GetMethod("ConfirmSelectedFile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("ConfirmSelectedFile method not found.");
+    confirmMethod.Invoke(form, null);
+    PumpUi();
+
+    if (!string.IsNullOrWhiteSpace(form.SelectedFilePath))
+    {
+        throw new InvalidOperationException("Remote file browser should not treat a folder as a downloadable file.");
+    }
+
+    if (loadRequests.Count < 4)
+    {
+        throw new InvalidOperationException("Remote file browser did not perform the expected refresh and move sequence.");
     }
 }
 
@@ -861,6 +1124,26 @@ internal sealed class TestRemoteViewerForm : RemoteViewerForm
     protected override void OpenTransferFolder(string directoryPath)
     {
         OpenedFolderPath = directoryPath;
+    }
+}
+
+internal sealed class TestRemoteFileBrowserForm : RemoteFileBrowserForm
+{
+    private readonly string _moveDestinationDirectoryPath;
+
+    public TestRemoteFileBrowserForm(
+        string? initialPath,
+        Func<string?, CancellationToken, Task<RemoteDirectoryListingResult>> loadDirectoryAsync,
+        Func<string, string, CancellationToken, Task<RemoteMoveResult>> moveEntryAsync,
+        string moveDestinationDirectoryPath)
+        : base(initialPath, loadDirectoryAsync, moveEntryAsync)
+    {
+        _moveDestinationDirectoryPath = moveDestinationDirectoryPath;
+    }
+
+    protected override Task<string?> SelectMoveDestinationDirectoryAsync(IWin32Window owner, string sourcePath, string? currentDirectoryPath)
+    {
+        return Task.FromResult<string?>(_moveDestinationDirectoryPath);
     }
 }
 

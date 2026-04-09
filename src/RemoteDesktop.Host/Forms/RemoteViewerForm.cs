@@ -1,6 +1,7 @@
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Services;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -73,6 +74,8 @@ public partial class RemoteViewerForm : Form
     private TaskCompletionSource<AgentClipboardMessage>? _clipboardSyncSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadStartSignal;
     private TaskCompletionSource<AgentFileTransferStatusMessage>? _uploadCompletionSignal;
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<AgentFileTransferStatusMessage>> _browseDirectorySignals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<AgentFileTransferStatusMessage>> _moveEntrySignals = new(StringComparer.OrdinalIgnoreCase);
     private FileStream? _downloadStream;
     private string? _downloadTempPath;
     private string? _downloadTargetPath;
@@ -336,6 +339,18 @@ public partial class RemoteViewerForm : Form
             fileSize = status.FileSize
         });
 
+        if (string.Equals(status.Direction, "browse", StringComparison.OrdinalIgnoreCase))
+        {
+            HandleBrowseStatus(status);
+            return;
+        }
+
+        if (string.Equals(status.Direction, "move", StringComparison.OrdinalIgnoreCase))
+        {
+            HandleMoveStatus(status);
+            return;
+        }
+
         if (string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase))
         {
             HandleDownloadStatus(status);
@@ -395,6 +410,32 @@ public partial class RemoteViewerForm : Form
                 _activeUploadId = null;
                 MessageBox.Show(status.Message, HostUiText.Window("檔案傳輸", "File Transfer"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 break;
+        }
+    }
+
+    private void HandleBrowseStatus(AgentFileTransferStatusMessage status)
+    {
+        if (string.IsNullOrWhiteSpace(status.UploadId))
+        {
+            return;
+        }
+
+        if (_browseDirectorySignals.TryRemove(status.UploadId, out var signal))
+        {
+            signal.TrySetResult(status);
+        }
+    }
+
+    private void HandleMoveStatus(AgentFileTransferStatusMessage status)
+    {
+        if (string.IsNullOrWhiteSpace(status.UploadId))
+        {
+            return;
+        }
+
+        if (_moveEntrySignals.TryRemove(status.UploadId, out var signal))
+        {
+            signal.TrySetResult(status);
         }
     }
 
@@ -671,7 +712,7 @@ public partial class RemoteViewerForm : Form
         var suggestedRemotePath = !string.IsNullOrWhiteSpace(_lastUploadedFilePath)
             ? _lastUploadedFilePath
             : _lastDownloadFilePath;
-        var remotePath = SelectDownloadSourcePath(this, suggestedRemotePath);
+        var remotePath = await SelectDownloadSourcePathAsync(this, suggestedRemotePath);
         if (string.IsNullOrWhiteSpace(remotePath))
         {
             return;
@@ -1022,6 +1063,83 @@ public partial class RemoteViewerForm : Form
             UploadId = transferId,
             RemotePath = remotePath
         }, CancellationToken.None);
+    }
+
+    private async Task<RemoteDirectoryListingResult> BrowseRemoteDirectoryAsync(string? directoryPath, CancellationToken cancellationToken)
+    {
+        var requestId = Guid.NewGuid().ToString("N");
+        var signal = new TaskCompletionSource<AgentFileTransferStatusMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_browseDirectorySignals.TryAdd(requestId, signal))
+        {
+            throw new InvalidOperationException(HostUiText.Bi("無法建立遠端檔案總管要求。", "Could not create the remote file browser request."));
+        }
+
+        try
+        {
+            await SendViewerCommandCoreAsync(new ViewerCommandMessage
+            {
+                Type = "file-browser-list",
+                UploadId = requestId,
+                DirectoryPath = directoryPath
+            }, cancellationToken);
+
+            var status = await signal.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
+            if (!string.Equals(status.Status, "listed", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(status.Message);
+            }
+
+            return new RemoteDirectoryListingResult
+            {
+                DirectoryPath = status.DirectoryPath,
+                ParentDirectoryPath = status.ParentDirectoryPath,
+                CanNavigateUp = status.CanNavigateUp,
+                EntriesTruncated = status.EntriesTruncated,
+                Message = status.Message,
+                Entries = status.Entries
+            };
+        }
+        finally
+        {
+            _browseDirectorySignals.TryRemove(requestId, out _);
+        }
+    }
+
+    private async Task<RemoteMoveResult> MoveRemoteEntryAsync(string sourcePath, string destinationDirectoryPath, CancellationToken cancellationToken)
+    {
+        var requestId = Guid.NewGuid().ToString("N");
+        var signal = new TaskCompletionSource<AgentFileTransferStatusMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_moveEntrySignals.TryAdd(requestId, signal))
+        {
+            throw new InvalidOperationException(HostUiText.Bi("無法建立遠端搬移要求。", "Could not create the remote move request."));
+        }
+
+        try
+        {
+            await SendViewerCommandCoreAsync(new ViewerCommandMessage
+            {
+                Type = "file-move",
+                UploadId = requestId,
+                RemotePath = sourcePath,
+                DestinationPath = destinationDirectoryPath
+            }, cancellationToken);
+
+            var status = await signal.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            if (!string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(status.Message);
+            }
+
+            return new RemoteMoveResult
+            {
+                DestinationPath = status.StoredFilePath,
+                Message = status.Message
+            };
+        }
+        finally
+        {
+            _moveEntrySignals.TryRemove(requestId, out _);
+        }
     }
 
     private async Task TryAbortUploadAsync(string uploadId)
@@ -1600,12 +1718,12 @@ public partial class RemoteViewerForm : Form
         return selectedFilePath;
     }
 
-    protected virtual string? SelectDownloadSourcePath(IWin32Window owner, string? suggestedRemotePath)
+    protected virtual Task<string?> SelectDownloadSourcePathAsync(IWin32Window owner, string? suggestedRemotePath)
     {
-        using var dialog = new DownloadRequestForm(suggestedRemotePath);
-        return dialog.ShowDialog(owner) == DialogResult.OK
-            ? dialog.RemotePath
-            : null;
+        using var dialog = new RemoteFileBrowserForm(suggestedRemotePath, BrowseRemoteDirectoryAsync, MoveRemoteEntryAsync);
+        return Task.FromResult(dialog.ShowDialog(owner) == DialogResult.OK
+            ? dialog.SelectedFilePath
+            : null);
     }
 
     protected virtual string? SelectDownloadSavePath(IWin32Window owner, string suggestedFileName)
@@ -1721,7 +1839,7 @@ public partial class RemoteViewerForm : Form
         lblTransferValue.Visible = visible;
         lblTransferPathValue.Visible = visible;
         progressFileTransfer.Visible = visible;
-        btnOpenTransferFolder.Visible = visible;
+        btnOpenTransferFolder.Visible = false;
 
         if (!_isFullscreen)
         {

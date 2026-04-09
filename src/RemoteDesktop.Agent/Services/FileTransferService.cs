@@ -12,6 +12,7 @@ public sealed class FileTransferService
     private const int MaxDownloadChunkBytes = 16 * 1024;
     private const int MaxChunkBase64Characters = 24_000;
     private const int ProgressPublishThresholdBytes = 256 * 1024;
+    private const int MaxBrowserEntries = 2_000;
     private readonly AgentOptions _options;
     private readonly ILogger<FileTransferService> _logger;
     private readonly FileTransferTraceService _fileTransferTraceService;
@@ -66,6 +67,23 @@ public sealed class FileTransferService
                     remotePath = command.RemotePath
                 }, cancellationToken);
                 await HandleDownloadStartAsync(command, publishStatusAsync, cancellationToken);
+                return true;
+            case "file-browser-list":
+                await LogAsync("agent-browser-command-list", "Received file-browser-list command.", new
+                {
+                    requestId = command.UploadId,
+                    directoryPath = command.DirectoryPath
+                }, cancellationToken);
+                await HandleBrowseDirectoryAsync(command, publishStatusAsync, cancellationToken);
+                return true;
+            case "file-move":
+                await LogAsync("agent-file-move-command", "Received file-move command.", new
+                {
+                    requestId = command.UploadId,
+                    sourcePath = command.RemotePath,
+                    destinationPath = command.DestinationPath
+                }, cancellationToken);
+                await HandleMoveAsync(command, publishStatusAsync, cancellationToken);
                 return true;
             default:
                 return false;
@@ -384,6 +402,197 @@ public sealed class FileTransferService
         }
     }
 
+    private async Task HandleBrowseDirectoryAsync(
+        ViewerCommandMessage command,
+        Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
+        CancellationToken cancellationToken)
+    {
+        var requestId = command.UploadId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            await PublishFailedAsync(
+                requestId,
+                string.Empty,
+                0,
+                AgentUiText.Bi("遠端檔案總管要求缺少識別碼。", "The remote file browser request is missing an identifier."),
+                publishStatusAsync,
+                cancellationToken,
+                direction: "browse");
+            return;
+        }
+
+        try
+        {
+            var directoryPath = ResolveBrowserDirectoryPath(command.DirectoryPath);
+            var directoryInfo = new DirectoryInfo(directoryPath);
+            if (!directoryInfo.Exists)
+            {
+                throw new DirectoryNotFoundException(AgentUiText.Bi("指定的遠端資料夾不存在。", "The requested remote directory does not exist."));
+            }
+
+            var directories = directoryInfo.EnumerateDirectories()
+                .OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(MaxBrowserEntries + 1)
+                .ToList();
+
+            var remainingSlots = Math.Max(0, MaxBrowserEntries - Math.Min(directories.Count, MaxBrowserEntries));
+            var files = directoryInfo.EnumerateFiles()
+                .OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(remainingSlots + 1)
+                .ToList();
+
+            var entries = new List<RemoteFileBrowserEntry>(Math.Min(MaxBrowserEntries, directories.Count + files.Count));
+            foreach (var directory in directories.Take(MaxBrowserEntries))
+            {
+                entries.Add(new RemoteFileBrowserEntry
+                {
+                    Name = directory.Name,
+                    FullPath = directory.FullName,
+                    IsDirectory = true,
+                    Size = 0,
+                    LastModifiedAt = directory.LastWriteTimeUtc
+                });
+            }
+
+            foreach (var file in files.Take(Math.Max(0, MaxBrowserEntries - entries.Count)))
+            {
+                entries.Add(new RemoteFileBrowserEntry
+                {
+                    Name = file.Name,
+                    FullPath = file.FullName,
+                    IsDirectory = false,
+                    Size = file.Length,
+                    LastModifiedAt = file.LastWriteTimeUtc
+                });
+            }
+
+            var parentDirectoryPath = directoryInfo.Parent?.FullName ?? string.Empty;
+            var entriesTruncated = directories.Count > MaxBrowserEntries || files.Count > remainingSlots;
+            await publishStatusAsync(new AgentFileTransferStatusMessage
+            {
+                UploadId = requestId,
+                Direction = "browse",
+                Status = "listed",
+                FileName = string.Empty,
+                StoredFileName = string.Empty,
+                StoredFilePath = directoryInfo.FullName,
+                FileSize = 0,
+                BytesTransferred = 0,
+                DirectoryPath = directoryInfo.FullName,
+                ParentDirectoryPath = parentDirectoryPath,
+                CanNavigateUp = !string.IsNullOrWhiteSpace(parentDirectoryPath),
+                EntriesTruncated = entriesTruncated,
+                Entries = entries,
+                Message = entriesTruncated
+                    ? AgentUiText.Bi($"已列出 {entries.Count} 個項目（已截斷）。", $"Listed {entries.Count} items (truncated).")
+                    : AgentUiText.Bi($"已列出 {entries.Count} 個項目。", $"Listed {entries.Count} items.")
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to list remote directory for request {RequestId}.", requestId);
+            await PublishFailedAsync(
+                requestId,
+                string.Empty,
+                0,
+                AgentUiText.Bi($"遠端檔案總管載入失敗：{exception.Message}", $"Remote file browser load failed: {exception.Message}"),
+                publishStatusAsync,
+                cancellationToken,
+                direction: "browse");
+        }
+    }
+
+    private async Task HandleMoveAsync(
+        ViewerCommandMessage command,
+        Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
+        CancellationToken cancellationToken)
+    {
+        var requestId = command.UploadId?.Trim() ?? string.Empty;
+        var sourcePathInput = command.RemotePath?.Trim() ?? string.Empty;
+        var destinationDirectoryInput = command.DestinationPath?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(requestId) || string.IsNullOrWhiteSpace(sourcePathInput) || string.IsNullOrWhiteSpace(destinationDirectoryInput))
+        {
+            await PublishFailedAsync(
+                requestId,
+                Path.GetFileName(sourcePathInput),
+                0,
+                AgentUiText.Bi("移動檔案或資料夾的要求無效。", "The file or folder move request is invalid."),
+                publishStatusAsync,
+                cancellationToken,
+                direction: "move");
+            return;
+        }
+
+        try
+        {
+            var sourcePath = ResolveRemoteContentPath(sourcePathInput);
+            var destinationDirectoryPath = ResolveBrowserDirectoryPath(destinationDirectoryInput);
+            if (!Directory.Exists(destinationDirectoryPath))
+            {
+                throw new DirectoryNotFoundException(AgentUiText.Bi("目的資料夾不存在。", "The destination folder does not exist."));
+            }
+
+            var sourceIsFile = File.Exists(sourcePath);
+            var sourceIsDirectory = Directory.Exists(sourcePath);
+            if (!sourceIsFile && !sourceIsDirectory)
+            {
+                throw new FileNotFoundException(AgentUiText.Bi("找不到要移動的檔案或資料夾。", "The file or folder to move was not found."), sourcePath);
+            }
+
+            var sourceName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var currentParentPath = Path.GetDirectoryName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? string.Empty;
+            if (string.Equals(currentParentPath, destinationDirectoryPath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(AgentUiText.Bi("所選項目已經在目的資料夾中。", "The selected item is already in the destination folder."));
+            }
+
+            if (sourceIsDirectory && IsPathWithin(destinationDirectoryPath, sourcePath))
+            {
+                throw new InvalidOperationException(AgentUiText.Bi("不能將資料夾移動到自己的子資料夾內。", "A folder cannot be moved into one of its own subfolders."));
+            }
+
+            var destinationPath = sourceIsDirectory
+                ? ResolveUniqueDirectoryPath(destinationDirectoryPath, sourceName)
+                : ResolveUniqueTargetPath(destinationDirectoryPath, sourceName);
+
+            if (sourceIsFile)
+            {
+                File.Move(sourcePath, destinationPath);
+            }
+            else
+            {
+                Directory.Move(sourcePath, destinationPath);
+            }
+
+            await publishStatusAsync(new AgentFileTransferStatusMessage
+            {
+                UploadId = requestId,
+                Direction = "move",
+                Status = "completed",
+                FileName = sourceName,
+                StoredFileName = Path.GetFileName(destinationPath),
+                StoredFilePath = destinationPath,
+                FileSize = 0,
+                BytesTransferred = 0,
+                Message = sourceIsDirectory
+                    ? AgentUiText.Bi($"已將資料夾「{sourceName}」移動到 {destinationDirectoryPath}。", $"Moved folder '{sourceName}' to {destinationDirectoryPath}.")
+                    : AgentUiText.Bi($"已將檔案「{sourceName}」移動到 {destinationDirectoryPath}。", $"Moved file '{sourceName}' to {destinationDirectoryPath}.")
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to move remote content for request {RequestId}.", requestId);
+            await PublishFailedAsync(
+                requestId,
+                Path.GetFileName(sourcePathInput),
+                0,
+                AgentUiText.Bi($"移動檔案或資料夾失敗：{exception.Message}", $"Failed to move the file or folder: {exception.Message}"),
+                publishStatusAsync,
+                cancellationToken,
+                direction: "move");
+        }
+    }
+
     private async Task FailAndCleanupAsync(
         UploadSession session,
         string message,
@@ -474,13 +683,76 @@ public sealed class FileTransferService
 
     private string ResolveDownloadPath(string remotePath)
     {
+        return ResolveRemoteContentPath(remotePath);
+    }
+
+    private string ResolveBrowserDirectoryPath(string? directoryPath)
+    {
+        var trimmed = directoryPath?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            var transferDirectory = Path.GetFullPath(ResolveTransferDirectory());
+            Directory.CreateDirectory(transferDirectory);
+            return transferDirectory;
+        }
+
+        var candidatePath = Path.IsPathRooted(trimmed)
+            ? Path.GetFullPath(trimmed)
+            : Path.GetFullPath(Path.Combine(ResolveTransferDirectory(), trimmed));
+
+        if (File.Exists(candidatePath))
+        {
+            return Path.GetDirectoryName(candidatePath)
+                ?? throw new DirectoryNotFoundException(AgentUiText.Bi("指定的遠端檔案沒有父資料夾。", "The requested remote file does not have a parent directory."));
+        }
+
+        if (Directory.Exists(candidatePath))
+        {
+            return candidatePath;
+        }
+
+        var parentDirectoryPath = Path.GetDirectoryName(candidatePath);
+        if (!string.IsNullOrWhiteSpace(parentDirectoryPath)
+            && Directory.Exists(parentDirectoryPath)
+            && LooksLikeFilePath(trimmed))
+        {
+            return parentDirectoryPath;
+        }
+
+        return candidatePath;
+    }
+
+    private string ResolveRemoteContentPath(string remotePath)
+    {
         var trimmed = remotePath.Trim();
         if (Path.IsPathRooted(trimmed))
         {
-            return trimmed;
+            return Path.GetFullPath(trimmed);
         }
 
-        return Path.Combine(ResolveTransferDirectory(), trimmed);
+        return Path.GetFullPath(Path.Combine(ResolveTransferDirectory(), trimmed));
+    }
+
+    private static bool LooksLikeFilePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return !string.IsNullOrWhiteSpace(fileName) && fileName.Contains('.', StringComparison.Ordinal);
+    }
+
+    private static bool IsPathWithin(string candidatePath, string parentPath)
+    {
+        var normalizedCandidatePath = Path.GetFullPath(candidatePath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var normalizedParentPath = Path.GetFullPath(parentPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        return normalizedCandidatePath.StartsWith(normalizedParentPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ShouldPublishProgress(UploadSession session)
@@ -507,6 +779,18 @@ public sealed class FileTransferService
         while (File.Exists(candidate) || File.Exists($"{candidate}.uploading"))
         {
             candidate = Path.Combine(directory, $"{nameWithoutExtension} ({counter++}){extension}");
+        }
+
+        return candidate;
+    }
+
+    private static string ResolveUniqueDirectoryPath(string directory, string folderName)
+    {
+        var candidate = Path.Combine(directory, folderName);
+        var counter = 1;
+        while (Directory.Exists(candidate) || File.Exists(candidate))
+        {
+            candidate = Path.Combine(directory, $"{folderName} ({counter++})");
         }
 
         return candidate;

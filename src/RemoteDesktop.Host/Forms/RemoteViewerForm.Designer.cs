@@ -329,9 +329,9 @@ partial class RemoteViewerForm
         // btnOpenTransferFolder
         // 
         btnOpenTransferFolder.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnOpenTransferFolder.Location = new Point(443, 66);
+        btnOpenTransferFolder.Location = new Point(1148, 66);
         btnOpenTransferFolder.Name = "btnOpenTransferFolder";
-        btnOpenTransferFolder.Size = new Size(110, 42);
+        btnOpenTransferFolder.Size = new Size(144, 42);
         btnOpenTransferFolder.TabIndex = 0;
         btnOpenTransferFolder.Text = "Open Folder";
         btnOpenTransferFolder.UseVisualStyleBackColor = true;

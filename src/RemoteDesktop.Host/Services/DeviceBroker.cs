@@ -129,9 +129,18 @@ public sealed class DeviceBroker
         {
             await viewerSession.PublishStatusAsync(status, cancellationToken);
 
-            var actionPrefix = string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase)
-                ? "file-download"
-                : "file-upload";
+            string? actionPrefix = status.Direction?.ToLowerInvariant() switch
+            {
+                "download" => "file-download",
+                "upload" => "file-upload",
+                "move" => "file-move",
+                _ => null
+            };
+
+            if (actionPrefix is null)
+            {
+                return;
+            }
 
             if (string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase))
             {
@@ -142,9 +151,13 @@ public sealed class DeviceBroker
                     "device",
                     deviceId,
                     true,
-                    string.Equals(status.Direction, "download", StringComparison.OrdinalIgnoreCase)
-                        ? HostUiText.Bi($"檔案「{status.StoredFileName}」已成功下載。", $"Downloaded '{status.StoredFileName}' successfully.")
-                        : HostUiText.Bi($"檔案「{status.StoredFileName}」已成功上傳。", $"Uploaded '{status.StoredFileName}' successfully."),
+                    status.Direction?.ToLowerInvariant() switch
+                    {
+                        "download" => HostUiText.Bi($"檔案「{status.StoredFileName}」已成功下載。", $"Downloaded '{status.StoredFileName}' successfully."),
+                        "upload" => HostUiText.Bi($"檔案「{status.StoredFileName}」已成功上傳。", $"Uploaded '{status.StoredFileName}' successfully."),
+                        "move" => HostUiText.Bi($"已成功移動「{status.StoredFileName}」。", $"Moved '{status.StoredFileName}' successfully."),
+                        _ => status.Message
+                    },
                     CancellationToken.None);
             }
             else if (string.Equals(status.Status, "failed", StringComparison.OrdinalIgnoreCase))

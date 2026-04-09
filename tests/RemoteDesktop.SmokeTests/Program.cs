@@ -234,6 +234,53 @@ static async Task RunFileTransferSmokeTestAsync()
             throw new InvalidOperationException("File transfer service did not emit any throttled progress status.");
         }
 
+        var browseStatuses = new List<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage>();
+        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+        {
+            Type = "file-browser-list",
+            UploadId = Guid.NewGuid().ToString("N"),
+            DirectoryPath = tempRoot
+        }, (status, cancellationToken) =>
+        {
+            browseStatuses.Add(status);
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+
+        var directoryListing = browseStatuses.SingleOrDefault(static status =>
+            string.Equals(status.Direction, "browse", StringComparison.Ordinal)
+            && string.Equals(status.Status, "listed", StringComparison.Ordinal));
+        if (directoryListing is null)
+        {
+            throw new InvalidOperationException("File transfer service did not return a remote directory listing.");
+        }
+
+        if (!directoryListing.Entries.Any(entry =>
+                !entry.IsDirectory
+                && string.Equals(entry.Name, completed.StoredFileName, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("Remote directory listing did not include the uploaded file.");
+        }
+
+        var filePathBrowseStatuses = new List<RemoteDesktop.Agent.Models.AgentFileTransferStatusMessage>();
+        await fileTransferService.TryHandleAsync(new RemoteDesktop.Agent.Models.ViewerCommandMessage
+        {
+            Type = "file-browser-list",
+            UploadId = Guid.NewGuid().ToString("N"),
+            DirectoryPath = storedPath
+        }, (status, cancellationToken) =>
+        {
+            filePathBrowseStatuses.Add(status);
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+
+        var filePathListing = filePathBrowseStatuses.SingleOrDefault(static status =>
+            string.Equals(status.Direction, "browse", StringComparison.Ordinal)
+            && string.Equals(status.Status, "listed", StringComparison.Ordinal));
+        if (filePathListing is null || !string.Equals(filePathListing.DirectoryPath, tempRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Remote directory listing did not normalize a file path to its parent directory.");
+        }
+
         if (!File.Exists(fileTransferTraceService.LogPath))
         {
             throw new InvalidOperationException("File transfer trace log was not created.");

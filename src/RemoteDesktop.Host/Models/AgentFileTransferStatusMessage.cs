@@ -25,4 +25,14 @@ public sealed class AgentFileTransferStatusMessage
     public string ChunkBase64 { get; init; } = string.Empty;
 
     public string Message { get; init; } = string.Empty;
+
+    public string DirectoryPath { get; init; } = string.Empty;
+
+    public string ParentDirectoryPath { get; init; } = string.Empty;
+
+    public bool CanNavigateUp { get; init; }
+
+    public bool EntriesTruncated { get; init; }
+
+    public IReadOnlyList<RemoteFileBrowserEntry> Entries { get; init; } = Array.Empty<RemoteFileBrowserEntry>();
 }

@@ -29,4 +29,8 @@ public sealed class ViewerCommandMessage
     public string? ClipboardText { get; init; }
 
     public string? RemotePath { get; init; }
+
+    public string? DirectoryPath { get; init; }
+
+    public string? DestinationPath { get; init; }
 }
