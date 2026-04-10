@@ -10,7 +10,7 @@ param(
 
     [string]$Configuration = "Release",
 
-    [string]$Framework = "net8.0-windows",
+    [string]$Framework = "",
 
     [string]$SatelliteResourceLanguages = "zh-Hant"
 )
@@ -22,6 +22,10 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot "..\.."))
 $projectPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $ProjectRelativePath))
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputRelativePath))
+$dotnetExe = "C:\Program Files\dotnet\dotnet.exe"
+
+$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 
 if (-not (Test-Path -LiteralPath $projectPath)) {
     throw "Project file not found: $projectPath"
@@ -38,7 +42,6 @@ $publishArgs = @(
     "publish",
     $projectPath,
     "-c", $Configuration,
-    "-f", $Framework,
     "-o", $outputPath,
     "-p:SelfContained=false",
     "-p:UseAppHost=true",
@@ -48,9 +51,13 @@ $publishArgs = @(
     "-p:SatelliteResourceLanguages=$SatelliteResourceLanguages"
 )
 
+if (-not [string]::IsNullOrWhiteSpace($Framework)) {
+    $publishArgs += @("-f", $Framework)
+}
+
 Push-Location $repoRoot
 try {
-    & dotnet @publishArgs
+    & $dotnetExe @publishArgs
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE"
     }

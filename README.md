@@ -11,8 +11,8 @@
   - 背景自架 `Kestrel`，提供 `/ws/agent` 與 `/healthz`。
   - 前景提供登入、儀表板、遠端檢視與 Host 設定表單。
 - `src/RemoteDesktop.Server`
-  - 第一階段新增的中央 Host Server。
-  - 目前已可獨立啟動、提供 `/ws/agent` 與 `/healthz`，並接收 Agent `hello/heartbeat` 協定。
+  - 中央 Host Server。
+  - 可獨立啟動，提供 `/ws/agent`、`/ws/viewer`、`/ws/dashboard`、`/healthz` 與中央管理 API。
 - `src/RemoteDesktop.Shared`
   - 第一階段新增的共享契約專案。
   - 集中放 Agent/Viewer 通訊模型與裝置資料 DTO，供後續 Server / Console Client 共用。
@@ -23,8 +23,10 @@
   - Host 的精簡 `win-x64 framework-dependent` 發佈版。
 - `deploy/publish/Agent`
   - Agent 的精簡 `win-x64 framework-dependent` 發佈版。
+- `deploy/publish/Server`
+  - Server 的精簡 `framework-dependent` 發佈版。
 - `deploy/scripts`
-  - 發佈與清理腳本。
+  - 發佈、清理與整包交付腳本。
 - `tests/RemoteDesktop.SmokeTests`
   - 核心通訊 smoke test。
 - `tests/RemoteDesktop.UiAutomation`
@@ -67,6 +69,8 @@
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
 - 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
+- 發佈流程已補齊中央 Server：`Publish-App.ps1` 現在支援依專案指定 framework，`Deploy-App.ps1` 可一鍵 clean、build、測試、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 交付包。
+- 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 也能走與 Host/Agent 一致的交付與啟動流程。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -96,6 +100,7 @@
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
+- Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
 - Publish 目錄會在每次重建時完整覆蓋；若有自訂設定，應修改 `src/.../appsettings.json` 或在發佈後另外備份部署設定。
 - 可交付壓縮包與固定部署資料夾會輸出到 `deploy/release`。
@@ -140,8 +145,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - `PersistenceMode = Memory`
 
 目前定位：
-- 這是第一階段中央 Host Server
-- 現有 `RemoteDesktop.Host` 尚未完全改成純 Console Client
+- 這是中央 Host Server
 - 現在 `RemoteDesktop.Host` 已可透過 `ControlServer:CentralServerUrl` 接這個 Server，主畫面裝置清單/在線紀錄/授權管理會改走中央 API
 - Viewer attach/detach、遠端畫面串流與 Viewer 指令也會改走中央 Server 的 `/ws/viewer` 通道
 - Host 登入、使用者管理、稽核與 Host 設定畫面在中央模式下也已改走 `RemoteDesktop.Server` API
@@ -165,12 +169,26 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Host\RemoteDesktop.Host.csproj' `
   -OutputRelativePath 'deploy\publish\Host' `
-  -ExecutableName 'RemoteDesktop.Host.exe'
+  -ExecutableName 'RemoteDesktop.Host.exe' `
+  -Framework 'net8.0-windows'
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
   -OutputRelativePath 'deploy\publish\Agent' `
-  -ExecutableName 'RemoteDesktop.Agent.exe'
+  -ExecutableName 'RemoteDesktop.Agent.exe' `
+  -Framework 'net8.0-windows'
+
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Server\RemoteDesktop.Server.csproj' `
+  -OutputRelativePath 'deploy\publish\Server' `
+  -ExecutableName 'RemoteDesktop.Server.exe' `
+  -Framework 'net8.0'
+```
+
+### 一鍵部署
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Deploy-App.ps1
 ```
 
 ### Smoke Test

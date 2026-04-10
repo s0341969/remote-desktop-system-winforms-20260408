@@ -51,6 +51,7 @@ if ($IncludeDotnetHome) {
 if ($IncludePublish) {
     Remove-WorkspacePath -LiteralPath (Join-Path $repoRoot "deploy\publish\Host")
     Remove-WorkspacePath -LiteralPath (Join-Path $repoRoot "deploy\publish\Agent")
+    Remove-WorkspacePath -LiteralPath (Join-Path $repoRoot "deploy\publish\Server")
 }
 
 Write-Host "Cleanup completed successfully."

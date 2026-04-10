@@ -32,9 +32,11 @@
 ### 2.2 Central Server
 
 `RemoteDesktop.Server` 目前提供：
-- 第一階段中央 Host Server
+- 中央 Host Server
 - 獨立 ASP.NET Core 啟動
 - Agent WebSocket 入口 `/ws/agent`
+- Viewer WebSocket 入口 `/ws/viewer`
+- Dashboard WebSocket 入口 `/ws/dashboard`
 - 健康檢查 `/healthz`
 - 可切換 `Memory` / `SqlServer` 儲存模式
 - 可接收 Agent `hello/heartbeat`
@@ -64,6 +66,7 @@
 - `src/RemoteDesktop.Agent`
 - `deploy/publish/Host`
 - `deploy/publish/Agent`
+- `deploy/publish/Server`
 - `deploy/scripts`
 - `tests/RemoteDesktop.SmokeTests`
 - `tests/RemoteDesktop.UiAutomation`
@@ -151,6 +154,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 目前已產出：
 - `deploy/publish/Host`
 - `deploy/publish/Agent`
+- `deploy/publish/Server`
 
 若要重新產出：
 
@@ -163,7 +167,20 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
   -OutputRelativePath 'deploy\publish\Agent' `
-  -ExecutableName 'RemoteDesktop.Agent.exe'
+  -ExecutableName 'RemoteDesktop.Agent.exe' `
+  -Framework 'net8.0-windows'
+
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Server\RemoteDesktop.Server.csproj' `
+  -OutputRelativePath 'deploy\publish\Server' `
+  -ExecutableName 'RemoteDesktop.Server.exe' `
+  -Framework 'net8.0'
+```
+
+若要一鍵 clean、build、測試、publish 與建立 release：
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Deploy-App.ps1
 ```
 
 ## 8. 啟動方式
@@ -172,9 +189,10 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
+- Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設以 `Memory` 模式啟動，不會先連資料庫
 
-### 8.1.1 啟動中央 Server（第一階段）
+### 8.1.1 啟動中央 Server
 
 ```powershell
 & 'C:\Program Files\dotnet\dotnet.exe' run --project .\src\RemoteDesktop.Server\RemoteDesktop.Server.csproj
@@ -185,16 +203,16 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - `PersistenceMode = Memory`
 
 說明：
-- 這是多主控台重構的第一階段
-- 目前已可獨立接收 Agent WebSocket 連線
+- 目前已可獨立接收 Agent / Viewer / Dashboard WebSocket 連線
 - 現有 `RemoteDesktop.Host` 已可在 Host 設定中填入 `中央 Server URL / Central server URL`，切成中央 Server 儀表板模式
 - 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄、Server 端 bearer token/session 驗證、Viewer Session Lock 與強制接管/觀看模式、中央儀表板即時推播 `/ws/dashboard`
-- 中央模式目前尚未接通：真正的跨多主控台 publish 交付驗證
+- 中央模式的正式交付現在已可透過 `deploy/scripts/Deploy-App.ps1` 一次產出 `Host`、`Agent`、`Server` 與 `deploy/release` 套件
 
 ### 8.2 使用啟動腳本
 
 - `deploy/scripts/Start-Host.cmd`
 - `deploy/scripts/Start-Agent.cmd`
+- `deploy/scripts/Start-Server.cmd`
 
 ### 8.3 使用桌面捷徑
 
@@ -512,6 +530,7 @@ WinForms UI automation：
 如果要交給操作人員，建議直接提供：
 - `deploy/publish/Host`
 - `deploy/publish/Agent`
+- `deploy/publish/Server`
 - `deploy/release`
 - 本手冊 `INSTALLATION_GUIDE.md`
 - 桌面捷徑
@@ -530,6 +549,7 @@ WinForms UI automation：
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
 - 中央 `/ws/dashboard`：已由 smoke test 驗證會在 Agent 上線時推送 `dashboard-ready` / `dashboard-changed`
 - 中央 `/api/settings/host`：已由 smoke test 驗證可 round-trip 讀取與更新 Host 設定
+- `deploy/scripts/Deploy-App.ps1`：已驗證可產出 `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server` 與 `deploy/release/current`
 
 
 

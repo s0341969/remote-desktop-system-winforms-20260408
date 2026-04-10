@@ -2,6 +2,10 @@
 
 ## 2026-04-11
 
+- 補齊中央 Server 的正式交付流程：新增 `deploy/scripts/Deploy-App.ps1`，可一鍵 clean、build、smoke test、UI automation、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 套件。
+- `Publish-App.ps1` 現在改為可依專案指定 framework，不再假設所有專案都走 `net8.0-windows`，因此 `RemoteDesktop.Server` 也可納入同一套 publish 腳本。
+- 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 的 publish 與啟動流程與 Host / Agent 一致。
+- 更新 `README.md` 與 `INSTALLATION_GUIDE.md`，補上 `deploy/publish/Server`、`Deploy-App.ps1`、`Start-Server.cmd` 與 `deploy/release` 新的交付結構。
 - 第七階段新增中央儀表板 WebSocket 推播 /ws/dashboard，RemoteDesktop.Server 會在裝置上線、離線與授權變更時主動推送 dashboard-changed 事件。
 - RemoteDesktop.Host 的中央模式主畫面改成「即時推播 + 30 秒回補輪詢」，多台 Console Client 共用同一個中央狀態時不再只靠固定 5 秒 polling。
 - 擴充 RemoteDesktop.SmokeTests，新增中央 dashboard push 端到端驗證，確保 Agent 註冊後可立即收到 dashboard-ready / dashboard-changed 封包。

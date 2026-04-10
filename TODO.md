@@ -10,7 +10,7 @@
 - [ ] 擴充 UI 自動化測試，納入遠端檢視視窗實際 attach、設定儲存後重新載入驗證、剪貼簿同步流程，以及驗證 Host/Agent build 識別資訊、獨立 STA 選檔流程、縮放下拉互動穩定性、全螢幕、download 流程與長路徑版面顯示的端到端測試
 - [ ] 擴充 smoke test，加入未授權 Agent、重複登入取代與 heartbeat timeout 情境
 - [ ] 為設定檔持久化流程補上獨立的檔案層測試，覆蓋異常 JSON 與缺欄位回復策略
-- [ ] 將 `Clean-App.ps1` 與 `Publish-App.ps1` 整合成單一部署腳本，加入 build、smoke test 與版本標記流程
+- [ ] 為 `Deploy-App.ps1` 補上版本號寫入與交付包摘要輸出，讓 release 目錄可直接追蹤對應 commit / build time / package size
 - [ ] 為 Host 儲存模式切換補上更多自動化測試，覆蓋 `Memory` 與 `SqlServer` 兩種啟動路徑
 - [ ] 盤點 Host 發佈輸出是否仍有可安全縮減的非必要執行時相依，避免在不影響穩定性的前提下攜帶過多 DLL
 - [ ] 為遠端檔案總管補刪除、重新命名、搜尋與檔案類型預覽能力，降低仍需回到遠端桌面的操作次數
