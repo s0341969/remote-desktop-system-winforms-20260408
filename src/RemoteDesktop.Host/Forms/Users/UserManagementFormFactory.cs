@@ -6,10 +6,10 @@ namespace RemoteDesktop.Host.Forms.Users;
 
 public sealed class UserManagementFormFactory
 {
-    private readonly AuthenticationService _authenticationService;
-    private readonly AuditService _auditService;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IAuditService _auditService;
 
-    public UserManagementFormFactory(AuthenticationService authenticationService, AuditService auditService)
+    public UserManagementFormFactory(IAuthenticationService authenticationService, IAuditService auditService)
     {
         _authenticationService = authenticationService;
         _auditService = auditService;

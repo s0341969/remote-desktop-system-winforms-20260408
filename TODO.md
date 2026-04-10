@@ -1,9 +1,9 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
-- [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上主控台登入、使用者、稽核與 Host 設定保存的集中化
+- [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上 Host 設定保存的集中化與中央模式的完整 publish 驗證
 - [ ] 為 `RemoteDesktop.Server` 補 Console Client 儀表板 WebSocket 推播端點，讓多台主控台不用輪詢即可共用同一組中央狀態
-- [ ] 補中央化登入、使用者、稽核與 `Viewer Session Lock`，並讓中央 `/ws/viewer` 通道真正依 Server 端使用者/角色授權，而不是只信任 Client 傳入的 `userName` / `canControl`
+- [ ] 補真正的中央化登入 session / token 驗證、使用者授權與 `Viewer Session Lock`，讓中央 `/ws/viewer` 與 `/api/users` 不再只信任 Client 傳入的 `userName` / `canControl`
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
 - [ ] 繼續強化遠端檢視表單，補上快捷鍵提示與遠端輸入失敗原因的 Host 端可視化回報
 - [ ] 增加 Host 與 Agent 的操作日誌匯出功能
@@ -17,6 +17,7 @@
 - [ ] 為遠端檔案總管補上 publish EXE 層級的端到端自動化測試，覆蓋實際 Host / Agent 啟動、登入、Viewer 開啟、下載與移動流程
 - [ ] 盤點 Agent `功能` 下拉還要不要加入開啟 logs、複製版本資訊與重新連線等常用操作
 - [ ] 盤點 Host Viewer `功能` 下拉還要不要加入快捷鍵說明與常用遠端路徑收藏
+
 
 
 

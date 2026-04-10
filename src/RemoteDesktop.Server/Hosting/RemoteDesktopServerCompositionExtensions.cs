@@ -1,8 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Server.Options;
 using RemoteDesktop.Server.Services;
+using RemoteDesktop.Server.Services.Auditing;
+using RemoteDesktop.Server.Services.Users;
 using RemoteDesktop.Shared.Models;
 
 namespace RemoteDesktop.Server.Hosting;
@@ -14,6 +17,10 @@ public static class RemoteDesktopServerCompositionExtensions
         services.AddSingleton<DeviceBroker>();
         services.AddSingleton<AgentWebSocketHandler>();
         services.AddSingleton<ViewerWebSocketHandler>();
+        services.AddSingleton<IAuditLogStore, JsonAuditLogStore>();
+        services.AddSingleton<AuditService>();
+        services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
+        services.AddSingleton<UserAccountService>();
         services.AddHostedService<AgentMonitorService>();
         return services;
     }
@@ -65,6 +72,109 @@ public static class RemoteDesktopServerCompositionExtensions
         {
             var logs = await repository.GetPresenceLogsAsync(Math.Clamp(take ?? 100, 1, 500), cancellationToken);
             return Results.Ok(logs);
+        });
+
+        app.MapPost("/api/auth/login", async (LoginRequest request, UserAccountService userAccountService, AuditService auditService, IOptions<ControlServerOptions> options, CancellationToken cancellationToken) =>
+        {
+            var session = await userAccountService.AuthenticateAsync(request.UserName, request.Password, cancellationToken);
+            if (session is null)
+            {
+                await auditService.WriteAsync(new AuditLogEntryDto
+                {
+                    OccurredAt = DateTimeOffset.UtcNow,
+                    ActorUserName = request.UserName,
+                    ActorDisplayName = request.UserName,
+                    Action = "user-sign-in",
+                    TargetType = "console",
+                    TargetId = options.Value.ConsoleName,
+                    Succeeded = false,
+                    Details = "帳號或密碼錯誤。 / Invalid user name or password."
+                }, cancellationToken);
+
+                return Results.Unauthorized();
+            }
+
+            await auditService.WriteAsync(new AuditLogEntryDto
+            {
+                OccurredAt = DateTimeOffset.UtcNow,
+                ActorUserName = session.UserName,
+                ActorDisplayName = session.DisplayName,
+                Action = "user-sign-in",
+                TargetType = "console",
+                TargetId = options.Value.ConsoleName,
+                Succeeded = true,
+                Details = "使用者登入成功。 / User signed in successfully."
+            }, cancellationToken);
+
+            return Results.Ok(session);
+        });
+
+        app.MapGet("/api/users", async (UserAccountService userAccountService, CancellationToken cancellationToken) =>
+        {
+            var items = await userAccountService.GetAccountsAsync(cancellationToken);
+            return Results.Ok(items);
+        });
+
+        app.MapPost("/api/users", async (UserAccountUpsertRequest request, UserAccountService userAccountService, AuditService auditService, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await userAccountService.SaveAccountAsync(request, cancellationToken);
+                await auditService.WriteAsync(new AuditLogEntryDto
+                {
+                    OccurredAt = DateTimeOffset.UtcNow,
+                    ActorUserName = "remote-console",
+                    ActorDisplayName = "remote-console",
+                    Action = "user-account-save",
+                    TargetType = "user-account",
+                    TargetId = request.UserName,
+                    Succeeded = true,
+                    Details = $"帳號「{request.UserName}」已以角色「{request.Role}」儲存。 / Account '{request.UserName}' was saved with role '{request.Role}'."
+                }, cancellationToken);
+
+                return Results.Ok();
+            }
+            catch (ValidationException exception)
+            {
+                return Results.BadRequest(exception.Message);
+            }
+        });
+
+        app.MapDelete("/api/users/{userName}", async (string userName, string currentUserName, UserAccountService userAccountService, AuditService auditService, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await userAccountService.DeleteAccountAsync(userName, currentUserName, cancellationToken);
+                await auditService.WriteAsync(new AuditLogEntryDto
+                {
+                    OccurredAt = DateTimeOffset.UtcNow,
+                    ActorUserName = currentUserName,
+                    ActorDisplayName = currentUserName,
+                    Action = "user-account-delete",
+                    TargetType = "user-account",
+                    TargetId = userName,
+                    Succeeded = true,
+                    Details = $"帳號「{userName}」已刪除。 / Account '{userName}' was deleted."
+                }, cancellationToken);
+
+                return Results.Ok();
+            }
+            catch (ValidationException exception)
+            {
+                return Results.BadRequest(exception.Message);
+            }
+        });
+
+        app.MapGet("/api/audit-logs", async (int? take, AuditService auditService, CancellationToken cancellationToken) =>
+        {
+            var items = await auditService.GetRecentAsync(Math.Clamp(take ?? 250, 1, 1000), cancellationToken);
+            return Results.Ok(items);
+        });
+
+        app.MapPost("/api/audit-logs", async (AuditLogEntryDto entry, AuditService auditService, CancellationToken cancellationToken) =>
+        {
+            await auditService.WriteAsync(entry, cancellationToken);
+            return Results.Ok();
         });
 
         app.MapPost("/api/devices/{deviceId}/authorization", async (

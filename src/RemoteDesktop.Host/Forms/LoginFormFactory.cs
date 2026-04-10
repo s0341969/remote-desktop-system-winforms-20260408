@@ -7,11 +7,11 @@ namespace RemoteDesktop.Host.Forms;
 
 public sealed class LoginFormFactory
 {
-    private readonly AuthenticationService _authenticationService;
-    private readonly AuditService _auditService;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IAuditService _auditService;
     private readonly IOptions<ControlServerOptions> _options;
 
-    public LoginFormFactory(AuthenticationService authenticationService, AuditService auditService, IOptions<ControlServerOptions> options)
+    public LoginFormFactory(IAuthenticationService authenticationService, IAuditService auditService, IOptions<ControlServerOptions> options)
     {
         _authenticationService = authenticationService;
         _auditService = auditService;

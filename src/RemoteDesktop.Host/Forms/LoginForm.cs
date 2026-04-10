@@ -7,8 +7,8 @@ namespace RemoteDesktop.Host.Forms;
 
 public partial class LoginForm : Form
 {
-    private AuthenticationService? _authenticationService;
-    private AuditService? _auditService;
+    private IAuthenticationService? _authenticationService;
+    private IAuditService? _auditService;
     private ControlServerOptions? _options;
 
     public LoginForm()
@@ -19,7 +19,7 @@ public partial class LoginForm : Form
 
     public AuthenticatedUserSession? AuthenticatedUser { get; private set; }
 
-    public void Bind(AuthenticationService authenticationService, AuditService auditService, ControlServerOptions options)
+    public void Bind(IAuthenticationService authenticationService, IAuditService auditService, ControlServerOptions options)
     {
         _authenticationService = authenticationService;
         _auditService = auditService;

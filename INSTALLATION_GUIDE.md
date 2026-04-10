@@ -181,8 +181,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 這是多主控台重構的第一階段
 - 目前已可獨立接收 Agent WebSocket 連線
 - 現有 `RemoteDesktop.Host` 已可在 Host 設定中填入 `中央 Server URL / Central server URL`，切成中央 Server 儀表板模式
-- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流與 Viewer 指令轉送
-- 中央模式尚未接通：登入集中化、使用者/稽核集中化、儀表板即時推播
+- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄
+- 中央模式尚未接通：真正的 session/token 驗證、儀表板即時推播、Host 設定集中化
 
 ### 8.2 使用啟動腳本
 
@@ -516,6 +516,7 @@ WinForms UI automation：
 - Viewer upload/download 流程：已驗證
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
+
 
 
 

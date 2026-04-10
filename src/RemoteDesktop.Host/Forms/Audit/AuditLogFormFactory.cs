@@ -4,9 +4,9 @@ namespace RemoteDesktop.Host.Forms.Audit;
 
 public sealed class AuditLogFormFactory
 {
-    private readonly AuditService _auditService;
+    private readonly IAuditService _auditService;
 
-    public AuditLogFormFactory(AuditService auditService)
+    public AuditLogFormFactory(IAuditService auditService)
     {
         _auditService = auditService;
     }

@@ -86,7 +86,31 @@ public sealed class JsonAuditLogStore : IAuditLogStore
     }
 }
 
-public sealed class AuditService
+public interface IAuditService
+{
+    Task<IReadOnlyList<AuditLogEntry>> GetRecentAsync(int take, CancellationToken cancellationToken);
+
+    Task WriteAsync(
+        string action,
+        string actorUserName,
+        string actorDisplayName,
+        string targetType,
+        string? targetId,
+        bool succeeded,
+        string details,
+        CancellationToken cancellationToken);
+
+    Task WriteAsync(
+        string action,
+        AuthenticatedUserSession actor,
+        string targetType,
+        string? targetId,
+        bool succeeded,
+        string details,
+        CancellationToken cancellationToken);
+}
+
+public sealed class AuditService : IAuditService
 {
     private readonly IAuditLogStore _auditLogStore;
 

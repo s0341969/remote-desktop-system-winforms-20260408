@@ -8,7 +8,7 @@ public sealed class AuditLogForm : Form
     private readonly Button _btnRefresh;
     private readonly Button _btnClose;
     private readonly Label _lblStatus;
-    private AuditService? _auditService;
+    private IAuditService? _auditService;
 
     public AuditLogForm()
     {
@@ -105,7 +105,7 @@ public sealed class AuditLogForm : Form
         footer.Controls.Add(_btnClose, 1, 0);
     }
 
-    public void Bind(AuditService auditService)
+    public void Bind(IAuditService auditService)
     {
         _auditService = auditService;
     }

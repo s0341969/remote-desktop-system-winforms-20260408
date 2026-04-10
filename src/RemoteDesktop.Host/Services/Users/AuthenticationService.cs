@@ -3,7 +3,18 @@ using RemoteDesktop.Host.Models;
 
 namespace RemoteDesktop.Host.Services.Users;
 
-public sealed class AuthenticationService
+public interface IAuthenticationService
+{
+    Task<AuthenticatedUserSession?> AuthenticateAsync(string userName, string password, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<UserAccount>> GetAccountsAsync(CancellationToken cancellationToken);
+
+    Task SaveAccountAsync(UserAccountEditorModel model, CancellationToken cancellationToken);
+
+    Task DeleteAccountAsync(string userName, string currentUserName, CancellationToken cancellationToken);
+}
+
+public sealed class AuthenticationService : IAuthenticationService
 {
     private readonly IUserAccountStore _userAccountStore;
 

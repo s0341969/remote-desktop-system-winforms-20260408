@@ -27,6 +27,20 @@ public static class RemoteDesktopHostCompositionExtensions
         services.AddSingleton<AuditService>();
         services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
         services.AddSingleton<AuthenticationService>();
+        services.AddSingleton<IAuthenticationService>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.IsNullOrWhiteSpace(options.CentralServerUrl)
+                ? serviceProvider.GetRequiredService<AuthenticationService>()
+                : ActivatorUtilities.CreateInstance<RemoteAuthenticationService>(serviceProvider);
+        });
+        services.AddSingleton<IAuditService>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.IsNullOrWhiteSpace(options.CentralServerUrl)
+                ? serviceProvider.GetRequiredService<AuditService>()
+                : ActivatorUtilities.CreateInstance<RemoteAuditService>(serviceProvider);
+        });
         services.AddSingleton<MainDashboardDataSourceFactory>();
         services.AddSingleton<IHostSettingsStore, HostSettingsStore>();
         services.AddSingleton<LoginFormFactory>();

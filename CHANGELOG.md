@@ -14,6 +14,8 @@
 - 第三階段新增中央 `Viewer` websocket 通道 `/ws/viewer`，讓 `RemoteDesktop.Host` 在中央模式下也能透過 Server 中繼開啟 Viewer、接收畫面串流並轉送控制命令。
 - `RemoteDesktop.Host` 新增 `IRemoteViewerSessionBroker` 抽象，將本機 broker 與中央 Server viewer 通道拆開，避免 UI 與傳輸路徑耦合。
 - 已實測中央 Server viewer bridge：Agent 經 `/ws/agent` 連入後，Viewer 可透過 `/ws/viewer` 收到畫面與轉送控制命令。
+- 第四階段新增中央 `POST /api/auth/login`、`GET/POST/DELETE /api/users`、`GET/POST /api/audit-logs`。
+- `RemoteDesktop.Host` 的登入窗、使用者管理與稽核視窗已改成面向介面，在中央模式下會自動切到 Server API，而不是使用本機 `users.json` / `audit-log.ndjson`。
 - 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。
 
 ## 2026-04-09
@@ -65,6 +67,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 

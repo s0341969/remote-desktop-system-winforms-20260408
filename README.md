@@ -142,7 +142,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 現有 `RemoteDesktop.Host` 尚未完全改成純 Console Client
 - 現在 `RemoteDesktop.Host` 已可透過 `ControlServer:CentralServerUrl` 接這個 Server，主畫面裝置清單/在線紀錄/授權管理會改走中央 API
 - Viewer attach/detach、遠端畫面串流與 Viewer 指令也會改走中央 Server 的 `/ws/viewer` 通道
-- Host 登入、使用者、稽核集中化仍在下一階段
+- Host 登入、使用者管理與稽核畫面在中央模式下也已改走 `RemoteDesktop.Server` API
 
 ### Clean
 
@@ -187,6 +187,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
 
 
 

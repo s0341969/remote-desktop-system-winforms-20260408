@@ -18,8 +18,8 @@ public sealed class UserManagementForm : Form
     private readonly Button _btnClose;
     private readonly Label _lblStatus;
 
-    private AuthenticationService? _authenticationService;
-    private AuditService? _auditService;
+    private IAuthenticationService? _authenticationService;
+    private IAuditService? _auditService;
     private AuthenticatedUserSession? _currentUser;
     private List<UserAccount> _accounts = new();
     private string? _selectedUserName;
@@ -175,7 +175,7 @@ public sealed class UserManagementForm : Form
         BeginCreateAccount();
     }
 
-    public void Bind(AuthenticationService authenticationService, AuditService auditService, AuthenticatedUserSession currentUser)
+    public void Bind(IAuthenticationService authenticationService, IAuditService auditService, AuthenticatedUserSession currentUser)
     {
         _authenticationService = authenticationService;
         _auditService = auditService;
