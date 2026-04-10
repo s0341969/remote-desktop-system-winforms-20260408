@@ -171,9 +171,10 @@ static void TestHostMainForm()
     var auditLogFactory = new AuditLogFormFactory(auditService);
     var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
     var viewerFactory = new RemoteViewerFormFactory(broker, new RemoteDesktop.Host.Services.FileTransferTraceService());
+    var dashboardDataSourceFactory = new MainDashboardDataSourceFactory(repo, broker, options);
 
     using var form = new MainForm();
-    form.Bind(repo, options.Value, broker, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
+    form.Bind(dashboardDataSourceFactory.Create(), options.Value, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
     form.Show();
     WaitUntil(() => GetControl<DataGridView>(form, "gridDevices").Rows.Count >= 2, 3000);
 
@@ -1146,6 +1147,7 @@ internal sealed class TestRemoteFileBrowserForm : RemoteFileBrowserForm
         return Task.FromResult<string?>(_moveDestinationDirectoryPath);
     }
 }
+
 
 
 

@@ -39,6 +39,7 @@ public sealed class HostSettingsStore : IHostSettingsStore
             EnableDatabase = string.Equals(_options.Value.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase),
             RemoteDesktopDbConnectionString = _configuration.GetConnectionString("RemoteDesktopDb") ?? string.Empty,
             ServerUrl = _options.Value.ServerUrl,
+            CentralServerUrl = _options.Value.CentralServerUrl,
             ConsoleName = _options.Value.ConsoleName,
             AdminUserName = _options.Value.AdminUserName,
             AdminPassword = _options.Value.AdminPassword,
@@ -67,6 +68,7 @@ public sealed class HostSettingsStore : IHostSettingsStore
                 ControlServerOptions.PersistenceModeSqlServer,
                 StringComparison.OrdinalIgnoreCase);
             document.ServerUrl = controlServer["ServerUrl"]?.GetValue<string>() ?? document.ServerUrl;
+            document.CentralServerUrl = controlServer["CentralServerUrl"]?.GetValue<string>() ?? document.CentralServerUrl;
             document.ConsoleName = controlServer["ConsoleName"]?.GetValue<string>() ?? document.ConsoleName;
             document.AdminUserName = controlServer["AdminUserName"]?.GetValue<string>() ?? document.AdminUserName;
             document.AdminPassword = controlServer["AdminPassword"]?.GetValue<string>() ?? document.AdminPassword;
@@ -91,6 +93,9 @@ public sealed class HostSettingsStore : IHostSettingsStore
             ? ControlServerOptions.PersistenceModeSqlServer
             : ControlServerOptions.PersistenceModeMemory;
         controlServer["ServerUrl"] = document.ServerUrl.Trim();
+        controlServer["CentralServerUrl"] = string.IsNullOrWhiteSpace(document.CentralServerUrl)
+            ? null
+            : document.CentralServerUrl.Trim();
         controlServer["ConsoleName"] = document.ConsoleName.Trim();
         controlServer["AdminUserName"] = document.AdminUserName.Trim();
         controlServer["AdminPassword"] = document.AdminPassword;

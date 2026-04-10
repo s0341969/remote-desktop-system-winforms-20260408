@@ -32,6 +32,7 @@ public partial class HostSettingsForm : Form
         chkEnableDatabase.Checked = document.EnableDatabase;
         txtConnectionString.Text = document.RemoteDesktopDbConnectionString;
         txtServerUrl.Text = document.ServerUrl;
+        txtCentralServerUrl.Text = document.CentralServerUrl ?? string.Empty;
         txtConsoleName.Text = document.ConsoleName;
         txtAdminUserName.Text = document.AdminUserName;
         txtAdminPassword.Text = document.AdminPassword;
@@ -61,6 +62,7 @@ public partial class HostSettingsForm : Form
                 EnableDatabase = chkEnableDatabase.Checked,
                 RemoteDesktopDbConnectionString = txtConnectionString.Text.Trim(),
                 ServerUrl = txtServerUrl.Text.Trim(),
+                CentralServerUrl = string.IsNullOrWhiteSpace(txtCentralServerUrl.Text) ? null : txtCentralServerUrl.Text.Trim(),
                 ConsoleName = txtConsoleName.Text.Trim(),
                 AdminUserName = txtAdminUserName.Text.Trim(),
                 AdminPassword = txtAdminPassword.Text,

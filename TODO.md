@@ -1,9 +1,9 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
-- [ ] 讓現有 `RemoteDesktop.Host` 改接 `RemoteDesktop.Server`，逐步移除 WinForms Host 內嵌 Kestrel 的雙重角色
-- [ ] 為 `RemoteDesktop.Server` 補 Console Client API / WebSocket 推播端點，讓多台主控台可共用同一組中央狀態
-- [ ] 補 `Viewer Session Lock`、接管策略與多人觀看/單人控制規則，作為多主控台的核心並發保護
+- [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上 Viewer attach/detach、遠端畫面串流、剪貼簿、檔案傳輸與遠端檔案總管命令的 Server 中繼
+- [ ] 為 `RemoteDesktop.Server` 補 Console Client WebSocket 推播端點，讓多台主控台不用輪詢即可共用同一組中央狀態
+- [ ] 補中央化登入、使用者、稽核與 `Viewer Session Lock`，讓多台 Console Client 不再各自維護本機帳號與控制鎖
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
 - [ ] 繼續強化遠端檢視表單，補上快捷鍵提示與遠端輸入失敗原因的 Host 端可視化回報
 - [ ] 增加 Host 與 Agent 的操作日誌匯出功能
@@ -17,6 +17,7 @@
 - [ ] 為遠端檔案總管補上 publish EXE 層級的端到端自動化測試，覆蓋實際 Host / Agent 啟動、登入、Viewer 開啟、下載與移動流程
 - [ ] 盤點 Agent `功能` 下拉還要不要加入開啟 logs、複製版本資訊與重新連線等常用操作
 - [ ] 盤點 Host Viewer `功能` 下拉還要不要加入快捷鍵說明與常用遠端路徑收藏
+
 
 
 

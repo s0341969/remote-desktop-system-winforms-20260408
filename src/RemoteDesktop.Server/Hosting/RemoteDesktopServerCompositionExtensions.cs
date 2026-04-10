@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Server.Options;
 using RemoteDesktop.Server.Services;
+using RemoteDesktop.Shared.Models;
 
 namespace RemoteDesktop.Server.Hosting;
 
@@ -41,6 +42,49 @@ public static class RemoteDesktopServerCompositionExtensions
                 persistenceMode = options.Value.PersistenceMode,
                 onlineDevices = devices.Count(static item => item.IsOnline),
                 totalDevices = devices.Count
+            });
+        });
+
+        app.MapGet("/api/devices", async (IDeviceRepository repository, int? take, CancellationToken cancellationToken) =>
+        {
+            var devices = await repository.GetDevicesAsync(Math.Clamp(take ?? 100, 1, 500), cancellationToken);
+            return Results.Ok(devices);
+        });
+
+        app.MapGet("/api/presence-logs", async (IDeviceRepository repository, int? take, CancellationToken cancellationToken) =>
+        {
+            var logs = await repository.GetPresenceLogsAsync(Math.Clamp(take ?? 100, 1, 500), cancellationToken);
+            return Results.Ok(logs);
+        });
+
+        app.MapPost("/api/devices/{deviceId}/authorization", async (
+            string deviceId,
+            bool isAuthorized,
+            string changedBy,
+            DeviceBroker broker,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(changedBy))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "deviceId and changedBy are required."
+                });
+            }
+
+            var success = await broker.SetDeviceAuthorizationAsync(deviceId, isAuthorized, changedBy, cancellationToken);
+            if (!success)
+            {
+                return Results.NotFound(new
+                {
+                    message = $"Device '{deviceId}' was not found."
+                });
+            }
+
+            return Results.Ok(new
+            {
+                deviceId,
+                isAuthorized
             });
         });
 

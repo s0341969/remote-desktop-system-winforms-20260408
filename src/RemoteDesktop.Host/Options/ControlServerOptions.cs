@@ -13,6 +13,9 @@ public sealed class ControlServerOptions
     [Url]
     public string ServerUrl { get; init; } = "http://localhost:5106";
 
+    [Url]
+    public string? CentralServerUrl { get; init; }
+
     [Required]
     [MinLength(3)]
     public string ConsoleName { get; init; } = "RemoteDesk Control";

@@ -10,6 +10,7 @@ partial class HostSettingsForm
     private CheckBox chkEnableDatabase;
     private TextBox txtConnectionString;
     private TextBox txtServerUrl;
+    private TextBox txtCentralServerUrl;
     private TextBox txtConsoleName;
     private TextBox txtAdminUserName;
     private TextBox txtAdminPassword;
@@ -39,6 +40,7 @@ partial class HostSettingsForm
         chkEnableDatabase = new CheckBox();
         txtConnectionString = new TextBox();
         txtServerUrl = new TextBox();
+        txtCentralServerUrl = new TextBox();
         txtConsoleName = new TextBox();
         txtAdminUserName = new TextBox();
         txtAdminPassword = new TextBox();
@@ -89,23 +91,25 @@ partial class HostSettingsForm
         layoutFields.Controls.Add(txtConnectionString, 1, 1);
         layoutFields.Controls.Add(new Label { AutoSize = true, Text = "Server URL\r\nServer URL", Anchor = AnchorStyles.Left }, 0, 2);
         layoutFields.Controls.Add(txtServerUrl, 1, 2);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "主控台名稱\r\nConsole name", Anchor = AnchorStyles.Left }, 0, 3);
-        layoutFields.Controls.Add(txtConsoleName, 1, 3);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "管理員帳號\r\nAdmin user name", Anchor = AnchorStyles.Left }, 0, 4);
-        layoutFields.Controls.Add(txtAdminUserName, 1, 4);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "管理員密碼\r\nAdmin password", Anchor = AnchorStyles.Left }, 0, 5);
-        layoutFields.Controls.Add(txtAdminPassword, 1, 5);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "共享存取金鑰\r\nShared access key", Anchor = AnchorStyles.Left }, 0, 6);
-        layoutFields.Controls.Add(txtSharedAccessKey, 1, 6);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "心跳逾時秒數\r\nHeartbeat timeout seconds", Anchor = AnchorStyles.Left }, 0, 7);
-        layoutFields.Controls.Add(numHeartbeatTimeout, 1, 7);
-        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "HTTPS 重新導向\r\nHTTPS redirect", Anchor = AnchorStyles.Left }, 0, 8);
-        layoutFields.Controls.Add(chkRequireHttpsRedirect, 1, 8);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "中央 Server URL\r\nCentral server URL", Anchor = AnchorStyles.Left }, 0, 3);
+        layoutFields.Controls.Add(txtCentralServerUrl, 1, 3);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "主控台名稱\r\nConsole name", Anchor = AnchorStyles.Left }, 0, 4);
+        layoutFields.Controls.Add(txtConsoleName, 1, 4);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "管理員帳號\r\nAdmin user name", Anchor = AnchorStyles.Left }, 0, 5);
+        layoutFields.Controls.Add(txtAdminUserName, 1, 5);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "管理員密碼\r\nAdmin password", Anchor = AnchorStyles.Left }, 0, 6);
+        layoutFields.Controls.Add(txtAdminPassword, 1, 6);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "共享存取金鑰\r\nShared access key", Anchor = AnchorStyles.Left }, 0, 7);
+        layoutFields.Controls.Add(txtSharedAccessKey, 1, 7);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "心跳逾時秒數\r\nHeartbeat timeout seconds", Anchor = AnchorStyles.Left }, 0, 8);
+        layoutFields.Controls.Add(numHeartbeatTimeout, 1, 8);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "HTTPS 重新導向\r\nHTTPS redirect", Anchor = AnchorStyles.Left }, 0, 9);
+        layoutFields.Controls.Add(chkRequireHttpsRedirect, 1, 9);
         layoutFields.Dock = DockStyle.Fill;
         layoutFields.Location = new Point(19, 79);
         layoutFields.Name = "layoutFields";
-        layoutFields.RowCount = 9;
-        for (var i = 0; i < 9; i++)
+        layoutFields.RowCount = 10;
+        for (var i = 0; i < 10; i++)
         {
             layoutFields.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
         }
@@ -121,6 +125,9 @@ partial class HostSettingsForm
         // txtServerUrl
         txtServerUrl.Dock = DockStyle.Fill;
         txtServerUrl.Name = "txtServerUrl";
+        // txtCentralServerUrl
+        txtCentralServerUrl.Dock = DockStyle.Fill;
+        txtCentralServerUrl.Name = "txtCentralServerUrl";
         // txtConsoleName
         txtConsoleName.Dock = DockStyle.Fill;
         txtConsoleName.Name = "txtConsoleName";

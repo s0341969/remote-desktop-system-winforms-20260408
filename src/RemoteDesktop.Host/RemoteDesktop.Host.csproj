@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\RemoteDesktop.Shared\RemoteDesktop.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="DatabaseScripts\001_create_remote_desktop_schema.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

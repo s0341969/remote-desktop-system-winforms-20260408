@@ -12,6 +12,9 @@ public sealed class HostSettingsDocument
     [Url]
     public string ServerUrl { get; set; } = "http://localhost:5106";
 
+    [Url]
+    public string? CentralServerUrl { get; set; }
+
     [Required]
     [MinLength(3)]
     public string ConsoleName { get; set; } = "RemoteDesk Control";

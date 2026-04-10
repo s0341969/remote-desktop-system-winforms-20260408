@@ -64,6 +64,7 @@
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
 - Agent 主畫面的操作入口已改成右上角 `功能` 下拉按鍵，集中提供設定、複製裝置 ID、複製 Server 位址與立即重新整理。
 - 第一階段新增 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared`，把中央 Host Server 所需的通訊契約、裝置儲存與 Agent WebSocket 通道獨立出來，為後續多主控台 Console Client 做準備。
+- 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer 則先維持下一階段再切換。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -139,7 +140,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 目前定位：
 - 這是第一階段中央 Host Server
 - 現有 `RemoteDesktop.Host` 尚未完全改成純 Console Client
-- 後續會再把 WinForms Host 接到這個 Server
+- 現在 `RemoteDesktop.Host` 已可透過 `ControlServer:CentralServerUrl` 接這個 Server，主畫面裝置清單/在線紀錄/授權管理會改走中央 API
+- Viewer attach/detach、遠端畫面串流與 Host 登入集中化仍在下一階段
 
 ### Clean
 
@@ -184,6 +186,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
 
 
 

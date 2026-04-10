@@ -10,9 +10,8 @@ namespace RemoteDesktop.Host.Forms;
 public partial class MainForm : Form
 {
     private readonly System.Windows.Forms.Timer _refreshTimer;
-    private IDeviceRepository? _repository;
+    private IMainDashboardDataSource? _dashboardDataSource;
     private ControlServerOptions? _options;
-    private DeviceBroker? _deviceBroker;
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
     private HostSettingsFormFactory? _hostSettingsFormFactory;
     private UserManagementFormFactory? _userManagementFormFactory;
@@ -33,18 +32,16 @@ public partial class MainForm : Form
     }
 
     public void Bind(
-        IDeviceRepository repository,
+        IMainDashboardDataSource dashboardDataSource,
         ControlServerOptions options,
-        DeviceBroker deviceBroker,
         RemoteViewerFormFactory remoteViewerFormFactory,
         HostSettingsFormFactory hostSettingsFormFactory,
         UserManagementFormFactory userManagementFormFactory,
         AuditLogFormFactory auditLogFormFactory,
         AuthenticatedUserSession signedInUser)
     {
-        _repository = repository;
+        _dashboardDataSource = dashboardDataSource;
         _options = options;
-        _deviceBroker = deviceBroker;
         _remoteViewerFormFactory = remoteViewerFormFactory;
         _hostSettingsFormFactory = hostSettingsFormFactory;
         _userManagementFormFactory = userManagementFormFactory;
@@ -62,8 +59,8 @@ public partial class MainForm : Form
         }
 
         lblConsoleNameValue.Text = _options.ConsoleName;
-        lblServerUrlValue.Text = _options.ServerUrl;
-        lblHealthUrlValue.Text = $"{_options.ServerUrl.TrimEnd('/')}/healthz";
+        lblServerUrlValue.Text = _dashboardDataSource?.DashboardServerUrl ?? _options.ServerUrl;
+        lblHealthUrlValue.Text = _dashboardDataSource?.HealthUrl ?? $"{_options.ServerUrl.TrimEnd('/')}/healthz";
         lblSignedInUserValue.Text = _signedInUser is null
             ? "-"
             : $"{_signedInUser.DisplayName} ({_signedInUser.RoleDisplayName})";
@@ -81,6 +78,7 @@ public partial class MainForm : Form
     {
         _refreshTimer.Stop();
         _refreshTimer.Dispose();
+        (_dashboardDataSource as IDisposable)?.Dispose();
         base.OnFormClosed(e);
     }
 
@@ -159,7 +157,7 @@ public partial class MainForm : Form
 
     private async Task RefreshDashboardAsync(bool showErrorDialog = false)
     {
-        if (_repository is null || _refreshing)
+        if (_dashboardDataSource is null || _refreshing)
         {
             return;
         }
@@ -177,8 +175,8 @@ public partial class MainForm : Form
             lblStatusValue.Text = HostUiText.Bi("重新整理中...", "Refreshing...");
 
             var selectedDeviceId = GetSelectedDevice()?.Source.DeviceId;
-            var devicesTask = _repository.GetDevicesAsync(100, CancellationToken.None);
-            var logsTask = _repository.GetPresenceLogsAsync(100, CancellationToken.None);
+            var devicesTask = _dashboardDataSource.GetDevicesAsync(100, CancellationToken.None);
+            var logsTask = _dashboardDataSource.GetPresenceLogsAsync(100, CancellationToken.None);
             await Task.WhenAll(devicesTask, logsTask);
 
             var devices = await devicesTask;
@@ -252,6 +250,16 @@ public partial class MainForm : Form
             return;
         }
 
+        if (_dashboardDataSource is not { SupportsViewerSessions: true })
+        {
+            MessageBox.Show(
+                HostUiText.Bi("目前主控台已切到中央 Server 模式。第二階段目前只接通裝置清單與授權管理，Viewer 仍在下一階段切換。", "The console is currently connected to the central Server mode. This phase only switches device list and authorization management. Viewer routing will move in the next phase."),
+                HostUiText.Window("中央 Server 模式", "Central Server Mode"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         var selected = GetSelectedDevice();
         if (selected is null)
         {
@@ -299,7 +307,7 @@ public partial class MainForm : Form
 
     private async Task ChangeSelectedDeviceAuthorizationAsync(bool isAuthorized)
     {
-        if (_deviceBroker is null || _signedInUser is not { CanManageDeviceAuthorization: true })
+        if (_dashboardDataSource is null || _signedInUser is not { CanManageDeviceAuthorization: true })
         {
             return;
         }
@@ -318,7 +326,7 @@ public partial class MainForm : Form
 
         try
         {
-            var success = await _deviceBroker.SetDeviceAuthorizationAsync(selected.Source.DeviceId, isAuthorized, _signedInUser.UserName, CancellationToken.None);
+            var success = await _dashboardDataSource.SetDeviceAuthorizationAsync(selected.Source.DeviceId, isAuthorized, _signedInUser.UserName, CancellationToken.None);
             if (!success)
             {
                 MessageBox.Show(
@@ -344,7 +352,7 @@ public partial class MainForm : Form
     private void UpdateSelectedDeviceActions()
     {
         var selected = GetSelectedDevice();
-        btnOpenViewer.Enabled = selected is { Source.IsOnline: true, Source.IsAuthorized: true };
+        btnOpenViewer.Enabled = _dashboardDataSource is { SupportsViewerSessions: true } && selected is { Source.IsOnline: true, Source.IsAuthorized: true };
         btnApproveDevice.Enabled = _signedInUser?.CanManageDeviceAuthorization == true && selected is not null && !selected.Source.IsAuthorized;
         btnRevokeDevice.Enabled = _signedInUser?.CanManageDeviceAuthorization == true && selected is not null && selected.Source.IsAuthorized;
     }
@@ -361,7 +369,7 @@ public partial class MainForm : Form
         HostUiText.ApplyButton(btnOpenViewer, "開啟 Viewer", "Open Viewer");
         HostUiText.ApplyButton(btnRefresh, "重新整理", "Refresh");
         lblConsoleNameCaption.Text = HostUiText.Bi("主控台", "Console");
-        lblServerUrlCaption.Text = HostUiText.Bi("Agent 位址", "Agent URL");
+        lblServerUrlCaption.Text = HostUiText.Bi("資料來源", "Data source");
         lblHealthUrlCaption.Text = HostUiText.Bi("健康檢查位址", "Health URL");
         lblSignedInUserCaption.Text = HostUiText.Bi("目前登入使用者", "Signed-in user");
         lblOnlineCountCaption.Text = HostUiText.Bi("在線裝置數", "Online devices");
