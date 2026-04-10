@@ -23,6 +23,7 @@
 - Remote Viewer 全螢幕與縮放
 - 剪貼簿同步
 - 檔案上傳與下載
+- 遠端檔案總管
 - Host 設定表單
 - 背景健康檢查 `/healthz`
 
@@ -306,20 +307,45 @@ Host 日誌位置：
 Agent 日誌位置：
 - `deploy/publish/Agent/logs/agent-file-transfer.ndjson`
 
-### 11.5 檔案下載
+### 11.5 遠端檔案總管與檔案下載
 
 操作步驟：
 
 1. 在 Viewer 右上角開啟 `功能 / Actions`
 2. 按 `下載檔案 / Download File`
-3. 輸入 Agent 端完整檔案路徑
-4. 在 Host 選擇本機儲存位置
-5. 等待傳輸完成
-6. 完成後可用 `開啟資料夾 / Open Folder` 打開下載位置
+3. 系統會開啟 `遠端檔案總管 / Remote File Browser`
+4. 可在上方 `遠端路徑 / Remote Path` 直接輸入資料夾路徑後按 `載入`
+5. 可使用：
+   - `重新整理 / Refresh`
+   - `上一層 / Up`
+   - `移動所選項目 / Move Selected`
+   - `下載所選檔案 / Download Selected`
+6. 雙擊資料夾可進入子目錄
+7. 選取檔案後按 `下載所選檔案`
+8. 在 Host 選擇本機儲存位置
+9. 等待傳輸完成
+10. 完成後可用 `開啟資料夾 / Open Folder` 打開下載位置
 
-目前限制：
-- 這一版先採手動輸入 Agent 路徑
-- 尚未提供遠端檔案總管瀏覽 UI
+操作細節：
+- `F5` 可重新整理遠端資料夾
+- 右鍵選單同樣提供 `重新整理 / 移動所選項目 / 下載所選檔案`
+- 遠端資料夾清單目前最多顯示前 2,000 個項目
+- 若遠端項目很多，狀態列會顯示已截斷
+
+### 11.6 遠端項目移動
+
+操作步驟：
+
+1. 在 `遠端檔案總管 / Remote File Browser` 選取一個檔案或資料夾
+2. 按 `移動所選項目 / Move Selected`
+3. 選擇目的資料夾
+4. 系統會在 Agent 端執行移動
+5. 完成後目前目錄會重新整理
+
+目前規則：
+- 不能把資料夾移動到自己的子資料夾內
+- 若目的資料夾內已存在同名項目，系統會自動產生唯一名稱
+- 若項目已經在目的資料夾內，系統會拒絕此次移動
 
 ## 12. 連線驗證
 
@@ -332,6 +358,7 @@ Agent 日誌位置：
 - Viewer 應可切換 `縮放 / Zoom`
 - `F11` 與 `Esc` 應可切換全螢幕
 - `上傳檔案 / Upload File` 與 `下載檔案 / Download File` 應能完成傳輸
+- `遠端檔案總管 / Remote File Browser` 應可載入遠端資料夾、切換目錄、移動項目與選檔下載
 - Agent 主畫面右上角應可看到 `功能 / Actions` 下拉
 
 ### 12.2 健康檢查
@@ -412,11 +439,26 @@ WinForms UI automation：
 - 錯誤訊息
 - 實際落地路徑
 
+### 13.6 遠端檔案總管載入失敗或看不到資料
+
+請優先檢查：
+
+- Agent 是否仍在線
+- Host 與 Agent 的 `SharedAccessKey` 是否一致
+- Agent 使用者是否對目標資料夾有讀取權限
+- 目標路徑是否真的存在
+
+目前系統行為：
+- 指定的遠端資料夾不存在時，會在遠端檔案總管狀態列顯示錯誤
+- 目錄項目過多時，畫面只會顯示前 2,000 個項目
+- 失敗時可搭配檔案傳輸日誌一起查
+
 ## 14. 建議交付方式
 
 如果要交給操作人員，建議直接提供：
 - `deploy/publish/Host`
 - `deploy/publish/Agent`
+- `deploy/release`
 - 本手冊 `INSTALLATION_GUIDE.md`
 - 桌面捷徑
 
@@ -430,3 +472,4 @@ WinForms UI automation：
 - Host Remote Viewer `功能 / Actions` 下拉：已驗證
 - Viewer 縮放與全螢幕：已驗證
 - Viewer upload/download 流程：已驗證
+- 遠端檔案總管載入、移動、下載：已由 UI automation 驗證

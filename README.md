@@ -53,7 +53,7 @@
 - 手動縮放時，Viewer 現在不會在每一張串流畫面都重新排版；若遠端解析度沒有改變，會保留目前的手動縮放與捲動位置，不再一直跳回左上角。
 - Viewer 新增全螢幕模式，可用按鈕或雙擊遠端畫面切換，並支援 `F11` 進入/退出與 `Esc` 離開全螢幕。
 - Viewer 的傳輸區塊預設折疊，只有在實際 upload/download 開始後才展開並顯示狀態、路徑與進度列。
-- Viewer 新增下載功能；目前會先要求輸入 Agent 端檔案路徑，再選擇本機儲存位置，完成後可直接開啟本機下載資料夾。
+- Viewer 新增遠端檔案總管，可直接瀏覽 Agent 端資料夾、移動遠端項目，並從總管內選取檔案下載到 Host。
 - Host Viewer 右上角的 Agent 操作已改成 `功能` 下拉按鍵，集中收納開啟資料夾、剪貼簿同步、upload/download、全螢幕、聚焦 Viewer 與中斷連線。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
 - Agent 主畫面的操作入口已改成右上角 `功能` 下拉按鍵，集中提供設定、複製裝置 ID、複製 Server 位址與立即重新整理。
@@ -65,6 +65,7 @@
 - Host 日誌：`deploy/publish/Host/logs/host-file-transfer.ndjson`
 - Agent 日誌：`deploy/publish/Agent/logs/agent-file-transfer.ndjson`
 - `tests/RemoteDesktop.UiAutomation` 現在已涵蓋 Viewer 檔案上傳、目的地顯示與開啟資料夾流程。
+- `tests/RemoteDesktop.UiAutomation` 現在也涵蓋遠端檔案總管的載入、切換資料夾、移動與下載流程。
 
 ## 使用 Visual Studio 2022
 
@@ -86,6 +87,7 @@
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
 - Publish 目錄會在每次重建時完整覆蓋；若有自訂設定，應修改 `src/.../appsettings.json` 或在發佈後另外備份部署設定。
+- 可交付壓縮包與固定部署資料夾會輸出到 `deploy/release`。
 - 若要改回 MSSQL：
   1. 開啟 Host 的設定表單
   2. 勾選「使用 MSSQL 儲存裝置與連線紀錄」

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-10
+
+- 補齊 `INSTALLATION_GUIDE.md`，將 Remote Viewer 的遠端檔案總管、遠端項目移動、下載流程與交付包路徑寫成正式操作手冊。
+- 更新 `README.md`，同步反映遠端檔案總管已上線、UI automation 已覆蓋檔案總管流程，以及 `deploy/release` 交付包輸出位置。
+- 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。
+
 ## 2026-04-09
 
 - 將 Host Remote Viewer 右上角的一排 Agent 操作按鈕改成 `功能` 下拉按鍵，集中收納開啟資料夾、剪貼簿同步、upload/download、全螢幕、聚焦與中斷連線。
