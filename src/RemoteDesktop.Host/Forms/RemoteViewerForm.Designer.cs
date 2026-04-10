@@ -14,6 +14,7 @@ partial class RemoteViewerForm
     private ToolStripMenuItem menuGetClipboard;
     private ToolStripMenuItem menuUploadFile;
     private ToolStripMenuItem menuDownloadFile;
+    private ToolStripMenuItem menuTakeControl;
     private ToolStripMenuItem menuFullscreen;
     private ToolStripMenuItem menuFocusRemote;
     private ToolStripMenuItem menuDisconnect;
@@ -65,6 +66,7 @@ partial class RemoteViewerForm
         menuGetClipboard = new ToolStripMenuItem();
         menuUploadFile = new ToolStripMenuItem();
         menuDownloadFile = new ToolStripMenuItem();
+        menuTakeControl = new ToolStripMenuItem();
         menuFullscreen = new ToolStripMenuItem();
         menuFocusRemote = new ToolStripMenuItem();
         menuDisconnect = new ToolStripMenuItem();
@@ -161,9 +163,9 @@ partial class RemoteViewerForm
         // 
         // menuActions
         // 
-        menuActions.Items.AddRange(new ToolStripItem[] { menuOpenTransferFolder, menuSendClipboard, menuGetClipboard, menuUploadFile, menuDownloadFile, menuFullscreen, menuFocusRemote, menuDisconnect });
+        menuActions.Items.AddRange(new ToolStripItem[] { menuOpenTransferFolder, menuSendClipboard, menuGetClipboard, menuUploadFile, menuDownloadFile, menuTakeControl, menuFullscreen, menuFocusRemote, menuDisconnect });
         menuActions.Name = "menuActions";
-        menuActions.Size = new Size(181, 202);
+        menuActions.Size = new Size(181, 224);
         // 
         // menuOpenTransferFolder
         // 
@@ -199,6 +201,13 @@ partial class RemoteViewerForm
         menuDownloadFile.Size = new Size(180, 22);
         menuDownloadFile.Text = "Download File";
         menuDownloadFile.Click += menuDownloadFile_Click;
+        // 
+        // menuTakeControl
+        // 
+        menuTakeControl.Name = "menuTakeControl";
+        menuTakeControl.Size = new Size(180, 22);
+        menuTakeControl.Text = "Take Control";
+        menuTakeControl.Click += menuTakeControl_Click;
         // 
         // menuFullscreen
         // 

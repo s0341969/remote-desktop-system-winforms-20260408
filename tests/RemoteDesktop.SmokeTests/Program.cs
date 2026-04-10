@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -14,8 +15,15 @@ using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
 using RemoteDesktop.Host.Services.Auditing;
+using RemoteDesktop.Server.Hosting;
+using ServerIDeviceRepository = RemoteDesktop.Server.Services.IDeviceRepository;
+using ServerInMemoryDeviceRepository = RemoteDesktop.Server.Services.InMemoryDeviceRepository;
+using ServerControlServerOptions = RemoteDesktop.Server.Options.ControlServerOptions;
+
+
 
 await RunHostRelaySmokeTestAsync();
+await RunCentralViewerLockSmokeTestAsync();
 await RunFileTransferSmokeTestAsync();
 await RunClipboardSmokeTestAsync();
 Console.WriteLine("SMOKE_TEST_PASSED");
@@ -38,7 +46,7 @@ static async Task RunHostRelaySmokeTestAsync()
         AgentHeartbeatTimeoutSeconds = 45
     }));
 
-    builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
+    builder.Services.AddSingleton<RemoteDesktop.Host.Services.IDeviceRepository, InMemoryDeviceRepository>();
     builder.Services.AddRemoteDesktopHostCore();
 
     await using var app = builder.Build();
@@ -140,10 +148,125 @@ static async Task RunHostRelaySmokeTestAsync()
     }
 }
 
+static async Task RunCentralViewerLockSmokeTestAsync()
+{
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "ChangeMe-Agent-Key";
+    var builder = WebApplication.CreateBuilder();
+    builder.WebHost.UseSetting("urls", serverUrl);
+
+    builder.Services.AddSingleton<IOptions<ServerControlServerOptions>>(Options.Create(new ServerControlServerOptions
+    {
+        ServerUrl = serverUrl,
+        ConsoleName = "Central Smoke Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 45,
+        PersistenceMode = "Memory"
+    }));
+
+    builder.Services.AddSingleton<ServerIDeviceRepository, ServerInMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopServerCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopServerEndpoints();
+    await app.StartAsync();
+
+    try
+    {
+        using var httpClient = new HttpClient { BaseAddress = new Uri(serverUrl, UriKind.Absolute) };
+        var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new { userName = "admin", password = "ChangeMe!2026" });
+        loginResponse.EnsureSuccessStatusCode();
+        var session = await loginResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.UserSessionDto>()
+            ?? throw new InvalidOperationException("Central login did not return a session.");
+
+        if (string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            throw new InvalidOperationException("Central login did not return an access token.");
+        }
+
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        using var agentSocket = new ClientWebSocket();
+        await agentSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri, CancellationToken.None);
+        await SendTextAsync(agentSocket, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.AgentHelloMessage
+        {
+            Type = "hello",
+            DeviceId = "central-lock-device-001",
+            DeviceName = "Central Lock Device",
+            HostName = Environment.MachineName,
+            AgentVersion = "smoke",
+            AccessKey = accessKey,
+            ScreenWidth = 1920,
+            ScreenHeight = 1080
+        }), CancellationToken.None);
+
+        var agentAck = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        if (!Encoding.UTF8.GetString(agentAck.Payload).Contains("\"hello-ack\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Central server did not acknowledge the agent hello message.");
+        }
+
+        var authResponse = await httpClient.PostAsync("/api/devices/central-lock-device-001/authorization?isAuthorized=true&changedBy=ignored", null);
+        authResponse.EnsureSuccessStatusCode();
+
+        using var viewerOne = new ClientWebSocket();
+        viewerOne.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
+        await viewerOne.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/viewer", Query = "deviceId=central-lock-device-001" }.Uri, CancellationToken.None);
+        var viewerOneReady = await ReadViewerEnvelopeAsync(viewerOne, CancellationToken.None);
+        if (!string.Equals(viewerOneReady.Type, "viewer-ready", StringComparison.Ordinal) || viewerOneReady.CanControl != true)
+        {
+            throw new InvalidOperationException("First viewer was expected to become the controlling session.");
+        }
+
+        using var viewerTwo = new ClientWebSocket();
+        viewerTwo.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
+        await viewerTwo.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/viewer", Query = "deviceId=central-lock-device-001" }.Uri, CancellationToken.None);
+        var viewerTwoReady = await ReadViewerEnvelopeAsync(viewerTwo, CancellationToken.None);
+        if (!string.Equals(viewerTwoReady.Type, "viewer-ready", StringComparison.Ordinal) || viewerTwoReady.CanControl != false)
+        {
+            throw new InvalidOperationException("Second viewer should have been downgraded to observe-only mode.");
+        }
+
+        await SendTextAsync(viewerTwo, JsonSerializer.Serialize(new { type = "viewer-control-request", forceTakeover = true }), CancellationToken.None);
+        var viewerTwoUpdated = await ReadViewerEnvelopeAsync(viewerTwo, CancellationToken.None);
+        var viewerOneUpdated = await ReadViewerEnvelopeAsync(viewerOne, CancellationToken.None);
+        if (!string.Equals(viewerTwoUpdated.Type, "viewer-mode-updated", StringComparison.Ordinal) || viewerTwoUpdated.CanControl != true)
+        {
+            throw new InvalidOperationException("Second viewer did not receive control after takeover.");
+        }
+
+        if (!string.Equals(viewerOneUpdated.Type, "viewer-mode-updated", StringComparison.Ordinal) || viewerOneUpdated.CanControl != false)
+        {
+            throw new InvalidOperationException("Original controller was not downgraded to observe-only after takeover.");
+        }
+
+        await SendTextAsync(viewerOne, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.ViewerCommandMessage { Type = "move", X = 0.1, Y = 0.1 }), CancellationToken.None);
+        await Task.Delay(750);
+
+        await SendTextAsync(viewerTwo, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.ViewerCommandMessage { Type = "move", X = 0.4, Y = 0.6 }), CancellationToken.None);
+        var relayedCommand = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        var relayedJson = Encoding.UTF8.GetString(relayedCommand.Payload);
+        var relayedViewerCommand = JsonSerializer.Deserialize<RemoteDesktop.Shared.Models.ViewerCommandMessage>(relayedJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        if (relayedViewerCommand is null
+            || !string.Equals(relayedViewerCommand.Type, "move", StringComparison.Ordinal)
+            || Math.Abs(relayedViewerCommand.X - 0.4) > 0.0001
+            || Math.Abs(relayedViewerCommand.Y - 0.6) > 0.0001)
+        {
+            throw new InvalidOperationException($"Viewer lock did not preserve control ownership after takeover. Payload: {relayedJson}");
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+    }
+}
+
 static async Task RunFileTransferSmokeTestAsync()
 {
     var tempRoot = Path.Combine(Path.GetTempPath(), "RemoteDesktopSmoke", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(tempRoot);
 
     try
     {
@@ -310,14 +433,14 @@ static async Task RunClipboardSmokeTestAsync()
     try
     {
         await service.SetTextAsync("smoke-clipboard-text", CancellationToken.None);
-        var actual = await service.GetTextAsync(CancellationToken.None);
+        var actual = await ReadClipboardEventuallyAsync(service, expectedText: "smoke-clipboard-text", expectEmpty: false, CancellationToken.None);
         if (!string.Equals(actual, "smoke-clipboard-text", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Clipboard sync service did not return the expected text.");
         }
 
         await service.SetTextAsync(string.Empty, CancellationToken.None);
-        var cleared = await service.GetTextAsync(CancellationToken.None);
+        var cleared = await ReadClipboardEventuallyAsync(service, expectedText: string.Empty, expectEmpty: true, CancellationToken.None);
         if (!string.IsNullOrEmpty(cleared))
         {
             throw new InvalidOperationException("Clipboard sync service did not clear clipboard text.");
@@ -329,10 +452,37 @@ static async Task RunClipboardSmokeTestAsync()
     }
 }
 
+static async Task<string> ReadClipboardEventuallyAsync(ClipboardSyncService service, string expectedText, bool expectEmpty, CancellationToken cancellationToken)
+{
+    for (var attempt = 0; attempt < 10; attempt++)
+    {
+        var current = await service.GetTextAsync(cancellationToken);
+        if ((expectEmpty && string.IsNullOrEmpty(current)) || string.Equals(current, expectedText, StringComparison.Ordinal))
+        {
+            return current;
+        }
+
+        await Task.Delay(100, cancellationToken);
+    }
+
+    return await service.GetTextAsync(cancellationToken);
+}
 static async Task SendTextAsync(ClientWebSocket socket, string payload, CancellationToken cancellationToken)
 {
     var bytes = Encoding.UTF8.GetBytes(payload);
     await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+}
+
+static async Task<RemoteDesktop.Shared.Models.ViewerTransportEnvelope> ReadViewerEnvelopeAsync(ClientWebSocket socket, CancellationToken cancellationToken)
+{
+    var payload = await ReadMessageAsync(socket, cancellationToken);
+    if (payload.MessageType != WebSocketMessageType.Text)
+    {
+        throw new InvalidOperationException("Viewer websocket returned an unexpected non-text payload.");
+    }
+
+    return JsonSerializer.Deserialize<RemoteDesktop.Shared.Models.ViewerTransportEnvelope>(Encoding.UTF8.GetString(payload.Payload), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Viewer websocket returned an invalid envelope.");
 }
 
 static async Task<WebSocketPayload> ReadMessageAsync(ClientWebSocket socket, CancellationToken cancellationToken)
@@ -602,6 +752,20 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

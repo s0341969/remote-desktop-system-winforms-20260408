@@ -61,6 +61,8 @@ public partial class RemoteViewerForm : Form
     private DeviceRecord? _device;
     private AuthenticatedUserSession? _viewer;
     private IRemoteViewerSessionBroker? _viewerSessionBroker;
+    private bool _sessionCanControl;
+    private string? _controllerDisplayName;
     private Size _frameSize = Size.Empty;
     private bool _attached;
     private long _lastMoveAt;
@@ -115,17 +117,19 @@ public partial class RemoteViewerForm : Form
         _viewer = viewer;
         _viewerSessionBroker = viewerSessionBroker;
         _fileTransferTraceService = fileTransferTraceService;
-        var baseWindowTitle = viewer.CanControlRemote
+        _sessionCanControl = viewer.CanControlRemote;
+        _controllerDisplayName = viewer.DisplayName;
+        var baseWindowTitle = _sessionCanControl
             ? $"{device.DeviceName} - {HostUiText.Window("遠端檢視", "Remote Viewer")}"
             : $"{device.DeviceName} - {HostUiText.Window("遠端檢視（僅觀看）", "Remote Viewer (Observe Only)")}";
         Text = AppBuildInfo.AppendToWindowTitle(baseWindowTitle);
         lblDeviceValue.Text = $"{device.DeviceName} ({device.DeviceId})";
         lblHostValue.Text = device.HostName;
         lblResolutionValue.Text = $"{device.ScreenWidth} x {device.ScreenHeight}";
-        btnSendClipboard.Enabled = viewer.CanControlRemote;
-        btnGetClipboard.Enabled = viewer.CanControlRemote;
-        btnUploadFile.Enabled = viewer.CanControlRemote;
-        btnDownloadFile.Enabled = viewer.CanControlRemote;
+        btnSendClipboard.Enabled = _sessionCanControl;
+        btnGetClipboard.Enabled = _sessionCanControl;
+        btnUploadFile.Enabled = _sessionCanControl;
+        btnDownloadFile.Enabled = _sessionCanControl;
         btnOpenTransferFolder.Enabled = false;
         SyncActionMenuState();
         LogTransferTrace("host-viewer-bound", "Remote viewer form bound to device.", new
@@ -153,28 +157,23 @@ public partial class RemoteViewerForm : Form
             PublishFrameAsync,
             PublishStatusAsync,
             PublishClipboardAsync,
+            PublishSessionStateAsync,
             CancellationToken.None);
 
-        if (!attached)
+        if (!attached.Attached)
         {
-            var message = _device.IsAuthorized
-                ? HostUiText.Bi("所選裝置目前離線，或已被其他 Viewer 使用中。", "The selected device is offline or already in use by another viewer.")
-                : HostUiText.Bi("所選裝置仍在等待核准，請先核准無人值守存取後再開啟 Viewer。", "The selected device is waiting for approval. Approve unattended access before opening a viewer session.");
+            var message = string.IsNullOrWhiteSpace(attached.Message)
+                ? (_device.IsAuthorized
+                    ? HostUiText.Bi("所選裝置目前離線，或已被其他 Viewer 使用中。", "The selected device is offline or already in use by another viewer.")
+                    : HostUiText.Bi("所選裝置仍在等待核准，請先核准無人值守存取後再開啟 Viewer。", "The selected device is waiting for approval. Approve unattended access before opening a viewer session."))
+                : attached.Message;
             MessageBox.Show(message, HostUiText.Window("遠端檢視", "Remote Viewer"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             Close();
             return;
         }
 
         _attached = true;
-        lblStatusValue.Text = _viewer.CanControlRemote
-            ? HostUiText.Bi("已連線", "Connected")
-            : HostUiText.Bi("已連線（僅觀看）", "Connected (observe only)");
-        lblTransferValue.Text = _viewer.CanControlRemote
-            ? HostUiText.Bi("可開始上傳檔案。", "Ready to upload files.")
-            : HostUiText.Bi("僅觀看模式無法傳送檔案。", "Observe-only mode cannot transfer files.");
-        lblClipboardValue.Text = _viewer.CanControlRemote
-            ? HostUiText.Bi("剪貼簿同步已就緒。", "Clipboard sync is ready.")
-            : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
+        ApplySessionState(new RemoteViewerSessionState(attached.CanControl, attached.ControllerDisplayName, attached.Message), showNotification: attached.CanControl != _viewer.CanControlRemote);
         SetTransferPanelVisible(false);
         ConfigureZoomOptions();
         SyncActionMenuState();
@@ -304,6 +303,49 @@ public partial class RemoteViewerForm : Form
         return Task.CompletedTask;
     }
 
+    private Task PublishSessionStateAsync(RemoteViewerSessionState state, CancellationToken cancellationToken)
+    {
+        return UpdateUiAsync(() => ApplySessionState(state, showNotification: true));
+    }
+
+    private void ApplySessionState(RemoteViewerSessionState state, bool showNotification)
+    {
+        var previousCanControl = _sessionCanControl;
+        _sessionCanControl = state.CanControl;
+        _controllerDisplayName = state.ControllerDisplayName;
+
+        var baseWindowTitle = _sessionCanControl
+            ? $"{_device?.DeviceName} - {HostUiText.Window("遠端檢視", "Remote Viewer")}"
+            : $"{_device?.DeviceName} - {HostUiText.Window("遠端檢視（僅觀看）", "Remote Viewer (Observe Only)")}";
+        Text = AppBuildInfo.AppendToWindowTitle(baseWindowTitle);
+
+        btnSendClipboard.Enabled = _sessionCanControl;
+        btnGetClipboard.Enabled = _sessionCanControl;
+        btnUploadFile.Enabled = _sessionCanControl;
+        btnDownloadFile.Enabled = _sessionCanControl;
+
+        lblStatusValue.Text = _sessionCanControl
+            ? HostUiText.Bi("已連線（可控制）", "Connected (control)")
+            : HostUiText.Bi("已連線（僅觀看）", "Connected (observe only)");
+        lblTransferValue.Text = _sessionCanControl
+            ? HostUiText.Bi("可開始上傳或下載檔案。", "Ready to upload or download files.")
+            : HostUiText.Bi("僅觀看模式無法傳送檔案。", "Observe-only mode cannot transfer files.");
+        lblClipboardValue.Text = _sessionCanControl
+            ? HostUiText.Bi("剪貼簿同步已就緒。", "Clipboard sync is ready.")
+            : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
+
+        SyncActionMenuState();
+
+        if (showNotification && !string.IsNullOrWhiteSpace(state.Message))
+        {
+            MessageBox.Show(state.Message, HostUiText.Window("遠端檢視", "Remote Viewer"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        else if (!previousCanControl && _sessionCanControl && !string.IsNullOrWhiteSpace(state.Message))
+        {
+            lblStatusValue.Text = HostUiText.Bi("已連線（可控制）", "Connected (control)");
+        }
+    }
+
     private void ApplyFrame(byte[] payload)
     {
         try
@@ -393,8 +435,8 @@ public partial class RemoteViewerForm : Form
             case "completed":
                 _uploadCompletionSignal?.TrySetResult(status);
                 UpdateTransferProgress(status.FileSize, status.FileSize);
-                btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-                btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+                btnUploadFile.Enabled = _sessionCanControl;
+                btnDownloadFile.Enabled = _sessionCanControl;
                 _lastUploadedFilePath = string.IsNullOrWhiteSpace(status.StoredFilePath) ? null : status.StoredFilePath;
                 btnOpenTransferFolder.Enabled = !string.IsNullOrWhiteSpace(_lastUploadedFilePath);
                 lblTransferValue.Text = status.Message;
@@ -409,8 +451,8 @@ public partial class RemoteViewerForm : Form
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
                 lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
-                btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-                btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+                btnUploadFile.Enabled = _sessionCanControl;
+                btnDownloadFile.Enabled = _sessionCanControl;
                 _lastUploadedFilePath = null;
                 btnOpenTransferFolder.Enabled = false;
                 _activeUploadId = null;
@@ -559,10 +601,10 @@ public partial class RemoteViewerForm : Form
             {
                 deviceId = _device?.DeviceId,
                 viewer = _viewer?.UserName,
-                canControlRemote = _viewer?.CanControlRemote == true
+                canControlRemote = _sessionCanControl
             });
 
-            if (_viewer?.CanControlRemote != true)
+            if (!_sessionCanControl)
             {
                 lblStatusValue.Text = HostUiText.Bi("僅觀看工作階段", "Observe-only session");
                 lblTransferValue.Text = HostUiText.Bi("此帳號沒有傳送檔案的權限。", "This account does not have permission to transfer files.");
@@ -643,7 +685,7 @@ public partial class RemoteViewerForm : Form
         }
         catch (Exception exception)
         {
-            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnUploadFile.Enabled = _sessionCanControl;
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
@@ -798,8 +840,8 @@ public partial class RemoteViewerForm : Form
         finally
         {
             _clipboardSyncSignal = null;
-            btnSendClipboard.Enabled = _viewer?.CanControlRemote == true;
-            btnGetClipboard.Enabled = _viewer?.CanControlRemote == true;
+            btnSendClipboard.Enabled = _sessionCanControl;
+            btnGetClipboard.Enabled = _sessionCanControl;
         }
     }
 
@@ -841,8 +883,8 @@ public partial class RemoteViewerForm : Form
         finally
         {
             _clipboardSyncSignal = null;
-            btnSendClipboard.Enabled = _viewer?.CanControlRemote == true;
-            btnGetClipboard.Enabled = _viewer?.CanControlRemote == true;
+            btnSendClipboard.Enabled = _sessionCanControl;
+            btnGetClipboard.Enabled = _sessionCanControl;
         }
     }
 
@@ -911,8 +953,8 @@ public partial class RemoteViewerForm : Form
             var shouldShowDialog = !string.IsNullOrWhiteSpace(_activeUploadId);
             await TryAbortUploadAsync(uploadId);
             _activeUploadId = null;
-            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-            btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnUploadFile.Enabled = _sessionCanControl;
+            btnDownloadFile.Enabled = _sessionCanControl;
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
@@ -1371,8 +1413,8 @@ public partial class RemoteViewerForm : Form
             File.Move(_downloadTempPath, _downloadTargetPath, overwrite: false);
             _lastDownloadFilePath = _downloadTargetPath;
             _activeDownloadId = null;
-            btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-            btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+            btnUploadFile.Enabled = _sessionCanControl;
+            btnDownloadFile.Enabled = _sessionCanControl;
             btnOpenTransferFolder.Enabled = true;
             UpdateTransferProgress(status.FileSize, status.FileSize);
             lblTransferValue.Text = status.Message;
@@ -1400,8 +1442,8 @@ public partial class RemoteViewerForm : Form
         _downloadTargetPath = null;
         _activeDownloadId = null;
         _lastDownloadFilePath = null;
-        btnUploadFile.Enabled = _viewer?.CanControlRemote == true;
-        btnDownloadFile.Enabled = _viewer?.CanControlRemote == true;
+        btnUploadFile.Enabled = _sessionCanControl;
+        btnDownloadFile.Enabled = _sessionCanControl;
         btnOpenTransferFolder.Enabled = false;
         progressFileTransfer.Value = 0;
         SetTransferPanelVisible(true);
@@ -1800,6 +1842,60 @@ public partial class RemoteViewerForm : Form
         HandleOpenTransferFolder();
     }
 
+    private async void menuTakeControl_Click(object sender, EventArgs e)
+    {
+        await HandleTakeControlAsync();
+    }
+
+    private async Task HandleTakeControlAsync()
+    {
+        if (_viewerSessionBroker is null || _device is null || _viewer is null)
+        {
+            return;
+        }
+
+        if (_sessionCanControl)
+        {
+            lblStatusValue.Text = HostUiText.Bi("目前已擁有控制權。", "This viewer already has control.");
+            return;
+        }
+
+        if (!_viewer.CanControlRemote)
+        {
+            MessageBox.Show(
+                HostUiText.Bi("此帳號沒有接管遠端控制權的權限。", "This account is not allowed to take remote control."),
+                HostUiText.Window("遠端檢視", "Remote Viewer"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var prompt = string.IsNullOrWhiteSpace(_controllerDisplayName)
+            ? HostUiText.Bi("要接管這台裝置的控制權嗎？", "Do you want to take control of this device?")
+            : HostUiText.Bi($"目前由「{_controllerDisplayName}」控制，要強制接管嗎？", $"This device is currently controlled by '{_controllerDisplayName}'. Do you want to force takeover?");
+        var result = MessageBox.Show(
+            prompt,
+            HostUiText.Window("接管控制權", "Take Control"),
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (result != DialogResult.Yes)
+        {
+            return;
+        }
+
+        lblStatusValue.Text = HostUiText.Bi("正在請求控制權...", "Requesting control...");
+        var state = await _viewerSessionBroker.RequestControlAsync(_device.DeviceId, forceTakeover: true, CancellationToken.None);
+        if (state.CanControl != _sessionCanControl)
+        {
+            ApplySessionState(state, showNotification: !string.IsNullOrWhiteSpace(state.Message));
+        }
+        else if (!string.IsNullOrWhiteSpace(state.Message))
+        {
+            lblStatusValue.Text = state.Message;
+        }
+    }
+
     protected void HandleOpenTransferFolder()
     {
         var filePath = _lastDownloadFilePath ?? _lastUploadedFilePath;
@@ -1862,6 +1958,8 @@ public partial class RemoteViewerForm : Form
         menuGetClipboard.Enabled = btnGetClipboard.Enabled;
         menuUploadFile.Enabled = btnUploadFile.Enabled;
         menuDownloadFile.Enabled = btnDownloadFile.Enabled;
+        menuTakeControl.Visible = _viewer?.CanControlRemote == true;
+        menuTakeControl.Enabled = _viewer?.CanControlRemote == true && !_sessionCanControl;
         menuFocusRemote.Enabled = true;
         menuDisconnect.Enabled = true;
         menuFullscreen.Text = _isFullscreen
@@ -2028,7 +2126,7 @@ public partial class RemoteViewerForm : Form
 
     private bool EnsureInteractivePermission(string message)
     {
-        if (_viewer is { CanControlRemote: true })
+        if (_sessionCanControl)
         {
             return true;
         }
@@ -2084,6 +2182,7 @@ public partial class RemoteViewerForm : Form
         menuSendClipboard.Text = HostUiText.Bi("送出剪貼簿", "Send Clipboard");
         menuGetClipboard.Text = HostUiText.Bi("取得剪貼簿", "Get Clipboard");
         menuUploadFile.Text = HostUiText.Bi("上傳檔案", "Upload File");
+        menuTakeControl.Text = HostUiText.Bi("取得控制權", "Take Control");
         menuFocusRemote.Text = HostUiText.Bi("聚焦 Viewer", "Focus Viewer");
         menuDisconnect.Text = HostUiText.Bi("中斷連線", "Disconnect");
         menuFullscreen.Text = HostUiText.Bi("全螢幕", "Fullscreen");
@@ -2200,6 +2299,7 @@ public partial class RemoteViewerForm : Form
         public string RemotePath => _txtRemotePath.Text.Trim();
     }
 }
+
 
 
 

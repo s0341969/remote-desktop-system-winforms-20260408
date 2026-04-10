@@ -143,7 +143,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 現在 `RemoteDesktop.Host` 已可透過 `ControlServer:CentralServerUrl` 接這個 Server，主畫面裝置清單/在線紀錄/授權管理會改走中央 API
 - Viewer attach/detach、遠端畫面串流與 Viewer 指令也會改走中央 Server 的 `/ws/viewer` 通道
 - Host 登入、使用者管理與稽核畫面在中央模式下也已改走 `RemoteDesktop.Server` API
-- 中央模式現在已補真正的 bearer token/session；`/api/devices`、`/api/presence-logs`、`/api/users`、`/api/audit-logs` 與 `/ws/viewer` 都改由 Server 端驗證登入 session 與角色，不再信任 Console Client 傳入的 `userName` / `canControl`
+- 中央模式現在已補真正的 bearer token/session；`/api/devices`、`/api/presence-logs`、`/api/users`、`/api/audit-logs` 與 `/ws/viewer` 都改由 Server 端驗證登入 session 與角色，不再信任 Console Client 傳入的 `userName` / `canControl`。`/ws/viewer` 也已補上中央 Viewer Session Lock：同一台裝置同時間只會有一個控制者，其餘 Viewer 會自動降為僅觀看，並可由具控制權角色透過「取得控制權 / Take Control」強制接管。
 
 ### Clean
 
@@ -188,6 +188,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
 
 
 

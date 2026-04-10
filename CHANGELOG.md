@@ -21,6 +21,10 @@
 - 中央 Viewer websocket 不再接受 Client 傳入 `userName/canControl` 決定權限，改由 Server 端 session role 決定 attach 身分與是否允許控制。
 - `RemoteDesktop.Agent` 的 `ClipboardSyncService` 補上 Windows 剪貼簿重試機制，修正 smoke test 與實機偶發的 OLE/clipboard busy 失敗。
 - 已重新驗證 `dotnet build`、`RemoteDesktop.SmokeTests`、`RemoteDesktop.UiAutomation` 與中央 Server token-authenticated API/WebSocket smoke。
+- 第六階段補上中央 Viewer Session Lock 與強制接管規則：同一台裝置同時間只保留一個控制者，其餘 Viewer 自動降為僅觀看；具控制權角色可透過 Take Control 對既有控制者發起接管。
+- RemoteDesktop.Server 的 /ws/viewer 現在會在 Server 端追蹤多個 Viewer session，並在控制權切換時主動推送 iewer-mode-updated 給受影響的 Console Client。
+- RemoteDesktop.Host 的中央模式 Viewer 現在會依 Server 回傳的 session state 啟用/停用互動功能，並新增「取得控制權 / Take Control」操作。
+- 擴充 RemoteDesktop.SmokeTests，新增中央多 Viewer 鎖定、觀察者被拒絕控制、強制接管後控制權移轉的端到端驗證。
 - 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。
 
 ## 2026-04-09
@@ -72,6 +76,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 

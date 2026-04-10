@@ -10,18 +10,32 @@ namespace RemoteDesktop.Host.Services;
 
 public interface IRemoteViewerSessionBroker : IAsyncDisposable
 {
-    Task<bool> AttachViewerAsync(
+    Task<RemoteViewerAttachResult> AttachViewerAsync(
         string deviceId,
         AuthenticatedUserSession viewer,
         Func<byte[], CancellationToken, Task> publishFrameAsync,
         Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
         Func<AgentClipboardMessage, CancellationToken, Task> publishClipboardAsync,
+        Func<RemoteViewerSessionState, CancellationToken, Task> publishSessionStateAsync,
         CancellationToken cancellationToken);
 
     Task DetachViewerAsync(string deviceId, CancellationToken cancellationToken);
 
     Task ForwardViewerCommandAsync(string deviceId, ViewerCommandMessage command, CancellationToken cancellationToken);
+
+    Task<RemoteViewerSessionState> RequestControlAsync(string deviceId, bool forceTakeover, CancellationToken cancellationToken);
 }
+
+public sealed record RemoteViewerAttachResult(bool Attached, bool CanControl, string? Message, string? ControllerDisplayName)
+{
+    public static RemoteViewerAttachResult Accepted(bool canControl, string? message, string? controllerDisplayName)
+        => new(true, canControl, message, controllerDisplayName);
+
+    public static RemoteViewerAttachResult Rejected(string? message, string? controllerDisplayName = null)
+        => new(false, false, message, controllerDisplayName);
+}
+
+public sealed record RemoteViewerSessionState(bool CanControl, string? ControllerDisplayName, string? Message);
 
 public sealed class RemoteViewerSessionBrokerFactory
 {
@@ -57,15 +71,16 @@ internal sealed class LocalRemoteViewerSessionBroker : IRemoteViewerSessionBroke
         _deviceBroker = deviceBroker;
     }
 
-    public Task<bool> AttachViewerAsync(
+    public async Task<RemoteViewerAttachResult> AttachViewerAsync(
         string deviceId,
         AuthenticatedUserSession viewer,
         Func<byte[], CancellationToken, Task> publishFrameAsync,
         Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
         Func<AgentClipboardMessage, CancellationToken, Task> publishClipboardAsync,
+        Func<RemoteViewerSessionState, CancellationToken, Task> publishSessionStateAsync,
         CancellationToken cancellationToken)
     {
-        return _deviceBroker.AttachViewerAsync(
+        var attached = await _deviceBroker.AttachViewerAsync(
             deviceId,
             viewer.DisplayName,
             viewer.CanControlRemote,
@@ -73,6 +88,13 @@ internal sealed class LocalRemoteViewerSessionBroker : IRemoteViewerSessionBroke
             publishStatusAsync,
             publishClipboardAsync,
             cancellationToken);
+
+        if (!attached)
+        {
+            return RemoteViewerAttachResult.Rejected("The selected device is offline or busy.");
+        }
+
+        return RemoteViewerAttachResult.Accepted(viewer.CanControlRemote, "viewer-ready", viewer.DisplayName);
     }
 
     public Task DetachViewerAsync(string deviceId, CancellationToken cancellationToken)
@@ -83,6 +105,11 @@ internal sealed class LocalRemoteViewerSessionBroker : IRemoteViewerSessionBroke
     public Task ForwardViewerCommandAsync(string deviceId, ViewerCommandMessage command, CancellationToken cancellationToken)
     {
         return _deviceBroker.ForwardViewerCommandAsync(deviceId, command, cancellationToken);
+    }
+
+    public Task<RemoteViewerSessionState> RequestControlAsync(string deviceId, bool forceTakeover, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new RemoteViewerSessionState(true, null, "本機模式下目前 Viewer 直接擁有控制權。 / Local mode viewer already has direct control."));
     }
 
     public ValueTask DisposeAsync()
@@ -97,11 +124,13 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
     private readonly Uri _viewerEndpoint;
     private readonly CentralConsoleSessionState _sessionState;
     private readonly TaskCompletionSource<bool> _readySignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<RemoteViewerAttachResult> _attachResultSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ClientWebSocket? _socket;
     private Task? _receiveLoopTask;
     private Func<byte[], CancellationToken, Task>? _publishFrameAsync;
     private Func<AgentFileTransferStatusMessage, CancellationToken, Task>? _publishStatusAsync;
     private Func<AgentClipboardMessage, CancellationToken, Task>? _publishClipboardAsync;
+    private Func<RemoteViewerSessionState, CancellationToken, Task>? _publishSessionStateAsync;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     public CentralServerRemoteViewerSessionBroker(string centralServerUrl, CentralConsoleSessionState sessionState)
@@ -110,12 +139,13 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
         _sessionState = sessionState;
     }
 
-    public async Task<bool> AttachViewerAsync(
+    public async Task<RemoteViewerAttachResult> AttachViewerAsync(
         string deviceId,
         AuthenticatedUserSession viewer,
         Func<byte[], CancellationToken, Task> publishFrameAsync,
         Func<AgentFileTransferStatusMessage, CancellationToken, Task> publishStatusAsync,
         Func<AgentClipboardMessage, CancellationToken, Task> publishClipboardAsync,
+        Func<RemoteViewerSessionState, CancellationToken, Task> publishSessionStateAsync,
         CancellationToken cancellationToken)
     {
         if (_socket is not null)
@@ -126,20 +156,21 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
         _publishFrameAsync = publishFrameAsync;
         _publishStatusAsync = publishStatusAsync;
         _publishClipboardAsync = publishClipboardAsync;
+        _publishSessionStateAsync = publishSessionStateAsync;
 
         var socket = new ClientWebSocket();
         _sessionState.ApplyAuthorizationHeader(socket);
-        var endpoint = BuildAttachUri(deviceId);
+        var endpoint = BuildAttachUri(deviceId, forceTakeover: false);
         await socket.ConnectAsync(endpoint, cancellationToken);
         _socket = socket;
         _receiveLoopTask = ReceiveLoopAsync(socket, cancellationToken);
-        var completed = await Task.WhenAny(_readySignal.Task, _receiveLoopTask!);
-        if (completed == _readySignal.Task)
+        var completed = await Task.WhenAny(_attachResultSignal.Task, _receiveLoopTask!);
+        if (completed == _attachResultSignal.Task)
         {
-            return await _readySignal.Task;
+            return await _attachResultSignal.Task;
         }
 
-        return false;
+        return RemoteViewerAttachResult.Rejected("Central viewer channel closed before attach completed.");
     }
 
     public async Task DetachViewerAsync(string deviceId, CancellationToken cancellationToken)
@@ -196,6 +227,32 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
         }
     }
 
+    public async Task<RemoteViewerSessionState> RequestControlAsync(string deviceId, bool forceTakeover, CancellationToken cancellationToken)
+    {
+        if (_socket is null || _socket.State != WebSocketState.Open)
+        {
+            return new RemoteViewerSessionState(false, null, "中央 Viewer 通道尚未連線。 / Central viewer channel is not connected.");
+        }
+
+        var payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            type = "viewer-control-request",
+            forceTakeover
+        }, JsonOptions));
+
+        await _sendLock.WaitAsync(cancellationToken);
+        try
+        {
+            await _socket.SendAsync(payload, WebSocketMessageType.Text, true, cancellationToken);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+
+        return new RemoteViewerSessionState(false, null, "控制權請求已送出。 / Control request sent.");
+    }
+
     public async ValueTask DisposeAsync()
     {
         await DetachViewerAsync(string.Empty, CancellationToken.None);
@@ -237,7 +294,22 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
             switch (envelope.Type)
             {
                 case "viewer-ready":
-                    _readySignal.TrySetResult(true);
+                    var readyResult = RemoteViewerAttachResult.Accepted(
+                        envelope.CanControl ?? false,
+                        envelope.Message,
+                        envelope.ControllerDisplayName);
+                    _attachResultSignal.TrySetResult(readyResult);
+                    break;
+                case "viewer-mode-updated":
+                    if (_publishSessionStateAsync is not null)
+                    {
+                        await _publishSessionStateAsync(
+                            new RemoteViewerSessionState(envelope.CanControl ?? false, envelope.ControllerDisplayName, envelope.Message),
+                            cancellationToken);
+                    }
+                    break;
+                case "viewer-rejected":
+                    _attachResultSignal.TrySetResult(RemoteViewerAttachResult.Rejected(envelope.Message, envelope.ControllerDisplayName));
                     break;
                 case "transfer-status" when envelope.TransferStatus is not null && _publishStatusAsync is not null:
                     await _publishStatusAsync(MapTransferStatus(envelope.TransferStatus), cancellationToken);
@@ -248,13 +320,13 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
             }
         }
 
-        _readySignal.TrySetResult(false);
+        _attachResultSignal.TrySetResult(RemoteViewerAttachResult.Rejected("Central viewer channel closed."));
     }
 
-    private Uri BuildAttachUri(string deviceId)
+    private Uri BuildAttachUri(string deviceId, bool forceTakeover)
     {
         var builder = new UriBuilder(_viewerEndpoint);
-        builder.Query = $"deviceId={Uri.EscapeDataString(deviceId)}";
+        builder.Query = $"deviceId={Uri.EscapeDataString(deviceId)}&forceTakeover={forceTakeover.ToString().ToLowerInvariant()}";
         return builder.Uri;
     }
 

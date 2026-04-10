@@ -111,6 +111,9 @@ public sealed class AgentWebSocketHandler
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
         }
+        catch (WebSocketException) when (context.RequestAborted.IsCancellationRequested || socket.State is WebSocketState.Aborted or WebSocketState.Closed)
+        {
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Agent WebSocket processing failed.");
@@ -124,4 +127,3 @@ public sealed class AgentWebSocketHandler
         }
     }
 }
-

@@ -33,6 +33,7 @@ public sealed class ViewerWebSocketHandler
         }
 
         var deviceId = context.Request.Query["deviceId"].ToString();
+        var forceTakeover = bool.TryParse(context.Request.Query["forceTakeover"], out var parsedForceTakeover) && parsedForceTakeover;
         if (string.IsNullOrWhiteSpace(deviceId))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -41,13 +42,18 @@ public sealed class ViewerWebSocketHandler
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
+        string? viewerSessionId = null;
         var attached = await _broker.AttachViewerAsync(
             deviceId,
             session.DisplayName,
             _sessionTokenService.CanControlRemote(session),
+            forceTakeover,
             async (payload, cancellationToken) =>
             {
-                await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
+                }
             },
             async (status, cancellationToken) =>
             {
@@ -59,7 +65,10 @@ public sealed class ViewerWebSocketHandler
                 };
 
                 var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
-                await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                }
             },
             async (clipboard, cancellationToken) =>
             {
@@ -71,25 +80,70 @@ public sealed class ViewerWebSocketHandler
                 };
 
                 var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
-                await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                }
+            },
+            async (viewerState, cancellationToken) =>
+            {
+                var envelope = new ViewerTransportEnvelope
+                {
+                    Type = "viewer-mode-updated",
+                    DeviceId = deviceId,
+                    CanControl = viewerState.CanControl,
+                    ControllerDisplayName = viewerState.ControllerDisplayName,
+                    Message = viewerState.Message
+                };
+
+                var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                }
+            },
+            async (reason, cancellationToken) =>
+            {
+                if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                {
+                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken);
+                }
             },
             context.RequestAborted);
 
-        if (!attached)
+        if (!attached.Attached)
         {
-            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Device unavailable or busy.", context.RequestAborted);
+            var rejected = new ViewerTransportEnvelope
+            {
+                Type = "viewer-rejected",
+                DeviceId = deviceId,
+                Message = attached.Message
+            };
+            var rejectedPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(rejected, JsonOptions));
+            if (socket.State == WebSocketState.Open)
+            {
+                await socket.SendAsync(rejectedPayload, WebSocketMessageType.Text, true, context.RequestAborted);
+                await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, attached.Message ?? "Device unavailable or busy.", context.RequestAborted);
+            }
             return;
         }
+
+        viewerSessionId = attached.ViewerSessionId;
 
         var readyEnvelope = new ViewerTransportEnvelope
         {
             Type = "viewer-ready",
             DeviceId = deviceId,
-            Message = "viewer-ready"
+            Message = attached.Message ?? "viewer-ready",
+            CanControl = attached.CanControl,
+            ControllerDisplayName = attached.ControllerDisplayName
         };
 
         var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(readyEnvelope, JsonOptions));
-        await socket.SendAsync(readyPayload, WebSocketMessageType.Text, true, context.RequestAborted);
+        if (socket.State == WebSocketState.Open)
+        {
+            await socket.SendAsync(readyPayload, WebSocketMessageType.Text, true, context.RequestAborted);
+        }
 
         try
         {
@@ -107,12 +161,45 @@ public sealed class ViewerWebSocketHandler
                 }
 
                 var json = Encoding.UTF8.GetString(message.Payload);
-                await _broker.ForwardViewerCommandAsync(deviceId, json, context.RequestAborted);
+                using var document = JsonDocument.Parse(json);
+                var type = document.RootElement.TryGetProperty("type", out var typeElement)
+                    ? typeElement.GetString()
+                    : null;
+
+                if (string.Equals(type, "viewer-control-request", StringComparison.Ordinal))
+                {
+                    var requestForceTakeover = document.RootElement.TryGetProperty("forceTakeover", out var takeoverElement)
+                        && takeoverElement.ValueKind == JsonValueKind.True;
+                    var updatedState = await _broker.RequestViewerControlAsync(deviceId, viewerSessionId!, requestForceTakeover, context.RequestAborted);
+                    var envelope = new ViewerTransportEnvelope
+                    {
+                        Type = "viewer-mode-updated",
+                        DeviceId = deviceId,
+                        CanControl = updatedState.CanControl,
+                        ControllerDisplayName = updatedState.ControllerDisplayName,
+                        Message = updatedState.Message
+                    };
+
+                    var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
+                    if (socket.State == WebSocketState.Open)
+                    {
+                        await socket.SendAsync(bytes, WebSocketMessageType.Text, true, context.RequestAborted);
+                    }
+                    continue;
+                }
+
+                await _broker.ForwardViewerCommandAsync(deviceId, viewerSessionId!, json, context.RequestAborted);
             }
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+        }
+        catch (WebSocketException) when (context.RequestAborted.IsCancellationRequested || socket.State is WebSocketState.Aborted or WebSocketState.Closed)
+        {
         }
         finally
         {
-            await _broker.DetachViewerAsync(deviceId);
+            await _broker.DetachViewerAsync(deviceId, viewerSessionId);
         }
     }
 }

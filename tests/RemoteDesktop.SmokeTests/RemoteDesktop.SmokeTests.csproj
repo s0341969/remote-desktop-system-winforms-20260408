@@ -10,6 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj" />
     <ProjectReference Include="..\..\src\RemoteDesktop.Host\RemoteDesktop.Host.csproj" />
+    <ProjectReference Include="..\..\src\RemoteDesktop.Server\RemoteDesktop.Server.csproj" />
   </ItemGroup>
 
 </Project>
+
