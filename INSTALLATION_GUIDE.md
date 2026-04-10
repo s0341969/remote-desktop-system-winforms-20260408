@@ -189,7 +189,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 目前已可獨立接收 Agent WebSocket 連線
 - 現有 `RemoteDesktop.Host` 已可在 Host 設定中填入 `中央 Server URL / Central server URL`，切成中央 Server 儀表板模式
 - 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄、Server 端 bearer token/session 驗證、Viewer Session Lock 與強制接管/觀看模式、中央儀表板即時推播 `/ws/dashboard`
-- 中央模式目前尚未接通：Host 設定集中化
+- 中央模式目前尚未接通：真正的跨多主控台 publish 交付驗證
 
 ### 8.2 使用啟動腳本
 
@@ -223,6 +223,8 @@ Windows 登入後，Agent 會自動啟動。
    - Presence Log
    - 健康檢查位址
 4. 按「設定」可修改 Host 參數
+   - 本機模式：直接更新本機 `appsettings.json`
+   - 中央模式：除了 `CentralServerUrl` 仍保留在本機外，其餘 Host 設定會改由中央 Server 儲存
 5. 若要把主畫面資料切到中央 Server，於 Host 設定填入 `中央 Server URL / Central server URL`，儲存後重啟 Host
 6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；登入成功後 Host 會保存中央 Server 簽發的 bearer token，Viewer 與後續管理 API 都會帶著同一份 token 透過中央 Server 的 `/ws/viewer` 與 REST API 通道運作
 7. 中央模式主畫面會優先接收 `/ws/dashboard` 即時推播；若 websocket 斷線或短時間沒有事件，Host 仍會以 30 秒低頻輪詢回補，避免畫面長時間失真
@@ -527,6 +529,10 @@ WinForms UI automation：
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
 - 中央 `/ws/dashboard`：已由 smoke test 驗證會在 Agent 上線時推送 `dashboard-ready` / `dashboard-changed`
+- 中央 `/api/settings/host`：已由 smoke test 驗證可 round-trip 讀取與更新 Host 設定
+
+
+
 
 
 

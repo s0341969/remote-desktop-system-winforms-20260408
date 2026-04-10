@@ -6,6 +6,8 @@
 - RemoteDesktop.Host 的中央模式主畫面改成「即時推播 + 30 秒回補輪詢」，多台 Console Client 共用同一個中央狀態時不再只靠固定 5 秒 polling。
 - 擴充 RemoteDesktop.SmokeTests，新增中央 dashboard push 端到端驗證，確保 Agent 註冊後可立即收到 dashboard-ready / dashboard-changed 封包。
 - 修正 CHANGELOG.md、TODO.md、INSTALLATION_GUIDE.md 既有的格式瑕疵，補齊中央模式的即時推播與操作說明。
+- 第八階段新增中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單現在會改由 `RemoteDesktop.Server` 載入與儲存，只有 `CentralServerUrl` 仍保留在每台 Console Client 本機。
+- 擴充 `RemoteDesktop.SmokeTests`，新增中央設定 API round-trip 驗證，確認管理員可讀取並更新中央 Host 設定，同時不污染本機工作目錄。
 
 ## 2026-04-10
 
@@ -83,6 +85,8 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
+
 
 
 

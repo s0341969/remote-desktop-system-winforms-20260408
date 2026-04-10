@@ -25,6 +25,7 @@ using ServerControlServerOptions = RemoteDesktop.Server.Options.ControlServerOpt
 await RunHostRelaySmokeTestAsync();
 await RunCentralViewerLockSmokeTestAsync();
 await RunCentralDashboardPushSmokeTestAsync();
+await RunCentralSettingsApiSmokeTestAsync();
 await RunFileTransferSmokeTestAsync();
 await RunClipboardSmokeTestAsync();
 Console.WriteLine("SMOKE_TEST_PASSED");
@@ -345,6 +346,100 @@ static async Task RunCentralDashboardPushSmokeTestAsync()
     finally
     {
         await app.StopAsync();
+    }
+}
+static async Task RunCentralSettingsApiSmokeTestAsync()
+{
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "ChangeMe-Agent-Key";
+    var tempRoot = Path.Combine(Path.GetTempPath(), "RemoteDesktopCentralSettingsSmoke", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(tempRoot);
+
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        ContentRootPath = tempRoot
+    });
+    builder.WebHost.UseSetting("urls", serverUrl);
+
+    builder.Services.AddSingleton<IOptions<ServerControlServerOptions>>(Options.Create(new ServerControlServerOptions
+    {
+        ServerUrl = serverUrl,
+        ConsoleName = "Central Settings Smoke Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 45,
+        PersistenceMode = "Memory"
+    }));
+
+    builder.Services.AddSingleton<ServerIDeviceRepository, ServerInMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopServerCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopServerEndpoints();
+    await app.StartAsync();
+
+    try
+    {
+        using var httpClient = new HttpClient { BaseAddress = new Uri(serverUrl, UriKind.Absolute) };
+        var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new { userName = "admin", password = "ChangeMe!2026" });
+        loginResponse.EnsureSuccessStatusCode();
+        var session = await loginResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.UserSessionDto>()
+            ?? throw new InvalidOperationException("Central settings login did not return a session.");
+
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        var getResponse = await httpClient.GetAsync("/api/settings/host");
+        getResponse.EnsureSuccessStatusCode();
+        var settings = await getResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.HostSettingsDto>()
+            ?? throw new InvalidOperationException("Central settings API did not return settings.");
+
+        if (!string.Equals(settings.ConsoleName, "Central Settings Smoke Console", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Central settings API returned an unexpected console name.");
+        }
+
+        var updatedSettings = new RemoteDesktop.Shared.Models.HostSettingsDto
+        {
+            EnableDatabase = false,
+            RemoteDesktopDbConnectionString = settings.RemoteDesktopDbConnectionString,
+            ServerUrl = settings.ServerUrl,
+            ConsoleName = "Central Settings Smoke Console Updated",
+            AdminUserName = settings.AdminUserName,
+            AdminPassword = settings.AdminPassword,
+            SharedAccessKey = settings.SharedAccessKey,
+            RequireHttpsRedirect = settings.RequireHttpsRedirect,
+            AgentHeartbeatTimeoutSeconds = 90
+        };
+
+        var saveResponse = await httpClient.PostAsJsonAsync("/api/settings/host", updatedSettings);
+        saveResponse.EnsureSuccessStatusCode();
+
+        var verifyResponse = await httpClient.GetAsync("/api/settings/host");
+        verifyResponse.EnsureSuccessStatusCode();
+        var verified = await verifyResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.HostSettingsDto>()
+            ?? throw new InvalidOperationException("Central settings API did not return updated settings.");
+
+        if (!string.Equals(verified.ConsoleName, updatedSettings.ConsoleName, StringComparison.Ordinal)
+            || verified.AgentHeartbeatTimeoutSeconds != updatedSettings.AgentHeartbeatTimeoutSeconds)
+        {
+            throw new InvalidOperationException("Central settings API did not persist the updated settings.");
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+        try
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+        catch
+        {
+        }
     }
 }
 static async Task RunFileTransferSmokeTestAsync()
@@ -846,6 +941,10 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
+
+
 
 
 

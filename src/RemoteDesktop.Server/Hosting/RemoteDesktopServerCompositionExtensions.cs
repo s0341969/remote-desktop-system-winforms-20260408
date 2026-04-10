@@ -9,6 +9,7 @@ using RemoteDesktop.Server.Options;
 using RemoteDesktop.Server.Services;
 using RemoteDesktop.Server.Services.Auditing;
 using RemoteDesktop.Server.Services.Security;
+using RemoteDesktop.Server.Services.Settings;
 using RemoteDesktop.Server.Services.Users;
 using RemoteDesktop.Shared.Models;
 
@@ -26,6 +27,7 @@ public static class RemoteDesktopServerCompositionExtensions
         services.AddSingleton<ViewerWebSocketHandler>();
         services.AddSingleton<IAuditLogStore, JsonAuditLogStore>();
         services.AddSingleton<AuditService>();
+        services.AddSingleton<IServerHostSettingsStore, ServerHostSettingsStore>();
         services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
         services.AddSingleton<UserAccountService>();
         services.AddSingleton<ConsoleSessionTokenService>();
@@ -280,6 +282,57 @@ public static class RemoteDesktopServerCompositionExtensions
 
             var items = await auditService.GetRecentAsync(Math.Clamp(take ?? 250, 1, 1000), cancellationToken);
             return Results.Ok(items);
+        });
+
+        app.MapGet("/api/settings/host", async (HttpContext context, IServerHostSettingsStore hostSettingsStore, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
+        {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            var settings = await hostSettingsStore.LoadAsync(cancellationToken);
+            return Results.Ok(settings);
+        });
+
+        app.MapPost("/api/settings/host", async (HttpContext context, HostSettingsDto request, IServerHostSettingsStore hostSettingsStore, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
+        {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            try
+            {
+                await hostSettingsStore.SaveAsync(request, cancellationToken);
+                await auditService.WriteAsync(new AuditLogEntryDto
+                {
+                    OccurredAt = DateTimeOffset.UtcNow,
+                    ActorUserName = session.UserName,
+                    ActorDisplayName = session.DisplayName,
+                    Action = "host-settings-save",
+                    TargetType = "host-settings",
+                    TargetId = request.ConsoleName,
+                    Succeeded = true,
+                    Details = "中央 Host 設定已儲存。 / Central host settings were saved."
+                }, cancellationToken);
+
+                return Results.Ok();
+            }
+            catch (ValidationException exception)
+            {
+                return Results.BadRequest(exception.Message);
+            }
         });
 
         app.MapPost("/api/audit-logs", async (HttpContext context, AuditLogEntryDto entry, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>

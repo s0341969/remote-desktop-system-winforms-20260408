@@ -7,9 +7,9 @@ namespace RemoteDesktop.Host.Forms.Settings;
 public sealed class HostSettingsFormFactory
 {
     private readonly IHostSettingsStore _settingsStore;
-    private readonly AuditService _auditService;
+    private readonly IAuditService _auditService;
 
-    public HostSettingsFormFactory(IHostSettingsStore settingsStore, AuditService auditService)
+    public HostSettingsFormFactory(IHostSettingsStore settingsStore, IAuditService auditService)
     {
         _settingsStore = settingsStore;
         _auditService = auditService;

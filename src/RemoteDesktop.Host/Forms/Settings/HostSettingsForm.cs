@@ -7,7 +7,7 @@ namespace RemoteDesktop.Host.Forms.Settings;
 public partial class HostSettingsForm : Form
 {
     private IHostSettingsStore? _settingsStore;
-    private AuditService? _auditService;
+    private IAuditService? _auditService;
     private AuthenticatedUserSession? _currentUser;
     private bool _showResultDialogs;
 
@@ -23,7 +23,7 @@ public partial class HostSettingsForm : Form
         InitializeUiText();
     }
 
-    public void Bind(IHostSettingsStore settingsStore, AuditService auditService, AuthenticatedUserSession currentUser, HostSettingsDocument document, bool showResultDialogs = true)
+    public void Bind(IHostSettingsStore settingsStore, IAuditService auditService, AuthenticatedUserSession currentUser, HostSettingsDocument document, bool showResultDialogs = true)
     {
         _settingsStore = settingsStore;
         _auditService = auditService;

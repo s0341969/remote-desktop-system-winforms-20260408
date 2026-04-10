@@ -66,6 +66,7 @@
 - 第一階段新增 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared`，把中央 Host Server 所需的通訊契約、裝置儲存與 Agent WebSocket 通道獨立出來，為後續多主控台 Console Client 做準備。
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
+- 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -143,7 +144,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 現有 `RemoteDesktop.Host` 尚未完全改成純 Console Client
 - 現在 `RemoteDesktop.Host` 已可透過 `ControlServer:CentralServerUrl` 接這個 Server，主畫面裝置清單/在線紀錄/授權管理會改走中央 API
 - Viewer attach/detach、遠端畫面串流與 Viewer 指令也會改走中央 Server 的 `/ws/viewer` 通道
-- Host 登入、使用者管理與稽核畫面在中央模式下也已改走 `RemoteDesktop.Server` API
+- Host 登入、使用者管理、稽核與 Host 設定畫面在中央模式下也已改走 `RemoteDesktop.Server` API
 - 中央模式現在已補真正的 bearer token/session；`/api/devices`、`/api/presence-logs`、`/api/users`、`/api/audit-logs`、`/ws/viewer` 與 `/ws/dashboard` 都改由 Server 端驗證登入 session 與角色，不再信任 Console Client 傳入的 `userName` / `canControl`。`/ws/viewer` 也已補上中央 Viewer Session Lock：同一台裝置同時間只會有一個控制者，其餘 Viewer 會自動降為僅觀看，並可由具控制權角色透過「取得控制權 / Take Control」強制接管。
 
 ### Clean
@@ -189,6 +190,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 完整安裝與操作手冊：[INSTALLATION_GUIDE.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\INSTALLATION_GUIDE.md)
 - 變更紀錄：[CHANGELOG.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CHANGELOG.md)
 - 待辦：[TODO.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\TODO.md)
+
+
 
 
 
