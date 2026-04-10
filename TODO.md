@@ -1,6 +1,9 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 讓現有 `RemoteDesktop.Host` 改接 `RemoteDesktop.Server`，逐步移除 WinForms Host 內嵌 Kestrel 的雙重角色
+- [ ] 為 `RemoteDesktop.Server` 補 Console Client API / WebSocket 推播端點，讓多台主控台可共用同一組中央狀態
+- [ ] 補 `Viewer Session Lock`、接管策略與多人觀看/單人控制規則，作為多主控台的核心並發保護
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
 - [ ] 繼續強化遠端檢視表單，補上快捷鍵提示與遠端輸入失敗原因的 Host 端可視化回報
 - [ ] 增加 Host 與 Agent 的操作日誌匯出功能

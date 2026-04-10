@@ -10,6 +10,12 @@
   - Windows Forms 主控台。
   - 背景自架 `Kestrel`，提供 `/ws/agent` 與 `/healthz`。
   - 前景提供登入、儀表板、遠端檢視與 Host 設定表單。
+- `src/RemoteDesktop.Server`
+  - 第一階段新增的中央 Host Server。
+  - 目前已可獨立啟動、提供 `/ws/agent` 與 `/healthz`，並接收 Agent `hello/heartbeat` 協定。
+- `src/RemoteDesktop.Shared`
+  - 第一階段新增的共享契約專案。
+  - 集中放 Agent/Viewer 通訊模型與裝置資料 DTO，供後續 Server / Console Client 共用。
 - `src/RemoteDesktop.Agent`
   - Windows Forms Agent。
   - 提供桌面截圖、心跳、輸入回放、自動重連與 Agent 設定表單。
@@ -57,6 +63,8 @@
 - Host Viewer 右上角的 Agent 操作已改成 `功能` 下拉按鍵，集中收納開啟資料夾、剪貼簿同步、upload/download、全螢幕、聚焦 Viewer 與中斷連線。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
 - Agent 主畫面的操作入口已改成右上角 `功能` 下拉按鍵，集中提供設定、複製裝置 ID、複製 Server 位址與立即重新整理。
+- 第一階段新增 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared`，把中央 Host Server 所需的通訊契約、裝置儲存與 Agent WebSocket 通道獨立出來，為後續多主控台 Console Client 做準備。
+- `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
 - Host 的本機剪貼簿讀寫改為專用 STA 路徑執行，不再因目前執行緒 apartment 狀態不同而直接失敗。
@@ -117,6 +125,21 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\dotnet\dotnet.exe' build .\RemoteDesktopSystem.sln
 ```
+
+### 啟動中央 Server
+
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' run --project .\src\RemoteDesktop.Server\RemoteDesktop.Server.csproj
+```
+
+預設：
+- `ControlServer:ServerUrl = http://localhost:5206`
+- `PersistenceMode = Memory`
+
+目前定位：
+- 這是第一階段中央 Host Server
+- 現有 `RemoteDesktop.Host` 尚未完全改成純 Console Client
+- 後續會再把 WinForms Host 接到這個 Server
 
 ### Clean
 

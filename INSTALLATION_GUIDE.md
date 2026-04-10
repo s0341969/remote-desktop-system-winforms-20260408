@@ -6,6 +6,8 @@
 
 目前系統為：
 - `RemoteDesktop.Host`：Windows Forms 主控台
+- `RemoteDesktop.Server`：第一階段中央 Host Server
+- `RemoteDesktop.Shared`：Server / Client 共用通訊契約
 - `RemoteDesktop.Agent`：Windows Forms 被控端 Agent
 - 通訊方式：Host 背景 `Kestrel` + WebSocket `/ws/agent`
 - 儲存模式：預設 `Memory`，可切換為 SQL Server / LocalDB
@@ -27,7 +29,17 @@
 - Host 設定表單
 - 背景健康檢查 `/healthz`
 
-### 2.2 Agent
+### 2.2 Central Server
+
+`RemoteDesktop.Server` 目前提供：
+- 第一階段中央 Host Server
+- 獨立 ASP.NET Core 啟動
+- Agent WebSocket 入口 `/ws/agent`
+- 健康檢查 `/healthz`
+- 可切換 `Memory` / `SqlServer` 儲存模式
+- 可接收 Agent `hello/heartbeat`
+
+### 2.3 Agent
 
 `RemoteDesktop.Agent` 提供：
 - 桌面擷取
@@ -47,6 +59,8 @@
 ## 4. 專案目錄
 
 - `src/RemoteDesktop.Host`
+- `src/RemoteDesktop.Server`
+- `src/RemoteDesktop.Shared`
 - `src/RemoteDesktop.Agent`
 - `deploy/publish/Host`
 - `deploy/publish/Agent`
@@ -152,6 +166,21 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Host 預設以 `Memory` 模式啟動，不會先連資料庫
+
+### 8.1.1 啟動中央 Server（第一階段）
+
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' run --project .\src\RemoteDesktop.Server\RemoteDesktop.Server.csproj
+```
+
+預設：
+- `http://localhost:5206`
+- `PersistenceMode = Memory`
+
+說明：
+- 這是多主控台重構的第一階段
+- 目前已可獨立接收 Agent WebSocket 連線
+- 現有 `RemoteDesktop.Host` 尚未完全改為純 Console Client，因此這一版是並行存在，不是取代 Host
 
 ### 8.2 使用啟動腳本
 
@@ -360,6 +389,8 @@ Agent 日誌位置：
 - `上傳檔案 / Upload File` 與 `下載檔案 / Download File` 應能完成傳輸
 - `遠端檔案總管 / Remote File Browser` 應可載入遠端資料夾、切換目錄、移動項目與選檔下載
 - Agent 主畫面右上角應可看到 `功能 / Actions` 下拉
+- `RemoteDesktop.Server` 啟動後，`http://localhost:5206/healthz` 應可回應
+- Agent 對 `RemoteDesktop.Server` 送出 `hello` 後，`/healthz` 的 `onlineDevices` 應增加
 
 ### 12.2 健康檢查
 
@@ -382,6 +413,13 @@ WinForms UI automation：
 ```powershell
 & 'C:\Program Files\dotnet\dotnet.exe' run --project .\tests\RemoteDesktop.UiAutomation\RemoteDesktop.UiAutomation.csproj
 ```
+
+中央 Server 協定驗證：
+
+- 目前已手動驗證：
+  - `RemoteDesktop.Server` 可啟動
+  - WebSocket client 模擬 Agent `hello` 後會收到 `hello-ack`
+  - `/healthz` 會從 `onlineDevices = 0` 變成 `1`
 
 ## 13. 常見問題
 
@@ -473,3 +511,4 @@ WinForms UI automation：
 - Viewer 縮放與全螢幕：已驗證
 - Viewer upload/download 流程：已驗證
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
+- `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數

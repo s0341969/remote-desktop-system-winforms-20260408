@@ -2,6 +2,10 @@
 
 ## 2026-04-10
 
+- 新增 `src/RemoteDesktop.Server` 與 `src/RemoteDesktop.Shared`，作為「中央 Host Server + 多台 Console Client」重構的第一階段骨架。
+- `RemoteDesktop.Server` 目前已可獨立啟動、提供 `/ws/agent` 與 `/healthz`，並接受 Agent `hello/heartbeat` 協定。
+- 將 Agent / Viewer 通訊模型與裝置資料 DTO 搬到 `RemoteDesktop.Shared`，供後續 Server / Console Client 共用。
+- 將 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared` 納入 `RemoteDesktopSystem.sln` 與根目錄聚合建置流程。
 - 補齊 `INSTALLATION_GUIDE.md`，將 Remote Viewer 的遠端檔案總管、遠端項目移動、下載流程與交付包路徑寫成正式操作手冊。
 - 更新 `README.md`，同步反映遠端檔案總管已上線、UI automation 已覆蓋檔案總管流程，以及 `deploy/release` 交付包輸出位置。
 - 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。

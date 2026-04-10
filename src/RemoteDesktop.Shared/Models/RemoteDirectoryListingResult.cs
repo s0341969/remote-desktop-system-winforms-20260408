@@ -1,0 +1,17 @@
+namespace RemoteDesktop.Shared.Models;
+
+public sealed class RemoteDirectoryListingResult
+{
+    public string DirectoryPath { get; init; } = string.Empty;
+
+    public string ParentDirectoryPath { get; init; } = string.Empty;
+
+    public bool CanNavigateUp { get; init; }
+
+    public bool EntriesTruncated { get; init; }
+
+    public string Message { get; init; } = string.Empty;
+
+    public IReadOnlyList<RemoteFileBrowserEntry> Entries { get; init; } = Array.Empty<RemoteFileBrowserEntry>();
+}
+
