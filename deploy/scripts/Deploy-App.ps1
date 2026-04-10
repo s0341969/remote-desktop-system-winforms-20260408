@@ -19,6 +19,7 @@ $dateStamp = Get-Date -Format "yyyy-MM-dd"
 $datedReleaseRoot = Join-Path $releaseRoot "RemoteDesktopSystem-$dateStamp"
 $zipPath = Join-Path $releaseRoot "RemoteDesktopSystem-$dateStamp.zip"
 $dotnetExe = "C:\Program Files\dotnet\dotnet.exe"
+$releaseTimestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
@@ -47,6 +48,23 @@ function Reset-Directory {
     }
 
     New-Item -ItemType Directory -Path $LiteralPath -Force | Out-Null
+}
+
+function Get-DirectorySummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LiteralPath
+    )
+
+    $files = Get-ChildItem -Path $LiteralPath -Recurse -File
+    $totalSizeBytes = ($files | Measure-Object -Property Length -Sum).Sum
+
+    return [ordered]@{
+        path = $LiteralPath
+        fileCount = $files.Count
+        totalSizeBytes = [int64]$totalSizeBytes
+        totalSizeMb = [Math]::Round(($totalSizeBytes / 1MB), 2)
+    }
 }
 
 Push-Location $repoRoot
@@ -142,6 +160,58 @@ try {
         Copy-Item -LiteralPath (Join-Path $repoRoot "CHANGELOG.md") -Destination (Join-Path $currentReleaseRoot "Docs\CHANGELOG.md") -Force
         Copy-Item -LiteralPath (Join-Path $repoRoot "TODO.md") -Destination (Join-Path $currentReleaseRoot "Docs\TODO.md") -Force
         Copy-Item -LiteralPath (Join-Path $repoRoot "INSTALLATION_GUIDE.md") -Destination (Join-Path $currentReleaseRoot "Docs\INSTALLATION_GUIDE.md") -Force
+
+        New-Item -ItemType Directory -Path (Join-Path $currentReleaseRoot "Scripts") -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $scriptRoot "Start-Host.cmd") -Destination (Join-Path $currentReleaseRoot "Scripts\Start-Host.cmd") -Force
+        Copy-Item -LiteralPath (Join-Path $scriptRoot "Start-Agent.cmd") -Destination (Join-Path $currentReleaseRoot "Scripts\Start-Agent.cmd") -Force
+        Copy-Item -LiteralPath (Join-Path $scriptRoot "Start-Server.cmd") -Destination (Join-Path $currentReleaseRoot "Scripts\Start-Server.cmd") -Force
+        Copy-Item -LiteralPath (Join-Path $scriptRoot "Verify-Central-Release.ps1") -Destination (Join-Path $currentReleaseRoot "Scripts\Verify-Central-Release.ps1") -Force
+
+        $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitCommit)) {
+            throw "Unable to resolve git commit hash for release manifest."
+        }
+
+        $manifest = [ordered]@{
+            generatedAt = $releaseTimestamp
+            configuration = $Configuration
+            gitCommit = $gitCommit
+            build = [ordered]@{
+                skipped = [bool]$SkipBuild
+                smokeTestsSkipped = [bool]$SkipSmokeTests
+                uiAutomationSkipped = [bool]$SkipUiAutomation
+                zipSkipped = [bool]$SkipZip
+            }
+            artifacts = [ordered]@{
+                host = Get-DirectorySummary -LiteralPath (Join-Path $publishRoot "Host")
+                agent = Get-DirectorySummary -LiteralPath (Join-Path $publishRoot "Agent")
+                server = Get-DirectorySummary -LiteralPath (Join-Path $publishRoot "Server")
+            }
+            release = [ordered]@{
+                currentPath = $currentReleaseRoot
+                datedPath = $datedReleaseRoot
+                zipPath = $(if ($SkipZip) { $null } else { $zipPath })
+            }
+        }
+
+        $manifestJson = $manifest | ConvertTo-Json -Depth 8
+        $summaryLines = @(
+            "RemoteDesktopSystem Release Summary"
+            "GeneratedAt: $releaseTimestamp"
+            "Configuration: $Configuration"
+            "GitCommit: $gitCommit"
+            "Host: $($manifest.artifacts.host.fileCount) files, $($manifest.artifacts.host.totalSizeMb) MB"
+            "Agent: $($manifest.artifacts.agent.fileCount) files, $($manifest.artifacts.agent.totalSizeMb) MB"
+            "Server: $($manifest.artifacts.server.fileCount) files, $($manifest.artifacts.server.totalSizeMb) MB"
+            "CurrentRelease: $currentReleaseRoot"
+            "DatedRelease: $datedReleaseRoot"
+            "Zip: $(if ($SkipZip) { 'SKIPPED' } else { $zipPath })"
+        )
+
+        Set-Content -LiteralPath (Join-Path $currentReleaseRoot "release-manifest.json") -Value $manifestJson -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $currentReleaseRoot "release-summary.txt") -Value $summaryLines -Encoding UTF8
+        Copy-Item -LiteralPath (Join-Path $currentReleaseRoot "release-manifest.json") -Destination (Join-Path $datedReleaseRoot "release-manifest.json") -Force -ErrorAction SilentlyContinue
+        Copy-Item -LiteralPath (Join-Path $currentReleaseRoot "release-summary.txt") -Destination (Join-Path $datedReleaseRoot "release-summary.txt") -Force -ErrorAction SilentlyContinue
 
         Copy-Item -Path (Join-Path $currentReleaseRoot "*") -Destination $datedReleaseRoot -Recurse -Force
 

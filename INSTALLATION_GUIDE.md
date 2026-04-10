@@ -183,6 +183,11 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Deploy-App.ps1
 ```
 
+執行後會產出：
+- `deploy/release/current/release-manifest.json`
+- `deploy/release/current/release-summary.txt`
+- `deploy/release/current/Scripts`
+
 ## 8. 啟動方式
 
 ### 8.1 直接執行 publish 版
@@ -213,6 +218,20 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - `deploy/scripts/Start-Host.cmd`
 - `deploy/scripts/Start-Agent.cmd`
 - `deploy/scripts/Start-Server.cmd`
+
+### 8.2.1 驗收交付包
+
+若要直接驗證 release 套件中的中央 Server 可正常啟動：
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\release\current\Scripts\Verify-Central-Release.ps1
+```
+
+預期輸出：
+- `serverStatus = ok`
+- `persistenceMode = Memory`
+- `onlineDevices = 0`
+- `totalDevices = 0`
 
 ### 8.3 使用桌面捷徑
 
@@ -532,6 +551,8 @@ WinForms UI automation：
 - `deploy/publish/Agent`
 - `deploy/publish/Server`
 - `deploy/release`
+- `deploy/release/current/release-manifest.json`
+- `deploy/release/current/release-summary.txt`
 - 本手冊 `INSTALLATION_GUIDE.md`
 - 桌面捷徑
 
@@ -550,6 +571,7 @@ WinForms UI automation：
 - 中央 `/ws/dashboard`：已由 smoke test 驗證會在 Agent 上線時推送 `dashboard-ready` / `dashboard-changed`
 - 中央 `/api/settings/host`：已由 smoke test 驗證可 round-trip 讀取與更新 Host 設定
 - `deploy/scripts/Deploy-App.ps1`：已驗證可產出 `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server` 與 `deploy/release/current`
+- `deploy/scripts/Verify-Central-Release.ps1`：已驗證可直接啟動 publish 版 `RemoteDesktop.Server.exe` 並成功讀取 `/healthz`
 
 
 

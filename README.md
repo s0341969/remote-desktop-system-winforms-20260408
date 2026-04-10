@@ -71,6 +71,8 @@
 - 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
 - 發佈流程已補齊中央 Server：`Publish-App.ps1` 現在支援依專案指定 framework，`Deploy-App.ps1` 可一鍵 clean、build、測試、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 交付包。
 - 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 也能走與 Host/Agent 一致的交付與啟動流程。
+- `Deploy-App.ps1` 現在會在 `deploy/release/current` 產生 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤對應 commit、產生時間與 Host/Agent/Server 封裝大小。
+- `deploy/scripts/Verify-Central-Release.ps1` 可直接驗證 release 套件是否完整，並啟動 publish 版 `RemoteDesktop.Server.exe` 檢查 `/healthz`。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -189,6 +191,12 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 
 ```powershell
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Deploy-App.ps1
+```
+
+### 驗收交付包
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\release\current\Scripts\Verify-Central-Release.ps1
 ```
 
 ### Smoke Test

@@ -6,6 +6,8 @@
 - `Publish-App.ps1` 現在改為可依專案指定 framework，不再假設所有專案都走 `net8.0-windows`，因此 `RemoteDesktop.Server` 也可納入同一套 publish 腳本。
 - 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 的 publish 與啟動流程與 Host / Agent 一致。
 - 更新 `README.md` 與 `INSTALLATION_GUIDE.md`，補上 `deploy/publish/Server`、`Deploy-App.ps1`、`Start-Server.cmd` 與 `deploy/release` 新的交付結構。
+- `Deploy-App.ps1` 現在會輸出 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤 commit、產生時間與 Host/Agent/Server 大小摘要。
+- 新增 `deploy/scripts/Verify-Central-Release.ps1`，可直接驗證 release 套件中的 publish 版中央 Server 是否能正常啟動並回應 `/healthz`。
 - 第七階段新增中央儀表板 WebSocket 推播 /ws/dashboard，RemoteDesktop.Server 會在裝置上線、離線與授權變更時主動推送 dashboard-changed 事件。
 - RemoteDesktop.Host 的中央模式主畫面改成「即時推播 + 30 秒回補輪詢」，多台 Console Client 共用同一個中央狀態時不再只靠固定 5 秒 polling。
 - 擴充 RemoteDesktop.SmokeTests，新增中央 dashboard push 端到端驗證，確保 Agent 註冊後可立即收到 dashboard-ready / dashboard-changed 封包。
