@@ -107,7 +107,7 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
 
     public string HealthUrl => $"{DashboardServerUrl}/healthz";
 
-    public bool SupportsViewerSessions => false;
+    public bool SupportsViewerSessions => true;
 
     public async Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken)
     {

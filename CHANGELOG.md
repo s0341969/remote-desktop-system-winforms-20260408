@@ -10,7 +10,10 @@
 - 更新 `README.md`，同步反映遠端檔案總管已上線、UI automation 已覆蓋檔案總管流程，以及 `deploy/release` 交付包輸出位置。
 - 第二階段新增 `ControlServer:CentralServerUrl` 設定，讓現有 `RemoteDesktop.Host` 可切到中央 Server 儀表板模式，直接透過 `/api/devices`、`/api/presence-logs` 與授權 API 顯示中央裝置狀態。
 - `RemoteDesktop.Server` 新增 Console Client 所需的第一批 API 端點：`/api/devices`、`/api/presence-logs` 與裝置授權更新端點。
-- `RemoteDesktop.Host` 主畫面已改成雙模式資料來源：未設定 `CentralServerUrl` 時維持本機模式；設定後改讀中央 Server，並暫時停用 Viewer，避免半套通道切換造成控制路徑不一致。
+- `RemoteDesktop.Host` 主畫面已改成雙模式資料來源：未設定 `CentralServerUrl` 時維持本機模式；設定後改讀中央 Server。
+- 第三階段新增中央 `Viewer` websocket 通道 `/ws/viewer`，讓 `RemoteDesktop.Host` 在中央模式下也能透過 Server 中繼開啟 Viewer、接收畫面串流並轉送控制命令。
+- `RemoteDesktop.Host` 新增 `IRemoteViewerSessionBroker` 抽象，將本機 broker 與中央 Server viewer 通道拆開，避免 UI 與傳輸路徑耦合。
+- 已實測中央 Server viewer bridge：Agent 經 `/ws/agent` 連入後，Viewer 可透過 `/ws/viewer` 收到畫面與轉送控制命令。
 - 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。
 
 ## 2026-04-09
@@ -62,6 +65,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 

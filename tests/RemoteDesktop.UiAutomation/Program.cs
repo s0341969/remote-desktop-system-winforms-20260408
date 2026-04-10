@@ -170,7 +170,8 @@ static void TestHostMainForm()
     var userManagementFactory = new UserManagementFormFactory(authenticationService, auditService);
     var auditLogFactory = new AuditLogFormFactory(auditService);
     var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
-    var viewerFactory = new RemoteViewerFormFactory(broker, new RemoteDesktop.Host.Services.FileTransferTraceService());
+    var viewerSessionBrokerFactory = new RemoteViewerSessionBrokerFactory(broker, options);
+    var viewerFactory = new RemoteViewerFormFactory(viewerSessionBrokerFactory, new RemoteDesktop.Host.Services.FileTransferTraceService());
     var dashboardDataSourceFactory = new MainDashboardDataSourceFactory(repo, broker, options);
 
     using var form = new MainForm();
@@ -257,7 +258,7 @@ static void TestRemoteViewerUploadForm()
     try
     {
         using var form = new TestRemoteViewerForm(uploadFilePath, storedFilePath);
-        form.Bind(device, currentUser, broker);
+        form.Bind(device, currentUser, new RemoteViewerSessionBrokerFactory(broker, options).Create());
         form.Show();
         PumpUi();
 
@@ -1147,6 +1148,7 @@ internal sealed class TestRemoteFileBrowserForm : RemoteFileBrowserForm
         return Task.FromResult<string?>(_moveDestinationDirectoryPath);
     }
 }
+
 
 
 

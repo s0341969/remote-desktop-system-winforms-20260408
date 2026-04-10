@@ -5,19 +5,19 @@ namespace RemoteDesktop.Host.Forms;
 
 public sealed class RemoteViewerFormFactory
 {
-    private readonly DeviceBroker _deviceBroker;
+    private readonly RemoteViewerSessionBrokerFactory _remoteViewerSessionBrokerFactory;
     private readonly FileTransferTraceService _fileTransferTraceService;
 
-    public RemoteViewerFormFactory(DeviceBroker deviceBroker, FileTransferTraceService fileTransferTraceService)
+    public RemoteViewerFormFactory(RemoteViewerSessionBrokerFactory remoteViewerSessionBrokerFactory, FileTransferTraceService fileTransferTraceService)
     {
-        _deviceBroker = deviceBroker;
+        _remoteViewerSessionBrokerFactory = remoteViewerSessionBrokerFactory;
         _fileTransferTraceService = fileTransferTraceService;
     }
 
     public RemoteViewerForm Create(DeviceRecord device, AuthenticatedUserSession viewer)
     {
         var form = new RemoteViewerForm();
-        form.Bind(device, viewer, _deviceBroker, _fileTransferTraceService);
+        form.Bind(device, viewer, _remoteViewerSessionBrokerFactory.Create(), _fileTransferTraceService);
         return form;
     }
 }

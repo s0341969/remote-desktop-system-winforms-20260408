@@ -60,7 +60,7 @@ public partial class RemoteViewerForm : Form
 
     private DeviceRecord? _device;
     private AuthenticatedUserSession? _viewer;
-    private DeviceBroker? _deviceBroker;
+    private IRemoteViewerSessionBroker? _viewerSessionBroker;
     private Size _frameSize = Size.Empty;
     private bool _attached;
     private long _lastMoveAt;
@@ -109,11 +109,11 @@ public partial class RemoteViewerForm : Form
         KeyPreview = true;
     }
 
-    public void Bind(DeviceRecord device, AuthenticatedUserSession viewer, DeviceBroker deviceBroker, FileTransferTraceService? fileTransferTraceService = null)
+    public void Bind(DeviceRecord device, AuthenticatedUserSession viewer, IRemoteViewerSessionBroker viewerSessionBroker, FileTransferTraceService? fileTransferTraceService = null)
     {
         _device = device;
         _viewer = viewer;
-        _deviceBroker = deviceBroker;
+        _viewerSessionBroker = viewerSessionBroker;
         _fileTransferTraceService = fileTransferTraceService;
         var baseWindowTitle = viewer.CanControlRemote
             ? $"{device.DeviceName} - {HostUiText.Window("遠端檢視", "Remote Viewer")}"
@@ -140,16 +140,16 @@ public partial class RemoteViewerForm : Form
     {
         base.OnShown(e);
 
-        if (_deviceBroker is null || _device is null || _viewer is null)
+        if (_viewerSessionBroker is null || _device is null || _viewer is null)
         {
             Close();
             return;
         }
 
         lblStatusValue.Text = HostUiText.Bi("連線中...", "Connecting...");
-        var attached = await _deviceBroker.AttachViewerAsync(
+        var attached = await _viewerSessionBroker.AttachViewerAsync(
             _device.DeviceId,
-            _viewer.DisplayName,
+            _viewer,
             PublishFrameAsync,
             PublishStatusAsync,
             PublishClipboardAsync,
@@ -197,10 +197,16 @@ public partial class RemoteViewerForm : Form
 
         TryDeleteFile(_downloadTempPath);
 
-        if (_attached && _deviceBroker is not null && _device is not null)
+        if (_attached && _viewerSessionBroker is not null && _device is not null)
         {
-            await _deviceBroker.DetachViewerAsync(_device.DeviceId);
+            await _viewerSessionBroker.DetachViewerAsync(_device.DeviceId, CancellationToken.None);
             _attached = false;
+        }
+
+        if (_viewerSessionBroker is not null)
+        {
+            await _viewerSessionBroker.DisposeAsync();
+            _viewerSessionBroker = null;
         }
 
         if (pictureStream.Image is not null)
@@ -1584,9 +1590,9 @@ public partial class RemoteViewerForm : Form
 
     private async void btnDisconnect_Click(object sender, EventArgs e)
     {
-        if (_deviceBroker is not null && _device is not null)
+        if (_viewerSessionBroker is not null && _device is not null)
         {
-            await _deviceBroker.DetachViewerAsync(_device.DeviceId);
+            await _viewerSessionBroker.DetachViewerAsync(_device.DeviceId, CancellationToken.None);
             _attached = false;
         }
 
@@ -1624,7 +1630,7 @@ public partial class RemoteViewerForm : Form
 
     private async Task SendCommandAsync(ViewerCommandMessage command, bool showFailureDialog = true)
     {
-        if (!_attached || _deviceBroker is null || _device is null)
+        if (!_attached || _viewerSessionBroker is null || _device is null)
         {
             return;
         }
@@ -1636,7 +1642,7 @@ public partial class RemoteViewerForm : Form
 
         try
         {
-            await _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, CancellationToken.None);
+            await _viewerSessionBroker.ForwardViewerCommandAsync(_device.DeviceId, command, CancellationToken.None);
             _commandFailed = false;
         }
         catch (Exception exception)
@@ -1658,12 +1664,12 @@ public partial class RemoteViewerForm : Form
 
     private Task SendViewerCommandCoreAsync(ViewerCommandMessage command, CancellationToken cancellationToken)
     {
-        if (!_attached || _deviceBroker is null || _device is null)
+        if (!_attached || _viewerSessionBroker is null || _device is null)
         {
             throw new InvalidOperationException(HostUiText.Bi("Viewer 尚未連線到遠端裝置。", "The viewer is not connected to a remote device."));
         }
 
-        return _deviceBroker.ForwardViewerCommandAsync(_device.DeviceId, command, cancellationToken);
+        return _viewerSessionBroker.ForwardViewerCommandAsync(_device.DeviceId, command, cancellationToken);
     }
 
     protected virtual string? SelectUploadFilePath(IWin32Window owner)

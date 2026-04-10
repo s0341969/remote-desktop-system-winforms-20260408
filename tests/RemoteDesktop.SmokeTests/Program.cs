@@ -82,6 +82,7 @@ static async Task RunHostRelaySmokeTestAsync()
         var viewerAttached = await broker.AttachViewerAsync(
             "smoke-device-001",
             "smoke-viewer",
+            true,
             (payload, cancellationToken) =>
             {
                 viewerFrameReceived.TrySetResult(payload);
@@ -601,6 +602,7 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
 
 
 

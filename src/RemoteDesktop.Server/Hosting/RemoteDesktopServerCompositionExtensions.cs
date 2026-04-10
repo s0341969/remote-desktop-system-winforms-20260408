@@ -13,6 +13,7 @@ public static class RemoteDesktopServerCompositionExtensions
     {
         services.AddSingleton<DeviceBroker>();
         services.AddSingleton<AgentWebSocketHandler>();
+        services.AddSingleton<ViewerWebSocketHandler>();
         services.AddHostedService<AgentMonitorService>();
         return services;
     }
@@ -29,6 +30,15 @@ public static class RemoteDesktopServerCompositionExtensions
             branch.Run(async context =>
             {
                 var handler = context.RequestServices.GetRequiredService<AgentWebSocketHandler>();
+                await handler.HandleAsync(context);
+            });
+        });
+
+        app.Map("/ws/viewer", branch =>
+        {
+            branch.Run(async context =>
+            {
+                var handler = context.RequestServices.GetRequiredService<ViewerWebSocketHandler>();
                 await handler.HandleAsync(context);
             });
         });

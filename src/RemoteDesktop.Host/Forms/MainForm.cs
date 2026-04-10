@@ -250,16 +250,6 @@ public partial class MainForm : Form
             return;
         }
 
-        if (_dashboardDataSource is not { SupportsViewerSessions: true })
-        {
-            MessageBox.Show(
-                HostUiText.Bi("目前主控台已切到中央 Server 模式。第二階段目前只接通裝置清單與授權管理，Viewer 仍在下一階段切換。", "The console is currently connected to the central Server mode. This phase only switches device list and authorization management. Viewer routing will move in the next phase."),
-                HostUiText.Window("中央 Server 模式", "Central Server Mode"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
         var selected = GetSelectedDevice();
         if (selected is null)
         {

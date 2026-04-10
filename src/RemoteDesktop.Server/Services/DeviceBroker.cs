@@ -164,6 +164,7 @@ public sealed class DeviceBroker
     public Task<bool> AttachViewerAsync(
         string deviceId,
         string userName,
+        bool canControl,
         Func<byte[], CancellationToken, Task> publishFrameAsync,
         Func<AgentFileTransferStatusMessage, CancellationToken, Task>? publishStatusAsync,
         Func<AgentClipboardMessage, CancellationToken, Task>? publishClipboardAsync,
@@ -186,7 +187,7 @@ public sealed class DeviceBroker
                 return Task.FromResult(false);
             }
 
-            session.ViewerSession = new ViewerSession(userName, publishFrameAsync, publishStatusAsync, publishClipboardAsync);
+            session.ViewerSession = new ViewerSession(userName, canControl, publishFrameAsync, publishStatusAsync, publishClipboardAsync);
         }
 
         _logger.LogInformation("Viewer attached: {DeviceId} by {UserName}", deviceId, userName);
@@ -247,7 +248,7 @@ public sealed class DeviceBroker
             viewerSession = session.ViewerSession;
         }
 
-        if (viewerSession is null || !session.IsAuthorized)
+        if (viewerSession is null || !session.IsAuthorized || !viewerSession.CanControl)
         {
             return;
         }
@@ -371,17 +372,20 @@ public sealed class DeviceBroker
 
         public ViewerSession(
             string userName,
+            bool canControl,
             Func<byte[], CancellationToken, Task> publishFrameAsync,
             Func<AgentFileTransferStatusMessage, CancellationToken, Task>? publishStatusAsync,
             Func<AgentClipboardMessage, CancellationToken, Task>? publishClipboardAsync)
         {
             UserName = userName;
+            CanControl = canControl;
             _publishFrameAsync = publishFrameAsync;
             _publishStatusAsync = publishStatusAsync;
             _publishClipboardAsync = publishClipboardAsync;
         }
 
         public string UserName { get; }
+        public bool CanControl { get; }
         public bool InputActivityLogged { get; set; }
         public Task PublishFrameAsync(byte[] payload, CancellationToken cancellationToken) => _publishFrameAsync(payload, cancellationToken);
         public Task PublishStatusAsync(AgentFileTransferStatusMessage status, CancellationToken cancellationToken) => _publishStatusAsync is null ? Task.CompletedTask : _publishStatusAsync(status, cancellationToken);

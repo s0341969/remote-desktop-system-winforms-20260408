@@ -1,8 +1,9 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using RemoteDesktop.Shared.Models;
 
-namespace RemoteDesktop.Host.Services;
+namespace RemoteDesktop.Server.Services;
 
 public sealed class ViewerWebSocketHandler
 {
@@ -16,12 +17,6 @@ public sealed class ViewerWebSocketHandler
 
     public async Task HandleAsync(HttpContext context)
     {
-        if (context.User.Identity?.IsAuthenticated != true)
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-
         if (!context.WebSockets.IsWebSocketRequest)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -29,24 +24,48 @@ public sealed class ViewerWebSocketHandler
         }
 
         var deviceId = context.Request.Query["deviceId"].ToString();
-        if (string.IsNullOrWhiteSpace(deviceId))
+        var userName = context.Request.Query["userName"].ToString();
+        var canControl = bool.TryParse(context.Request.Query["canControl"], out var parsedCanControl) && parsedCanControl;
+        if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(userName))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Missing deviceId.");
+            await context.Response.WriteAsync("Missing deviceId or userName.");
             return;
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
         var attached = await _broker.AttachViewerAsync(
             deviceId,
-            context.User.Identity.Name ?? "viewer",
-            true,
+            userName,
+            canControl,
             async (payload, cancellationToken) =>
             {
                 await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);
             },
-            null,
-            null,
+            async (status, cancellationToken) =>
+            {
+                var envelope = new ViewerTransportEnvelope
+                {
+                    Type = "transfer-status",
+                    DeviceId = deviceId,
+                    TransferStatus = status
+                };
+
+                var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
+                await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+            },
+            async (clipboard, cancellationToken) =>
+            {
+                var envelope = new ViewerTransportEnvelope
+                {
+                    Type = "clipboard",
+                    DeviceId = deviceId,
+                    Clipboard = clipboard
+                };
+
+                var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
+                await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+            },
             context.RequestAborted);
 
         if (!attached)
@@ -55,12 +74,14 @@ public sealed class ViewerWebSocketHandler
             return;
         }
 
-        var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        var readyEnvelope = new ViewerTransportEnvelope
         {
-            type = "viewer-ready",
-            deviceId
-        }, JsonOptions));
+            Type = "viewer-ready",
+            DeviceId = deviceId,
+            Message = "viewer-ready"
+        };
 
+        var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(readyEnvelope, JsonOptions));
         await socket.SendAsync(readyPayload, WebSocketMessageType.Text, true, context.RequestAborted);
 
         try

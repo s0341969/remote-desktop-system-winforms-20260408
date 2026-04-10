@@ -21,6 +21,7 @@ public static class RemoteDesktopHostCompositionExtensions
         services.AddSingleton<AgentWebSocketHandler>();
         services.AddSingleton<ViewerWebSocketHandler>();
         services.AddSingleton<FileTransferTraceService>();
+        services.AddSingleton<RemoteViewerSessionBrokerFactory>();
         services.AddSingleton<CredentialValidator>();
         services.AddSingleton<IAuditLogStore, JsonAuditLogStore>();
         services.AddSingleton<AuditService>();
