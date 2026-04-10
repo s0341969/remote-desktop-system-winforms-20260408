@@ -16,6 +16,11 @@
 - 已實測中央 Server viewer bridge：Agent 經 `/ws/agent` 連入後，Viewer 可透過 `/ws/viewer` 收到畫面與轉送控制命令。
 - 第四階段新增中央 `POST /api/auth/login`、`GET/POST/DELETE /api/users`、`GET/POST /api/audit-logs`。
 - `RemoteDesktop.Host` 的登入窗、使用者管理與稽核視窗已改成面向介面，在中央模式下會自動切到 Server API，而不是使用本機 `users.json` / `audit-log.ndjson`。
+- 第五階段新增中央 `ConsoleSessionTokenService`，登入成功後會簽發 access token，並由 `RemoteDesktop.Host` 保存於 `CentralConsoleSessionState`。
+- 中央 `/api/devices`、`/api/presence-logs`、`/api/users`、`/api/audit-logs` 與 `/ws/viewer` 現在都需要 bearer token；管理員 API 會由 Server 端依角色回傳 `401/403`，不再信任 Console Client 傳入的身分。
+- 中央 Viewer websocket 不再接受 Client 傳入 `userName/canControl` 決定權限，改由 Server 端 session role 決定 attach 身分與是否允許控制。
+- `RemoteDesktop.Agent` 的 `ClipboardSyncService` 補上 Windows 剪貼簿重試機制，修正 smoke test 與實機偶發的 OLE/clipboard busy 失敗。
+- 已重新驗證 `dotnet build`、`RemoteDesktop.SmokeTests`、`RemoteDesktop.UiAutomation` 與中央 Server token-authenticated API/WebSocket smoke。
 - 將 `TODO.md` 中已過時的「補遠端檔案瀏覽 UI」項目移除，改為聚焦檔案總管後續強化方向。
 
 ## 2026-04-09
@@ -67,6 +72,7 @@
 - 在 Windows 啟動資料夾建立 `RemoteDesktop Agent 開機啟動.lnk`。
 - 重寫 `INSTALLATION_GUIDE.md`，改為目前 WinForms 架構、publish 版、捷徑與開機啟動實際說明。
 - 更新 `README.md`，補上 publish、腳本與捷徑資訊。
+
 
 
 

@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using RemoteDesktop.Server.Services.Security;
 using RemoteDesktop.Shared.Models;
 
 namespace RemoteDesktop.Server.Services;
@@ -9,10 +10,12 @@ public sealed class ViewerWebSocketHandler
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DeviceBroker _broker;
+    private readonly ConsoleSessionTokenService _sessionTokenService;
 
-    public ViewerWebSocketHandler(DeviceBroker broker)
+    public ViewerWebSocketHandler(DeviceBroker broker, ConsoleSessionTokenService sessionTokenService)
     {
         _broker = broker;
+        _sessionTokenService = sessionTokenService;
     }
 
     public async Task HandleAsync(HttpContext context)
@@ -23,21 +26,25 @@ public sealed class ViewerWebSocketHandler
             return;
         }
 
+        if (!_sessionTokenService.TryAuthenticate(context.Request, out var session))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
         var deviceId = context.Request.Query["deviceId"].ToString();
-        var userName = context.Request.Query["userName"].ToString();
-        var canControl = bool.TryParse(context.Request.Query["canControl"], out var parsedCanControl) && parsedCanControl;
-        if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(userName))
+        if (string.IsNullOrWhiteSpace(deviceId))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Missing deviceId or userName.");
+            await context.Response.WriteAsync("Missing deviceId.");
             return;
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
         var attached = await _broker.AttachViewerAsync(
             deviceId,
-            userName,
-            canControl,
+            session.DisplayName,
+            _sessionTokenService.CanControlRemote(session),
             async (payload, cancellationToken) =>
             {
                 await socket.SendAsync(payload, WebSocketMessageType.Binary, true, cancellationToken);

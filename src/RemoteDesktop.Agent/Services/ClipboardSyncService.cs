@@ -1,10 +1,13 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace RemoteDesktop.Agent.Services;
 
 public sealed class ClipboardSyncService : IDisposable
 {
+    private const int ClipboardRetryCount = 8;
+    private static readonly TimeSpan ClipboardRetryDelay = TimeSpan.FromMilliseconds(50);
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _clipboardThread;
     private bool _disposed;
@@ -22,7 +25,7 @@ public sealed class ClipboardSyncService : IDisposable
 
     public Task<string> GetTextAsync(CancellationToken cancellationToken)
     {
-        return InvokeAsync(() =>
+        return InvokeAsync(() => ExecuteClipboardOperation(() =>
         {
             if (!Clipboard.ContainsText())
             {
@@ -30,12 +33,12 @@ public sealed class ClipboardSyncService : IDisposable
             }
 
             return Clipboard.GetText();
-        }, cancellationToken);
+        }), cancellationToken);
     }
 
     public Task SetTextAsync(string text, CancellationToken cancellationToken)
     {
-        return InvokeAsync(() =>
+        return InvokeAsync(() => ExecuteClipboardOperation(() =>
         {
             if (string.IsNullOrEmpty(text))
             {
@@ -47,7 +50,7 @@ public sealed class ClipboardSyncService : IDisposable
             }
 
             return true;
-        }, cancellationToken);
+        }), cancellationToken);
     }
 
     public void Dispose()
@@ -90,5 +93,24 @@ public sealed class ClipboardSyncService : IDisposable
         }, cancellationToken);
 
         return completionSource.Task.WaitAsync(cancellationToken);
+    }
+
+    private static T ExecuteClipboardOperation<T>(Func<T> workItem)
+    {
+        Exception? lastException = null;
+        for (var attempt = 0; attempt < ClipboardRetryCount; attempt++)
+        {
+            try
+            {
+                return workItem();
+            }
+            catch (ExternalException exception)
+            {
+                lastException = exception;
+                Thread.Sleep(ClipboardRetryDelay);
+            }
+        }
+
+        throw new InvalidOperationException("無法存取 Windows 剪貼簿。 / Failed to access the Windows clipboard.", lastException);
     }
 }

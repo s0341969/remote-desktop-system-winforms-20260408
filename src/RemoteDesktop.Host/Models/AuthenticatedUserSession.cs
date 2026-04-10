@@ -8,6 +8,10 @@ public sealed class AuthenticatedUserSession
 
     public required UserRole Role { get; init; }
 
+    public string? AccessToken { get; init; }
+
+    public DateTimeOffset? AccessTokenExpiresAt { get; init; }
+
     public bool CanManageSettings => Role == UserRole.Administrator;
 
     public bool CanManageUsers => Role == UserRole.Administrator;

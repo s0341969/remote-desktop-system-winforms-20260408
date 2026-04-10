@@ -181,8 +181,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 這是多主控台重構的第一階段
 - 目前已可獨立接收 Agent WebSocket 連線
 - 現有 `RemoteDesktop.Host` 已可在 Host 設定中填入 `中央 Server URL / Central server URL`，切成中央 Server 儀表板模式
-- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄
-- 中央模式尚未接通：真正的 session/token 驗證、儀表板即時推播、Host 設定集中化
+- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄、Server 端 bearer token/session 驗證
+- 中央模式目前尚未接通：儀表板即時推播、Host 設定集中化、Viewer Session Lock
 
 ### 8.2 使用啟動腳本
 
@@ -217,7 +217,7 @@ Windows 登入後，Agent 會自動啟動。
    - 健康檢查位址
 4. 按「設定」可修改 Host 參數
 5. 若要把主畫面資料切到中央 Server，於 Host 設定填入 `中央 Server URL / Central server URL`，儲存後重啟 Host
-6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；Viewer 會透過中央 Server 的 `/ws/viewer` 通道開啟
+6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；登入成功後 Host 會保存中央 Server 簽發的 bearer token，Viewer 與後續管理 API 都會帶著同一份 token 透過中央 Server 的 `/ws/viewer` 與 REST API 通道運作
 7. 若要持久化裝置與歷程，可在本機 Host 或中央 Server 各自勾選 MSSQL 模式
 8. 在未設定 CentralServerUrl 的本機模式下，雙擊在線裝置或按「開啟遠端畫面」即可開啟 Viewer
 
@@ -516,6 +516,8 @@ WinForms UI automation：
 - Viewer upload/download 流程：已驗證
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
+
+
 
 
 

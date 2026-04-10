@@ -13,10 +13,12 @@ namespace RemoteDesktop.Host.Services;
 public sealed class RemoteAuthenticationService : IAuthenticationService, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly CentralConsoleSessionState _sessionState;
     private bool _disposed;
 
-    public RemoteAuthenticationService(IOptions<ControlServerOptions> options)
+    public RemoteAuthenticationService(IOptions<ControlServerOptions> options, CentralConsoleSessionState sessionState)
     {
+        _sessionState = sessionState;
         var baseAddress = NormalizeBaseAddress(options.Value.CentralServerUrl!);
         _httpClient = new HttpClient
         {
@@ -27,6 +29,7 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
 
     public async Task<AuthenticatedUserSession?> AuthenticateAsync(string userName, string password, CancellationToken cancellationToken)
     {
+        _sessionState.Clear();
         var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             UserName = userName,
@@ -40,12 +43,21 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
 
         response.EnsureSuccessStatusCode();
         var dto = await response.Content.ReadFromJsonAsync<UserSessionDto>(cancellationToken: cancellationToken);
-        return dto is null ? null : MapSession(dto);
+        if (dto is null)
+        {
+            _sessionState.Clear();
+            return null;
+        }
+
+        var session = MapSession(dto);
+        _sessionState.SetAuthenticatedSession(session);
+        return session;
     }
 
     public async Task<IReadOnlyList<UserAccount>> GetAccountsAsync(CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync("/api/users", cancellationToken);
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, "/api/users");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var items = await response.Content.ReadFromJsonAsync<List<UserAccountDto>>(cancellationToken: cancellationToken);
         return items?.Select(MapUserAccount).ToList() ?? [];
@@ -53,14 +65,16 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
 
     public async Task SaveAccountAsync(UserAccountEditorModel model, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/users", new UserAccountUpsertRequest
+        using var request = CreateAuthorizedRequest(HttpMethod.Post, "/api/users");
+        request.Content = JsonContent.Create(new UserAccountUpsertRequest
         {
             UserName = model.UserName,
             DisplayName = model.DisplayName,
             Role = model.Role.ToString(),
             IsEnabled = model.IsEnabled,
             Password = model.Password
-        }, cancellationToken);
+        });
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
@@ -75,7 +89,8 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
     {
         var encodedUserName = Uri.EscapeDataString(userName);
         var encodedCurrentUser = Uri.EscapeDataString(currentUserName);
-        var response = await _httpClient.DeleteAsync($"/api/users/{encodedUserName}?currentUserName={encodedCurrentUser}", cancellationToken);
+        using var request = CreateAuthorizedRequest(HttpMethod.Delete, $"/api/users/{encodedUserName}?currentUserName={encodedCurrentUser}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             var message = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -107,13 +122,22 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
         return trimmed;
     }
 
+    private HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string requestUri)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        _sessionState.ApplyAuthorizationHeader(request);
+        return request;
+    }
+
     private static AuthenticatedUserSession MapSession(UserSessionDto dto)
     {
         return new AuthenticatedUserSession
         {
             UserName = dto.UserName,
             DisplayName = dto.DisplayName,
-            Role = Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out var role) ? role : UserRole.Viewer
+            Role = Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out var role) ? role : UserRole.Viewer,
+            AccessToken = string.IsNullOrWhiteSpace(dto.AccessToken) ? null : dto.AccessToken,
+            AccessTokenExpiresAt = dto.AccessTokenExpiresAt
         };
     }
 
@@ -136,10 +160,12 @@ public sealed class RemoteAuthenticationService : IAuthenticationService, IDispo
 public sealed class RemoteAuditService : IAuditService, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly CentralConsoleSessionState _sessionState;
     private bool _disposed;
 
-    public RemoteAuditService(IOptions<ControlServerOptions> options)
+    public RemoteAuditService(IOptions<ControlServerOptions> options, CentralConsoleSessionState sessionState)
     {
+        _sessionState = sessionState;
         var baseAddress = NormalizeBaseAddress(options.Value.CentralServerUrl!);
         _httpClient = new HttpClient
         {
@@ -150,7 +176,8 @@ public sealed class RemoteAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetRecentAsync(int take, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync($"/api/audit-logs?take={Math.Clamp(take, 1, 1000)}", cancellationToken);
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, $"/api/audit-logs?take={Math.Clamp(take, 1, 1000)}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var items = await response.Content.ReadFromJsonAsync<List<AuditLogEntryDto>>(cancellationToken: cancellationToken);
         return items?.Select(MapAuditLogEntry).ToList() ?? [];
@@ -158,7 +185,8 @@ public sealed class RemoteAuditService : IAuditService, IDisposable
 
     public async Task WriteAsync(string action, string actorUserName, string actorDisplayName, string targetType, string? targetId, bool succeeded, string details, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/audit-logs", new AuditLogEntryDto
+        using var request = CreateAuthorizedRequest(HttpMethod.Post, "/api/audit-logs");
+        request.Content = JsonContent.Create(new AuditLogEntryDto
         {
             OccurredAt = DateTimeOffset.UtcNow,
             ActorUserName = actorUserName,
@@ -168,7 +196,8 @@ public sealed class RemoteAuditService : IAuditService, IDisposable
             TargetId = targetId ?? string.Empty,
             Succeeded = succeeded,
             Details = details
-        }, cancellationToken);
+        });
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         response.EnsureSuccessStatusCode();
     }
@@ -198,6 +227,13 @@ public sealed class RemoteAuditService : IAuditService, IDisposable
         }
 
         return trimmed;
+    }
+
+    private HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string requestUri)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        _sessionState.ApplyAuthorizationHeader(request);
+        return request;
     }
 
     private static AuditLogEntry MapAuditLogEntry(AuditLogEntryDto dto)

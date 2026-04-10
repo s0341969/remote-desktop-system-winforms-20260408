@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using RemoteDesktop.Server.Options;
 using RemoteDesktop.Server.Services;
 using RemoteDesktop.Server.Services.Auditing;
+using RemoteDesktop.Server.Services.Security;
 using RemoteDesktop.Server.Services.Users;
 using RemoteDesktop.Shared.Models;
 
@@ -21,6 +22,7 @@ public static class RemoteDesktopServerCompositionExtensions
         services.AddSingleton<AuditService>();
         services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
         services.AddSingleton<UserAccountService>();
+        services.AddSingleton<ConsoleSessionTokenService>();
         services.AddHostedService<AgentMonitorService>();
         return services;
     }
@@ -62,19 +64,29 @@ public static class RemoteDesktopServerCompositionExtensions
             });
         });
 
-        app.MapGet("/api/devices", async (IDeviceRepository repository, int? take, CancellationToken cancellationToken) =>
+        app.MapGet("/api/devices", async (HttpContext context, IDeviceRepository repository, ConsoleSessionTokenService sessionTokenService, int? take, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out _))
+            {
+                return Results.Unauthorized();
+            }
+
             var devices = await repository.GetDevicesAsync(Math.Clamp(take ?? 100, 1, 500), cancellationToken);
             return Results.Ok(devices);
         });
 
-        app.MapGet("/api/presence-logs", async (IDeviceRepository repository, int? take, CancellationToken cancellationToken) =>
+        app.MapGet("/api/presence-logs", async (HttpContext context, IDeviceRepository repository, ConsoleSessionTokenService sessionTokenService, int? take, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out _))
+            {
+                return Results.Unauthorized();
+            }
+
             var logs = await repository.GetPresenceLogsAsync(Math.Clamp(take ?? 100, 1, 500), cancellationToken);
             return Results.Ok(logs);
         });
 
-        app.MapPost("/api/auth/login", async (LoginRequest request, UserAccountService userAccountService, AuditService auditService, IOptions<ControlServerOptions> options, CancellationToken cancellationToken) =>
+        app.MapPost("/api/auth/login", async (LoginRequest request, UserAccountService userAccountService, AuditService auditService, ConsoleSessionTokenService sessionTokenService, IOptions<ControlServerOptions> options, CancellationToken cancellationToken) =>
         {
             var session = await userAccountService.AuthenticateAsync(request.UserName, request.Password, cancellationToken);
             if (session is null)
@@ -94,6 +106,8 @@ public static class RemoteDesktopServerCompositionExtensions
                 return Results.Unauthorized();
             }
 
+            session = sessionTokenService.IssueToken(session);
+
             await auditService.WriteAsync(new AuditLogEntryDto
             {
                 OccurredAt = DateTimeOffset.UtcNow,
@@ -109,22 +123,42 @@ public static class RemoteDesktopServerCompositionExtensions
             return Results.Ok(session);
         });
 
-        app.MapGet("/api/users", async (UserAccountService userAccountService, CancellationToken cancellationToken) =>
+        app.MapGet("/api/users", async (HttpContext context, UserAccountService userAccountService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             var items = await userAccountService.GetAccountsAsync(cancellationToken);
             return Results.Ok(items);
         });
 
-        app.MapPost("/api/users", async (UserAccountUpsertRequest request, UserAccountService userAccountService, AuditService auditService, CancellationToken cancellationToken) =>
+        app.MapPost("/api/users", async (HttpContext context, UserAccountUpsertRequest request, UserAccountService userAccountService, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             try
             {
                 await userAccountService.SaveAccountAsync(request, cancellationToken);
                 await auditService.WriteAsync(new AuditLogEntryDto
                 {
                     OccurredAt = DateTimeOffset.UtcNow,
-                    ActorUserName = "remote-console",
-                    ActorDisplayName = "remote-console",
+                    ActorUserName = session.UserName,
+                    ActorDisplayName = session.DisplayName,
                     Action = "user-account-save",
                     TargetType = "user-account",
                     TargetId = request.UserName,
@@ -140,16 +174,26 @@ public static class RemoteDesktopServerCompositionExtensions
             }
         });
 
-        app.MapDelete("/api/users/{userName}", async (string userName, string currentUserName, UserAccountService userAccountService, AuditService auditService, CancellationToken cancellationToken) =>
+        app.MapDelete("/api/users/{userName}", async (HttpContext context, string userName, string? currentUserName, UserAccountService userAccountService, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             try
             {
-                await userAccountService.DeleteAccountAsync(userName, currentUserName, cancellationToken);
+                await userAccountService.DeleteAccountAsync(userName, session.UserName, cancellationToken);
                 await auditService.WriteAsync(new AuditLogEntryDto
                 {
                     OccurredAt = DateTimeOffset.UtcNow,
-                    ActorUserName = currentUserName,
-                    ActorDisplayName = currentUserName,
+                    ActorUserName = session.UserName,
+                    ActorDisplayName = session.DisplayName,
                     Action = "user-account-delete",
                     TargetType = "user-account",
                     TargetId = userName,
@@ -165,34 +209,72 @@ public static class RemoteDesktopServerCompositionExtensions
             }
         });
 
-        app.MapGet("/api/audit-logs", async (int? take, AuditService auditService, CancellationToken cancellationToken) =>
+        app.MapGet("/api/audit-logs", async (HttpContext context, int? take, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
         {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             var items = await auditService.GetRecentAsync(Math.Clamp(take ?? 250, 1, 1000), cancellationToken);
             return Results.Ok(items);
         });
 
-        app.MapPost("/api/audit-logs", async (AuditLogEntryDto entry, AuditService auditService, CancellationToken cancellationToken) =>
+        app.MapPost("/api/audit-logs", async (HttpContext context, AuditLogEntryDto entry, AuditService auditService, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
         {
-            await auditService.WriteAsync(entry, cancellationToken);
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            await auditService.WriteAsync(new AuditLogEntryDto
+            {
+                Id = entry.Id,
+                OccurredAt = entry.OccurredAt,
+                ActorUserName = session.UserName,
+                ActorDisplayName = session.DisplayName,
+                Action = entry.Action,
+                TargetType = entry.TargetType,
+                TargetId = entry.TargetId,
+                Succeeded = entry.Succeeded,
+                Details = entry.Details
+            }, cancellationToken);
             return Results.Ok();
         });
 
         app.MapPost("/api/devices/{deviceId}/authorization", async (
+            HttpContext context,
             string deviceId,
             bool isAuthorized,
             string changedBy,
             DeviceBroker broker,
+            ConsoleSessionTokenService sessionTokenService,
             CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(changedBy))
+            if (!sessionTokenService.TryAuthenticate(context.Request, out var session))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!sessionTokenService.IsInRole(session, "Administrator"))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            if (string.IsNullOrWhiteSpace(deviceId))
             {
                 return Results.BadRequest(new
                 {
-                    message = "deviceId and changedBy are required."
+                    message = "deviceId is required."
                 });
             }
 
-            var success = await broker.SetDeviceAuthorizationAsync(deviceId, isAuthorized, changedBy, cancellationToken);
+            var success = await broker.SetDeviceAuthorizationAsync(deviceId, isAuthorized, session.UserName, cancellationToken);
             if (!success)
             {
                 return Results.NotFound(new

@@ -165,14 +165,15 @@ static void TestHostMainForm()
     var auditService = CreateAuditService();
     var loggerFactory = LoggerFactory.Create(static builder => { });
     var broker = new DeviceBroker(repo, options, loggerFactory.CreateLogger<DeviceBroker>(), auditService);
+    var sessionState = new CentralConsoleSessionState(options);
     var settingsFactory = new HostSettingsFormFactory(new InMemoryHostSettingsStore(), auditService);
     var authenticationService = CreateAuthenticationService(options.Value);
     var userManagementFactory = new UserManagementFormFactory(authenticationService, auditService);
     var auditLogFactory = new AuditLogFormFactory(auditService);
     var currentUser = AuthenticateOrThrow(authenticationService, "admin", "Password!2026");
-    var viewerSessionBrokerFactory = new RemoteViewerSessionBrokerFactory(broker, options);
+    var viewerSessionBrokerFactory = new RemoteViewerSessionBrokerFactory(broker, options, sessionState);
     var viewerFactory = new RemoteViewerFormFactory(viewerSessionBrokerFactory, new RemoteDesktop.Host.Services.FileTransferTraceService());
-    var dashboardDataSourceFactory = new MainDashboardDataSourceFactory(repo, broker, options);
+    var dashboardDataSourceFactory = new MainDashboardDataSourceFactory(repo, broker, options, sessionState);
 
     using var form = new MainForm();
     form.Bind(dashboardDataSourceFactory.Create(), options.Value, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
@@ -233,6 +234,7 @@ static void TestRemoteViewerUploadForm()
     var auditService = CreateAuditService();
     var broker = new DeviceBroker(repo, options, loggerFactory.CreateLogger<DeviceBroker>(), auditService);
     var currentUser = CreateAdministratorSession();
+    var sessionState = new CentralConsoleSessionState(options);
     var device = new DeviceRecord
     {
         DeviceId = "viewer-device-001",
@@ -258,7 +260,7 @@ static void TestRemoteViewerUploadForm()
     try
     {
         using var form = new TestRemoteViewerForm(uploadFilePath, storedFilePath);
-        form.Bind(device, currentUser, new RemoteViewerSessionBrokerFactory(broker, options).Create());
+        form.Bind(device, currentUser, new RemoteViewerSessionBrokerFactory(broker, options, sessionState).Create());
         form.Show();
         PumpUi();
 
@@ -1148,6 +1150,7 @@ internal sealed class TestRemoteFileBrowserForm : RemoteFileBrowserForm
         return Task.FromResult<string?>(_moveDestinationDirectoryPath);
     }
 }
+
 
 
 

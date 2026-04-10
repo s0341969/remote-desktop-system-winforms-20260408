@@ -27,15 +27,18 @@ public sealed class MainDashboardDataSourceFactory
     private readonly IDeviceRepository _repository;
     private readonly DeviceBroker _deviceBroker;
     private readonly IOptions<ControlServerOptions> _options;
+    private readonly CentralConsoleSessionState _sessionState;
 
     public MainDashboardDataSourceFactory(
         IDeviceRepository repository,
         DeviceBroker deviceBroker,
-        IOptions<ControlServerOptions> options)
+        IOptions<ControlServerOptions> options,
+        CentralConsoleSessionState sessionState)
     {
         _repository = repository;
         _deviceBroker = deviceBroker;
         _options = options;
+        _sessionState = sessionState;
     }
 
     public IMainDashboardDataSource Create()
@@ -46,7 +49,7 @@ public sealed class MainDashboardDataSourceFactory
             return new LocalMainDashboardDataSource(_repository, _deviceBroker, options);
         }
 
-        return new RemoteMainDashboardDataSource(options);
+        return new RemoteMainDashboardDataSource(options, _sessionState);
     }
 }
 
@@ -91,10 +94,12 @@ internal sealed class LocalMainDashboardDataSource : IMainDashboardDataSource
 internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly CentralConsoleSessionState _sessionState;
     private bool _disposed;
 
-    public RemoteMainDashboardDataSource(ControlServerOptions options)
+    public RemoteMainDashboardDataSource(ControlServerOptions options, CentralConsoleSessionState sessionState)
     {
+        _sessionState = sessionState;
         var baseAddress = NormalizeBaseAddress(options.CentralServerUrl!);
         _httpClient = new HttpClient
         {
@@ -111,7 +116,8 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
 
     public async Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync($"/api/devices?take={Math.Clamp(take, 1, 500)}", cancellationToken);
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, $"/api/devices?take={Math.Clamp(take, 1, 500)}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var devices = await response.Content.ReadFromJsonAsync<List<SharedDeviceRecord>>(cancellationToken: cancellationToken);
         return devices?.Select(MapDeviceRecord).ToList() ?? [];
@@ -119,7 +125,8 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
 
     public async Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync($"/api/presence-logs?take={Math.Clamp(take, 1, 500)}", cancellationToken);
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, $"/api/presence-logs?take={Math.Clamp(take, 1, 500)}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var logs = await response.Content.ReadFromJsonAsync<List<SharedPresenceLogRecord>>(cancellationToken: cancellationToken);
         return logs?.Select(MapPresenceLogRecord).ToList() ?? [];
@@ -134,10 +141,10 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
 
         var encodedDeviceId = Uri.EscapeDataString(deviceId);
         var encodedChangedBy = Uri.EscapeDataString(changedBy);
-        var response = await _httpClient.PostAsync(
-            $"/api/devices/{encodedDeviceId}/authorization?isAuthorized={isAuthorized}&changedBy={encodedChangedBy}",
-            content: null,
-            cancellationToken);
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/devices/{encodedDeviceId}/authorization?isAuthorized={isAuthorized}&changedBy={encodedChangedBy}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -168,6 +175,13 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
         }
 
         return trimmed;
+    }
+
+    private HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string requestUri)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        _sessionState.ApplyAuthorizationHeader(request);
+        return request;
     }
 
     private static DeviceRecord MapDeviceRecord(SharedDeviceRecord source)

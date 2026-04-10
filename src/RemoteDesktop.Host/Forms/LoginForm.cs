@@ -48,7 +48,7 @@ public partial class LoginForm : Form
             var authenticatedUser = await _authenticationService.AuthenticateAsync(userName, password, CancellationToken.None);
             if (authenticatedUser is not null)
             {
-                if (_auditService is not null)
+                if (_auditService is not null && !IsCentralMode())
                 {
                     await _auditService.WriteAsync(
                         "user-sign-in",
@@ -66,7 +66,7 @@ public partial class LoginForm : Form
                 return;
             }
 
-            if (_auditService is not null)
+            if (_auditService is not null && !IsCentralMode())
             {
                 await _auditService.WriteAsync(
                     "user-sign-in",
@@ -85,7 +85,7 @@ public partial class LoginForm : Form
         }
         catch (Exception exception)
         {
-            if (_auditService is not null)
+            if (_auditService is not null && !IsCentralMode())
             {
                 await _auditService.WriteAsync(
                     "user-sign-in",
@@ -105,6 +105,11 @@ public partial class LoginForm : Form
             btnLogin.Enabled = true;
             btnCancel.Enabled = true;
         }
+    }
+
+    private bool IsCentralMode()
+    {
+        return !string.IsNullOrWhiteSpace(_options?.CentralServerUrl);
     }
 
     private void InitializeUiText()

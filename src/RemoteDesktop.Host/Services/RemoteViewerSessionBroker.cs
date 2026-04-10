@@ -27,11 +27,13 @@ public sealed class RemoteViewerSessionBrokerFactory
 {
     private readonly DeviceBroker _deviceBroker;
     private readonly IOptions<ControlServerOptions> _options;
+    private readonly CentralConsoleSessionState _sessionState;
 
-    public RemoteViewerSessionBrokerFactory(DeviceBroker deviceBroker, IOptions<ControlServerOptions> options)
+    public RemoteViewerSessionBrokerFactory(DeviceBroker deviceBroker, IOptions<ControlServerOptions> options, CentralConsoleSessionState sessionState)
     {
         _deviceBroker = deviceBroker;
         _options = options;
+        _sessionState = sessionState;
     }
 
     public IRemoteViewerSessionBroker Create()
@@ -42,7 +44,7 @@ public sealed class RemoteViewerSessionBrokerFactory
             return new LocalRemoteViewerSessionBroker(_deviceBroker);
         }
 
-        return new CentralServerRemoteViewerSessionBroker(centralServerUrl);
+        return new CentralServerRemoteViewerSessionBroker(centralServerUrl, _sessionState);
     }
 }
 
@@ -93,6 +95,7 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Uri _viewerEndpoint;
+    private readonly CentralConsoleSessionState _sessionState;
     private readonly TaskCompletionSource<bool> _readySignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ClientWebSocket? _socket;
     private Task? _receiveLoopTask;
@@ -101,9 +104,10 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
     private Func<AgentClipboardMessage, CancellationToken, Task>? _publishClipboardAsync;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    public CentralServerRemoteViewerSessionBroker(string centralServerUrl)
+    public CentralServerRemoteViewerSessionBroker(string centralServerUrl, CentralConsoleSessionState sessionState)
     {
         _viewerEndpoint = BuildViewerEndpoint(centralServerUrl);
+        _sessionState = sessionState;
     }
 
     public async Task<bool> AttachViewerAsync(
@@ -124,7 +128,8 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
         _publishClipboardAsync = publishClipboardAsync;
 
         var socket = new ClientWebSocket();
-        var endpoint = BuildAttachUri(deviceId, viewer);
+        _sessionState.ApplyAuthorizationHeader(socket);
+        var endpoint = BuildAttachUri(deviceId);
         await socket.ConnectAsync(endpoint, cancellationToken);
         _socket = socket;
         _receiveLoopTask = ReceiveLoopAsync(socket, cancellationToken);
@@ -246,10 +251,10 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
         _readySignal.TrySetResult(false);
     }
 
-    private Uri BuildAttachUri(string deviceId, AuthenticatedUserSession viewer)
+    private Uri BuildAttachUri(string deviceId)
     {
         var builder = new UriBuilder(_viewerEndpoint);
-        builder.Query = $"deviceId={Uri.EscapeDataString(deviceId)}&userName={Uri.EscapeDataString(viewer.DisplayName)}&canControl={viewer.CanControlRemote.ToString().ToLowerInvariant()}";
+        builder.Query = $"deviceId={Uri.EscapeDataString(deviceId)}";
         return builder.Uri;
     }
 
