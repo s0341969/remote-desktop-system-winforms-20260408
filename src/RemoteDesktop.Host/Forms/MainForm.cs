@@ -19,6 +19,7 @@ public partial class MainForm : Form
     private AuthenticatedUserSession? _signedInUser;
     private bool _refreshing;
     private string? _lastRefreshErrorMessage;
+    private bool _dashboardUpdateSubscriptionAttached;
 
     public MainForm()
     {
@@ -70,6 +71,18 @@ public partial class MainForm : Form
         btnRevokeDevice.Visible = _signedInUser?.CanManageDeviceAuthorization == true;
         btnUsers.Visible = _signedInUser?.CanManageUsers == true;
 
+        if (_dashboardDataSource is not null && !_dashboardUpdateSubscriptionAttached)
+        {
+            _dashboardDataSource.DashboardUpdated += DashboardDataSource_DashboardUpdated;
+            _dashboardUpdateSubscriptionAttached = true;
+        }
+
+        if (_dashboardDataSource is not null)
+        {
+            _refreshTimer.Interval = _dashboardDataSource.SupportsRealtimeUpdates ? 30000 : 5000;
+            await _dashboardDataSource.StartAsync(CancellationToken.None);
+        }
+
         await RefreshDashboardAsync(showErrorDialog: true);
         _refreshTimer.Start();
     }
@@ -78,6 +91,12 @@ public partial class MainForm : Form
     {
         _refreshTimer.Stop();
         _refreshTimer.Dispose();
+        if (_dashboardDataSource is not null && _dashboardUpdateSubscriptionAttached)
+        {
+            _dashboardDataSource.DashboardUpdated -= DashboardDataSource_DashboardUpdated;
+            _dashboardUpdateSubscriptionAttached = false;
+        }
+
         (_dashboardDataSource as IDisposable)?.Dispose();
         base.OnFormClosed(e);
     }
@@ -218,6 +237,16 @@ public partial class MainForm : Form
             btnUsers.Enabled = _signedInUser?.CanManageUsers == true;
             UpdateSelectedDeviceActions();
         }
+    }
+
+    private void DashboardDataSource_DashboardUpdated(object? sender, EventArgs e)
+    {
+        if (!IsHandleCreated || IsDisposed)
+        {
+            return;
+        }
+
+        BeginInvoke(async () => await RefreshDashboardAsync());
     }
 
     private void BindDeviceGrid(IReadOnlyList<DeviceRecord> devices, string? selectedDeviceId)

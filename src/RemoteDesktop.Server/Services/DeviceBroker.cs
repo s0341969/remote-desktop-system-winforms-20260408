@@ -15,12 +15,14 @@ public sealed class DeviceBroker
     private readonly ConcurrentDictionary<string, AgentSession> _agents = new(StringComparer.OrdinalIgnoreCase);
     private readonly IDeviceRepository _repository;
     private readonly ControlServerOptions _options;
+    private readonly DashboardUpdateHub _dashboardUpdateHub;
     private readonly ILogger<DeviceBroker> _logger;
 
-    public DeviceBroker(IDeviceRepository repository, IOptions<ControlServerOptions> options, ILogger<DeviceBroker> logger)
+    public DeviceBroker(IDeviceRepository repository, IOptions<ControlServerOptions> options, DashboardUpdateHub dashboardUpdateHub, ILogger<DeviceBroker> logger)
     {
         _repository = repository;
         _options = options.Value;
+        _dashboardUpdateHub = dashboardUpdateHub;
         _logger = logger;
     }
 
@@ -58,6 +60,7 @@ public sealed class DeviceBroker
 
         var session = new AgentSession(socket, descriptor, presenceId, deviceRecord?.IsAuthorized == true);
         _agents[descriptor.DeviceId] = session;
+        _dashboardUpdateHub.Publish("device-online", descriptor.DeviceId);
         _logger.LogInformation("Agent registered: {DeviceId} ({DeviceName})", descriptor.DeviceId, descriptor.DeviceName);
         return AgentRegistrationResult.Success(session);
     }
@@ -273,6 +276,7 @@ public sealed class DeviceBroker
             }
         }
 
+        _dashboardUpdateHub.Publish("device-authorization-changed", deviceId);
         return true;
     }
 
@@ -441,6 +445,7 @@ public sealed class DeviceBroker
 
         await session.CloseAsync(reason, cancellationToken);
         await _repository.ClosePresenceAsync(session.PresenceId, session.DeviceId, reason, cancellationToken);
+        _dashboardUpdateHub.Publish("device-offline", deviceId);
         _logger.LogInformation("Agent disconnected: {DeviceId}, reason: {Reason}", deviceId, reason);
     }
 

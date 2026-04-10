@@ -5,8 +5,8 @@
 本手冊提供目前 `RemoteDesktopSystem` 的正式安裝、設定、啟動、發佈與日常操作方式。
 
 目前系統為：
-- `RemoteDesktop.Host`：Windows Forms 主控台
-- `RemoteDesktop.Server`：第一階段中央 Host Server
+- `RemoteDesktop.Host`：Windows Forms 主控台 / Console Client
+- `RemoteDesktop.Server`：中央 Host Server
 - `RemoteDesktop.Shared`：Server / Client 共用通訊契約
 - `RemoteDesktop.Agent`：Windows Forms 被控端 Agent
 - 通訊方式：Host 背景 `Kestrel` + WebSocket `/ws/agent`
@@ -53,7 +53,7 @@
 
 - Windows 10 / Windows 11
 - 如使用原始碼執行：`.NET 8 SDK`
-- 如使用 `publish` 版本：不需另裝 .NET
+- 如使用 `publish` 版本：需安裝對應的 `.NET 8 Desktop Runtime`
 - 若要使用資料庫持久化：SQL Server LocalDB 或 SQL Server
 
 ## 4. 專案目錄
@@ -155,8 +155,15 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 若要重新產出：
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' publish .\src\RemoteDesktop.Host\RemoteDesktop.Host.csproj -c Release -r win-x64 --self-contained true -o .\deploy\publish\Host
-& 'C:\Program Files\dotnet\dotnet.exe' publish .\src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj -c Release -r win-x64 --self-contained true -o .\deploy\publish\Agent
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Host\RemoteDesktop.Host.csproj' `
+  -OutputRelativePath 'deploy\publish\Host' `
+  -ExecutableName 'RemoteDesktop.Host.exe'
+
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
+  -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
+  -OutputRelativePath 'deploy\publish\Agent' `
+  -ExecutableName 'RemoteDesktop.Agent.exe'
 ```
 
 ## 8. 啟動方式
@@ -181,7 +188,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - 這是多主控台重構的第一階段
 - 目前已可獨立接收 Agent WebSocket 連線
 - 現有 `RemoteDesktop.Host` 已可在 Host 設定中填入 `中央 Server URL / Central server URL`，切成中央 Server 儀表板模式
-- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄、Server 端 bearer token/session 驗證、Viewer Session Lock 與強制接管/觀看模式\r\n- 中央模式目前尚未接通：儀表板即時推播、Host 設定集中化
+- 中央模式目前已接通：裝置清單、在線紀錄、授權核准/撤銷、Viewer attach/detach、遠端畫面串流、Viewer 指令轉送、登入、使用者管理、稽核紀錄、Server 端 bearer token/session 驗證、Viewer Session Lock 與強制接管/觀看模式、中央儀表板即時推播 `/ws/dashboard`
+- 中央模式目前尚未接通：Host 設定集中化
 
 ### 8.2 使用啟動腳本
 
@@ -216,9 +224,12 @@ Windows 登入後，Agent 會自動啟動。
    - 健康檢查位址
 4. 按「設定」可修改 Host 參數
 5. 若要把主畫面資料切到中央 Server，於 Host 設定填入 `中央 Server URL / Central server URL`，儲存後重啟 Host
-6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；登入成功後 Host 會保存中央 Server 簽發的 bearer token，Viewer 與後續管理 API 都會帶著同一份 token 透過中央 Server 的 `/ws/viewer` 與 REST API 通道運作`r`n7. 中央模式啟動多個 Viewer 時，同一台裝置同時間只會有一個控制者；後續 Viewer 會自動以僅觀看模式加入`r`n8. 若具控制權角色需要接管，Viewer 可使用「功能 -> 取得控制權 / Take Control」強制接管；原控制者會收到模式更新並降為僅觀看
-7. 若要持久化裝置與歷程，可在本機 Host 或中央 Server 各自勾選 MSSQL 模式
-8. 在未設定 CentralServerUrl 的本機模式下，雙擊在線裝置或按「開啟遠端畫面」即可開啟 Viewer
+6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；登入成功後 Host 會保存中央 Server 簽發的 bearer token，Viewer 與後續管理 API 都會帶著同一份 token 透過中央 Server 的 `/ws/viewer` 與 REST API 通道運作
+7. 中央模式主畫面會優先接收 `/ws/dashboard` 即時推播；若 websocket 斷線或短時間沒有事件，Host 仍會以 30 秒低頻輪詢回補，避免畫面長時間失真
+8. 中央模式啟動多個 Viewer 時，同一台裝置同時間只會有一個控制者；後續 Viewer 會自動以僅觀看模式加入
+9. 若具控制權角色需要接管，Viewer 可使用「功能 -> 取得控制權 / Take Control」強制接管；原控制者會收到模式更新並降為僅觀看
+10. 若要持久化裝置與歷程，可在本機 Host 或中央 Server 各自勾選 MSSQL 模式
+11. 在未設定 CentralServerUrl 的本機模式下，雙擊在線裝置或按「開啟遠端畫面」即可開啟 Viewer
 
 ## 10. Agent 操作流程
 
@@ -515,6 +526,10 @@ WinForms UI automation：
 - Viewer upload/download 流程：已驗證
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
+- 中央 `/ws/dashboard`：已由 smoke test 驗證會在 Agent 上線時推送 `dashboard-ready` / `dashboard-changed`
+
+
+
 
 
 

@@ -24,6 +24,7 @@ using ServerControlServerOptions = RemoteDesktop.Server.Options.ControlServerOpt
 
 await RunHostRelaySmokeTestAsync();
 await RunCentralViewerLockSmokeTestAsync();
+await RunCentralDashboardPushSmokeTestAsync();
 await RunFileTransferSmokeTestAsync();
 await RunClipboardSmokeTestAsync();
 Console.WriteLine("SMOKE_TEST_PASSED");
@@ -264,6 +265,88 @@ static async Task RunCentralViewerLockSmokeTestAsync()
     }
 }
 
+static async Task RunCentralDashboardPushSmokeTestAsync()
+{
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "ChangeMe-Agent-Key";
+    var builder = WebApplication.CreateBuilder();
+    builder.WebHost.UseSetting("urls", serverUrl);
+
+    builder.Services.AddSingleton<IOptions<ServerControlServerOptions>>(Options.Create(new ServerControlServerOptions
+    {
+        ServerUrl = serverUrl,
+        ConsoleName = "Central Dashboard Smoke Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 45,
+        PersistenceMode = "Memory"
+    }));
+
+    builder.Services.AddSingleton<ServerIDeviceRepository, ServerInMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopServerCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopServerEndpoints();
+    await app.StartAsync();
+
+    try
+    {
+        using var httpClient = new HttpClient { BaseAddress = new Uri(serverUrl, UriKind.Absolute) };
+        var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new { userName = "admin", password = "ChangeMe!2026" });
+        loginResponse.EnsureSuccessStatusCode();
+        var session = await loginResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.UserSessionDto>()
+            ?? throw new InvalidOperationException("Dashboard smoke login did not return a session.");
+
+        if (string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            throw new InvalidOperationException("Dashboard smoke login did not return an access token.");
+        }
+
+        using var dashboardSocket = new ClientWebSocket();
+        dashboardSocket.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
+        await dashboardSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/dashboard" }.Uri, CancellationToken.None);
+
+        var readyEnvelope = await ReadDashboardEnvelopeAsync(dashboardSocket, CancellationToken.None);
+        if (!string.Equals(readyEnvelope.Type, "dashboard-ready", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Central dashboard websocket did not return a ready envelope.");
+        }
+
+        using var agentSocket = new ClientWebSocket();
+        await agentSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri, CancellationToken.None);
+        await SendTextAsync(agentSocket, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.AgentHelloMessage
+        {
+            Type = "hello",
+            DeviceId = "central-dashboard-device-001",
+            DeviceName = "Central Dashboard Device",
+            HostName = Environment.MachineName,
+            AgentVersion = "smoke",
+            AccessKey = accessKey,
+            ScreenWidth = 1920,
+            ScreenHeight = 1080
+        }), CancellationToken.None);
+
+        var agentAck = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        if (!Encoding.UTF8.GetString(agentAck.Payload).Contains("\"hello-ack\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Central dashboard smoke agent did not receive hello-ack.");
+        }
+
+        var changedEnvelope = await ReadDashboardEnvelopeAsync(dashboardSocket, CancellationToken.None);
+        if (!string.Equals(changedEnvelope.Type, "dashboard-changed", StringComparison.Ordinal)
+            || !string.Equals(changedEnvelope.DeviceId, "central-dashboard-device-001", StringComparison.Ordinal)
+            || !string.Equals(changedEnvelope.Reason, "device-online", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Central dashboard websocket did not publish the expected device-online event.");
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+    }
+}
 static async Task RunFileTransferSmokeTestAsync()
 {
     var tempRoot = Path.Combine(Path.GetTempPath(), "RemoteDesktopSmoke", Guid.NewGuid().ToString("N"));
@@ -485,6 +568,17 @@ static async Task<RemoteDesktop.Shared.Models.ViewerTransportEnvelope> ReadViewe
         ?? throw new InvalidOperationException("Viewer websocket returned an invalid envelope.");
 }
 
+static async Task<RemoteDesktop.Shared.Models.DashboardUpdateEnvelope> ReadDashboardEnvelopeAsync(ClientWebSocket socket, CancellationToken cancellationToken)
+{
+    var payload = await ReadMessageAsync(socket, cancellationToken);
+    if (payload.MessageType != WebSocketMessageType.Text)
+    {
+        throw new InvalidOperationException("Dashboard websocket returned an unexpected non-text payload.");
+    }
+
+    return JsonSerializer.Deserialize<RemoteDesktop.Shared.Models.DashboardUpdateEnvelope>(Encoding.UTF8.GetString(payload.Payload), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Dashboard websocket returned an invalid envelope.");
+}
 static async Task<WebSocketPayload> ReadMessageAsync(ClientWebSocket socket, CancellationToken cancellationToken)
 {
     var buffer = new byte[64 * 1024];
@@ -752,6 +846,7 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
 
 
 

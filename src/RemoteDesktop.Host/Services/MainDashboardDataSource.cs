@@ -1,7 +1,11 @@
 using System.Net.Http.Json;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
+using SharedDashboardUpdateEnvelope = RemoteDesktop.Shared.Models.DashboardUpdateEnvelope;
 using SharedPresenceLogRecord = RemoteDesktop.Shared.Models.AgentPresenceLogRecord;
 using SharedDeviceRecord = RemoteDesktop.Shared.Models.DeviceRecord;
 
@@ -14,6 +18,12 @@ public interface IMainDashboardDataSource
     string HealthUrl { get; }
 
     bool SupportsViewerSessions { get; }
+
+    bool SupportsRealtimeUpdates { get; }
+
+    event EventHandler? DashboardUpdated;
+
+    Task StartAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken);
 
@@ -75,6 +85,16 @@ internal sealed class LocalMainDashboardDataSource : IMainDashboardDataSource
 
     public bool SupportsViewerSessions => true;
 
+    public bool SupportsRealtimeUpdates => false;
+
+    public event EventHandler? DashboardUpdated
+    {
+        add { }
+        remove { }
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken)
     {
         return _repository.GetDevicesAsync(take, cancellationToken);
@@ -93,8 +113,13 @@ internal sealed class LocalMainDashboardDataSource : IMainDashboardDataSource
 
 internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, IDisposable
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
     private readonly CentralConsoleSessionState _sessionState;
+    private readonly Uri _dashboardWebSocketUri;
+    private readonly CancellationTokenSource _disposeCancellationTokenSource = new();
+    private Task? _backgroundTask;
+    private int _started;
     private bool _disposed;
 
     public RemoteMainDashboardDataSource(ControlServerOptions options, CentralConsoleSessionState sessionState)
@@ -106,6 +131,7 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
             BaseAddress = new Uri(baseAddress, UriKind.Absolute),
             Timeout = TimeSpan.FromSeconds(15)
         };
+        _dashboardWebSocketUri = BuildDashboardWebSocketUri(_httpClient.BaseAddress!);
     }
 
     public string DashboardServerUrl => _httpClient.BaseAddress!.ToString().TrimEnd('/');
@@ -113,6 +139,22 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
     public string HealthUrl => $"{DashboardServerUrl}/healthz";
 
     public bool SupportsViewerSessions => true;
+
+    public bool SupportsRealtimeUpdates => true;
+
+    public event EventHandler? DashboardUpdated;
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Exchange(ref _started, 1) != 0)
+        {
+            return _backgroundTask ?? Task.CompletedTask;
+        }
+
+        var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposeCancellationTokenSource.Token);
+        _backgroundTask = Task.Run(() => RunDashboardUpdatesLoopAsync(linkedCancellationTokenSource.Token), CancellationToken.None);
+        return Task.CompletedTask;
+    }
 
     public async Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken)
     {
@@ -162,8 +204,89 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
             return;
         }
 
+        _disposeCancellationTokenSource.Cancel();
         _httpClient.Dispose();
+        _disposeCancellationTokenSource.Dispose();
         _disposed = true;
+    }
+
+    private async Task RunDashboardUpdatesLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var socket = new ClientWebSocket();
+                _sessionState.ApplyAuthorizationHeader(socket);
+                await socket.ConnectAsync(_dashboardWebSocketUri, cancellationToken);
+                await ListenForDashboardUpdatesAsync(socket, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private async Task ListenForDashboardUpdatesAsync(ClientWebSocket socket, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
+        {
+            var message = await WebSocketMessageReader.ReadAsync(socket, cancellationToken);
+            if (message.MessageType == WebSocketMessageType.Close)
+            {
+                break;
+            }
+
+            if (message.MessageType != WebSocketMessageType.Text)
+            {
+                continue;
+            }
+
+            var envelope = JsonSerializer.Deserialize<SharedDashboardUpdateEnvelope>(Encoding.UTF8.GetString(message.Payload), JsonOptions);
+            if (envelope is null)
+            {
+                continue;
+            }
+
+            if (string.Equals(envelope.Type, "dashboard-ready", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(envelope.Type, "dashboard-changed", StringComparison.OrdinalIgnoreCase))
+            {
+                DashboardUpdated?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    private static Uri BuildDashboardWebSocketUri(Uri baseAddress)
+    {
+        var builder = new UriBuilder(baseAddress)
+        {
+            Path = "/ws/dashboard",
+            Query = string.Empty,
+            Scheme = string.Equals(baseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? Uri.UriSchemeWss : Uri.UriSchemeWs
+        };
+
+        return builder.Uri;
     }
 
     private static string NormalizeBaseAddress(string value)
@@ -222,3 +345,5 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
         };
     }
 }
+
+

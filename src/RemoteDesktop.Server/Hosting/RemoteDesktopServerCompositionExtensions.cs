@@ -1,4 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -13,8 +16,11 @@ namespace RemoteDesktop.Server.Hosting;
 
 public static class RemoteDesktopServerCompositionExtensions
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public static IServiceCollection AddRemoteDesktopServerCore(this IServiceCollection services)
     {
+        services.AddSingleton<DashboardUpdateHub>();
         services.AddSingleton<DeviceBroker>();
         services.AddSingleton<AgentWebSocketHandler>();
         services.AddSingleton<ViewerWebSocketHandler>();
@@ -49,6 +55,57 @@ public static class RemoteDesktopServerCompositionExtensions
             {
                 var handler = context.RequestServices.GetRequiredService<ViewerWebSocketHandler>();
                 await handler.HandleAsync(context);
+            });
+        });
+
+        app.Map("/ws/dashboard", branch =>
+        {
+            branch.Run(async context =>
+            {
+                if (!context.WebSockets.IsWebSocketRequest)
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    return;
+                }
+
+                var sessionTokenService = context.RequestServices.GetRequiredService<ConsoleSessionTokenService>();
+                if (!sessionTokenService.TryAuthenticate(context.Request, out _))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return;
+                }
+
+                var dashboardUpdateHub = context.RequestServices.GetRequiredService<DashboardUpdateHub>();
+                using var subscription = dashboardUpdateHub.Subscribe();
+                using var socket = await context.WebSockets.AcceptWebSocketAsync();
+
+                var readyPayload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new DashboardUpdateEnvelope
+                {
+                    Type = "dashboard-ready",
+                    OccurredAt = DateTimeOffset.UtcNow
+                }, JsonOptions));
+
+                await socket.SendAsync(readyPayload, WebSocketMessageType.Text, true, context.RequestAborted);
+
+                try
+                {
+                    await foreach (var update in subscription.Reader.ReadAllAsync(context.RequestAborted))
+                    {
+                        if (socket.State != WebSocketState.Open)
+                        {
+                            break;
+                        }
+
+                        var payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(update, JsonOptions));
+                        await socket.SendAsync(payload, WebSocketMessageType.Text, true, context.RequestAborted);
+                    }
+                }
+                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                {
+                }
+                catch (WebSocketException) when (context.RequestAborted.IsCancellationRequested || socket.State is WebSocketState.Aborted or WebSocketState.Closed)
+                {
+                }
             });
         });
 
