@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RemoteDesktop.Host.Options;
 
-public sealed class ControlServerOptions
+public sealed class ControlServerOptions : IValidatableObject
 {
     public const string SectionName = "ControlServer";
 
@@ -13,7 +13,6 @@ public sealed class ControlServerOptions
     [Url]
     public string ServerUrl { get; init; } = "http://localhost:5106";
 
-    [Url]
     public string? CentralServerUrl { get; init; }
 
     [Required]
@@ -39,4 +38,28 @@ public sealed class ControlServerOptions
 
     [Required]
     public string PersistenceMode { get; init; } = PersistenceModeMemory;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!string.IsNullOrWhiteSpace(CentralServerUrl))
+        {
+            if (!Uri.TryCreate(CentralServerUrl, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp &&
+                 uri.Scheme != Uri.UriSchemeHttps &&
+                 uri.Scheme != Uri.UriSchemeFtp))
+            {
+                yield return new ValidationResult(
+                    "CentralServerUrl must be empty or a valid absolute http, https, or ftp URL.",
+                    [nameof(CentralServerUrl)]);
+            }
+        }
+
+        if (!string.Equals(PersistenceMode, PersistenceModeMemory, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(PersistenceMode, PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new ValidationResult(
+                $"PersistenceMode must be '{PersistenceModeMemory}' or '{PersistenceModeSqlServer}'.",
+                [nameof(PersistenceMode)]);
+        }
+    }
 }

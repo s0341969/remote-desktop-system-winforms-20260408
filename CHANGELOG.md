@@ -2,6 +2,7 @@
 
 ## 2026-04-11
 
+- 修正 `RemoteDesktop.Host` 的 `CentralServerUrl` 設定驗證，現在允許空值或空字串；只有真的填了內容時才要求是合法完整 URL，避免本機模式下因 DataAnnotation 驗證直接啟動失敗。
 - 補齊中央 Server 的正式交付流程：新增 `deploy/scripts/Deploy-App.ps1`，可一鍵 clean、build、smoke test、UI automation、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 套件。
 - `Publish-App.ps1` 現在改為可依專案指定 framework，不再假設所有專案都走 `net8.0-windows`，因此 `RemoteDesktop.Server` 也可納入同一套 publish 腳本。
 - 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 的 publish 與啟動流程與 Host / Agent 一致。

@@ -262,6 +262,7 @@ Windows 登入後，Agent 會自動啟動。
 4. 按「設定」可修改 Host 參數
    - 本機模式：直接更新本機 `appsettings.json`
    - 中央模式：除了 `CentralServerUrl` 仍保留在本機外，其餘 Host 設定會改由中央 Server 儲存
+   - 若暫時不使用中央模式，`CentralServerUrl` 可留空；空白不會再造成 Host 啟動失敗
 5. 若要把主畫面資料切到中央 Server，於 Host 設定填入 `中央 Server URL / Central server URL`，儲存後重啟 Host
 6. 中央模式下，主畫面會改顯示中央 Server 的裝置清單、在線紀錄與授權狀態；登入成功後 Host 會保存中央 Server 簽發的 bearer token，Viewer 與後續管理 API 都會帶著同一份 token 透過中央 Server 的 `/ws/viewer` 與 REST API 通道運作
 7. 中央模式主畫面會優先接收 `/ws/dashboard` 即時推播；若 websocket 斷線或短時間沒有事件，Host 仍會以 30 秒低頻輪詢回補，避免畫面長時間失真
@@ -543,6 +544,18 @@ WinForms UI automation：
 - 指定的遠端資料夾不存在時，會在遠端檔案總管狀態列顯示錯誤
 - 目錄項目過多時，畫面只會顯示前 2,000 個項目
 - 失敗時可搭配檔案傳輸日誌一起查
+
+### 13.7 Host 一啟動就顯示 CentralServerUrl 驗證錯誤
+
+請先檢查：
+
+- [deploy/release/current/Host/appsettings.json](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\deploy\release\current\Host\appsettings.json)
+- `ControlServer:CentralServerUrl`
+
+目前系統行為：
+- 可以留空
+- 只有真的填了值時，才要求是完整 `http://...` 或 `https://...` URL
+- 若不使用中央模式，建議保留 `null` 或空白
 
 ## 14. 建議交付方式
 
