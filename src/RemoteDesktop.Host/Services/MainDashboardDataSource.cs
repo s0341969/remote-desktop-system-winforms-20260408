@@ -317,6 +317,7 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
             AgentVersion = source.AgentVersion,
             ScreenWidth = source.ScreenWidth,
             ScreenHeight = source.ScreenHeight,
+            Inventory = MapInventory(source.Inventory),
             IsOnline = source.IsOnline,
             IsAuthorized = source.IsAuthorized,
             AuthorizedAt = source.AuthorizedAt,
@@ -325,6 +326,28 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
             LastSeenAt = source.LastSeenAt,
             LastConnectedAt = source.LastConnectedAt,
             LastDisconnectedAt = source.LastDisconnectedAt
+        };
+    }
+
+    private static AgentInventoryProfile? MapInventory(RemoteDesktop.Shared.Models.AgentInventoryProfile? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return new AgentInventoryProfile
+        {
+            CpuName = source.CpuName,
+            InstalledMemoryBytes = source.InstalledMemoryBytes,
+            StorageSummary = source.StorageSummary,
+            OsName = source.OsName,
+            OsVersion = source.OsVersion,
+            OsBuildNumber = source.OsBuildNumber,
+            OfficeVersion = source.OfficeVersion,
+            LastWindowsUpdateTitle = source.LastWindowsUpdateTitle,
+            LastWindowsUpdateInstalledAt = source.LastWindowsUpdateInstalledAt,
+            CollectedAt = source.CollectedAt
         };
     }
 

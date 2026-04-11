@@ -336,6 +336,10 @@ partial class MainForm
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HostName", HeaderText = "Host name", FillWeight = 110F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Resolution", HeaderText = "Resolution", FillWeight = 90F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "AgentVersion", HeaderText = "Agent version", FillWeight = 80F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "HardwareSummary", HeaderText = "Hardware", FillWeight = 150F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "OsSummary", HeaderText = "OS", FillWeight = 130F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "OfficeSummary", HeaderText = "Office", FillWeight = 110F });
+        gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastUpdateSummary", HeaderText = "Last update", FillWeight = 125F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "Last seen", FillWeight = 110F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastConnectedAt", HeaderText = "Last connected", FillWeight = 110F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastDisconnectedAt", HeaderText = "Last disconnected", FillWeight = 110F });

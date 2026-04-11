@@ -43,6 +43,9 @@
 ## 本次整理重點
 
 - 補齊 Host 與 Agent 的完整設定表單，改由 UI 編輯 `appsettings.json`。
+- Agent 啟動時現在會主動收集並上報軟硬體盤點，包含 CPU、總記憶體、固定磁碟摘要、Windows 版本與組建、Office 版本，以及最近一次 Windows 更新名稱與日期。
+- 裝置盤點會沿著 Agent `hello` 註冊流程一路帶進 Host / Server，並可同時儲存在記憶體模式與 `SqlServer` 模式；資料庫模式會寫入 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。
+- Host 主畫面現在會直接顯示裝置的硬體摘要、作業系統、Office 與最後更新摘要，方便操作端先做盤點，不必先開 Viewer。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
 - Host 預設改為 `Memory` 儲存模式，不再要求先安裝 LocalDB 才能啟動；需要持久化時可在 Host 設定中勾選資料庫模式。
 - Host 主畫面新增設定入口，Agent 主畫面新增設定入口。
@@ -108,6 +111,7 @@
 - Agent 日誌：`deploy/publish/Agent/logs/agent-file-transfer.ndjson`
 - `tests/RemoteDesktop.UiAutomation` 現在已涵蓋 Viewer 檔案上傳、目的地顯示與開啟資料夾流程。
 - `tests/RemoteDesktop.UiAutomation` 現在也涵蓋遠端檔案總管的載入、切換資料夾、移動與下載流程。
+- `tests/RemoteDesktop.SmokeTests` 現在新增 Agent inventory round-trip 驗證，確認中央模式 `/api/devices` 真的會回傳 CPU、OS、Office 等盤點資料，而不是只在 Agent 端記憶體暫存。
 
 ## 使用 Visual Studio 2022
 

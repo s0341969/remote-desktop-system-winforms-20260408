@@ -15,6 +15,7 @@ public sealed class RemoteAgentService : BackgroundService
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly AgentOptions _options;
     private readonly AgentRuntimeState _runtimeState;
+    private readonly AgentInventoryService _inventoryService;
     private readonly DesktopCaptureService _captureService;
     private readonly ClipboardSyncService _clipboardSyncService;
     private readonly InputInjectionService _inputInjectionService;
@@ -26,6 +27,7 @@ public sealed class RemoteAgentService : BackgroundService
     public RemoteAgentService(
         IOptions<AgentOptions> options,
         AgentRuntimeState runtimeState,
+        AgentInventoryService inventoryService,
         DesktopCaptureService captureService,
         ClipboardSyncService clipboardSyncService,
         InputInjectionService inputInjectionService,
@@ -34,6 +36,7 @@ public sealed class RemoteAgentService : BackgroundService
     {
         _options = options.Value;
         _runtimeState = runtimeState;
+        _inventoryService = inventoryService;
         _captureService = captureService;
         _clipboardSyncService = clipboardSyncService;
         _inputInjectionService = inputInjectionService;
@@ -82,9 +85,10 @@ public sealed class RemoteAgentService : BackgroundService
         _logger.LogInformation("Connected to Control Server: {ServerUri}", serverUri);
 
         var screenSize = _captureService.GetVirtualScreenSize();
+        var inventory = _inventoryService.Collect();
         _lastScreenWidth = screenSize.Width;
         _lastScreenHeight = screenSize.Height;
-        await SendTextAsync(socket, sendLock, CreateHelloPayload(screenSize.Width, screenSize.Height), cancellationToken);
+        await SendTextAsync(socket, sendLock, CreateHelloPayload(screenSize.Width, screenSize.Height, inventory), cancellationToken);
 
         using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var receiveTask = ReceiveLoopAsync(socket, sendLock, loopCts.Token);
@@ -294,7 +298,7 @@ public sealed class RemoteAgentService : BackgroundService
         }
     }
 
-    private string CreateHelloPayload(int screenWidth, int screenHeight)
+    private string CreateHelloPayload(int screenWidth, int screenHeight, AgentInventoryProfile inventory)
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
         return JsonSerializer.Serialize(new AgentHelloMessage
@@ -305,7 +309,8 @@ public sealed class RemoteAgentService : BackgroundService
             AgentVersion = version,
             AccessKey = _options.SharedAccessKey,
             ScreenWidth = screenWidth,
-            ScreenHeight = screenHeight
+            ScreenHeight = screenHeight,
+            Inventory = inventory
         }, JsonOptions);
     }
 

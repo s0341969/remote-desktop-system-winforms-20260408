@@ -8,6 +8,8 @@ BEGIN
         AgentVersion NVARCHAR(32) NOT NULL,
         ScreenWidth INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenWidth DEFAULT (0),
         ScreenHeight INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenHeight DEFAULT (0),
+        InventoryJson NVARCHAR(MAX) NULL,
+        InventoryCollectedAt DATETIMEOFFSET(0) NULL,
         IsOnline BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsOnline DEFAULT (0),
         IsAuthorized BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsAuthorized DEFAULT (0),
         AuthorizedAt DATETIMEOFFSET(0) NULL,
@@ -18,6 +20,18 @@ BEGIN
         LastConnectedAt DATETIMEOFFSET(0) NULL,
         LastDisconnectedAt DATETIMEOFFSET(0) NULL
     );
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'InventoryJson') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD InventoryJson NVARCHAR(MAX) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'InventoryCollectedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD InventoryCollectedAt DATETIMEOFFSET(0) NULL;
 END;
 
 IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'IsAuthorized') IS NULL

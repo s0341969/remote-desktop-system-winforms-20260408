@@ -27,6 +27,7 @@ await RunCentralViewerLockSmokeTestAsync();
 await RunCentralDashboardPushSmokeTestAsync();
 await RunCentralHeartbeatTimeoutSmokeTestAsync();
 await RunCentralSettingsApiSmokeTestAsync();
+await RunCentralAgentInventorySmokeTestAsync();
 await RunFileTransferSmokeTestAsync();
 await RunClipboardSmokeTestAsync();
 Console.WriteLine("SMOKE_TEST_PASSED");
@@ -813,6 +814,100 @@ static int GetFreeTcpPort()
     }
 }
 
+static async Task RunCentralAgentInventorySmokeTestAsync()
+{
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "ChangeMe-Agent-Key";
+    var builder = WebApplication.CreateBuilder();
+    builder.WebHost.UseSetting("urls", serverUrl);
+
+    builder.Services.AddSingleton<IOptions<ServerControlServerOptions>>(Options.Create(new ServerControlServerOptions
+    {
+        ServerUrl = serverUrl,
+        ConsoleName = "Central Inventory Smoke Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 45,
+        PersistenceMode = "Memory"
+    }));
+
+    builder.Services.AddSingleton<ServerIDeviceRepository, ServerInMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopServerCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopServerEndpoints();
+    await app.StartAsync();
+
+    try
+    {
+        using var httpClient = new HttpClient { BaseAddress = new Uri(serverUrl, UriKind.Absolute) };
+        var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new { userName = "admin", password = "ChangeMe!2026" });
+        loginResponse.EnsureSuccessStatusCode();
+        var session = await loginResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.UserSessionDto>()
+            ?? throw new InvalidOperationException("Inventory smoke login did not return a session.");
+
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        using var agentSocket = new ClientWebSocket();
+        await agentSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri, CancellationToken.None);
+        await SendTextAsync(agentSocket, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.AgentHelloMessage
+        {
+            Type = "hello",
+            DeviceId = "central-inventory-device-001",
+            DeviceName = "Central Inventory Device",
+            HostName = Environment.MachineName,
+            AgentVersion = "smoke",
+            AccessKey = accessKey,
+            ScreenWidth = 1920,
+            ScreenHeight = 1080,
+            Inventory = new RemoteDesktop.Shared.Models.AgentInventoryProfile
+            {
+                CpuName = "Intel(R) Core(TM) Smoke CPU",
+                InstalledMemoryBytes = 34359738368,
+                StorageSummary = "C: 476 GB / 可用 120 GB",
+                OsName = "Windows 11 Pro",
+                OsVersion = "10.0.22631",
+                OsBuildNumber = "22631",
+                OfficeVersion = "Microsoft 365 Apps 16.0.12345.20000",
+                LastWindowsUpdateTitle = "KB5030219 - Security Update",
+                LastWindowsUpdateInstalledAt = new DateTimeOffset(2026, 4, 10, 0, 0, 0, TimeSpan.Zero),
+                CollectedAt = DateTimeOffset.UtcNow
+            }
+        }), CancellationToken.None);
+
+        var agentAck = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        if (!Encoding.UTF8.GetString(agentAck.Payload).Contains("\"hello-ack\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Inventory smoke agent did not receive hello-ack.");
+        }
+
+        var devicesResponse = await httpClient.GetAsync("/api/devices?take=10", CancellationToken.None);
+        devicesResponse.EnsureSuccessStatusCode();
+        var devices = await devicesResponse.Content.ReadFromJsonAsync<List<RemoteDesktop.Shared.Models.DeviceRecord>>(cancellationToken: CancellationToken.None)
+            ?? throw new InvalidOperationException("Inventory smoke devices response was empty.");
+
+        var device = devices.FirstOrDefault(static item => string.Equals(item.DeviceId, "central-inventory-device-001", StringComparison.Ordinal));
+        if (device?.Inventory is null)
+        {
+            throw new InvalidOperationException("Inventory smoke device record did not persist the agent inventory.");
+        }
+
+        if (!string.Equals(device.Inventory.CpuName, "Intel(R) Core(TM) Smoke CPU", StringComparison.Ordinal)
+            || !string.Equals(device.Inventory.OsName, "Windows 11 Pro", StringComparison.Ordinal)
+            || !string.Equals(device.Inventory.OfficeVersion, "Microsoft 365 Apps 16.0.12345.20000", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Inventory smoke device record did not return the expected inventory fields.");
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+    }
+}
+
+
 internal sealed record WebSocketPayload(WebSocketMessageType MessageType, byte[] Payload);
 
 internal sealed class InMemoryDeviceRepository : IDeviceRepository
@@ -1045,6 +1140,10 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
+
+
 
 
 

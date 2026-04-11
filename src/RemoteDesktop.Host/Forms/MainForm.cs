@@ -399,7 +399,7 @@ public partial class MainForm : Form
         lblStatusCaption.Text = HostUiText.Bi("狀態", "Status");
         lblStatusValue.Text = HostUiText.Bi("就緒", "Ready");
 
-        if (gridDevices.Columns.Count >= 10)
+        if (gridDevices.Columns.Count >= 14)
         {
             gridDevices.Columns[0].HeaderText = HostUiText.Bi("狀態", "Status");
             gridDevices.Columns[1].HeaderText = HostUiText.Bi("存取", "Access");
@@ -408,9 +408,13 @@ public partial class MainForm : Form
             gridDevices.Columns[4].HeaderText = HostUiText.Bi("主機名稱", "Host name");
             gridDevices.Columns[5].HeaderText = HostUiText.Bi("解析度", "Resolution");
             gridDevices.Columns[6].HeaderText = HostUiText.Bi("Agent 版本", "Agent version");
-            gridDevices.Columns[7].HeaderText = HostUiText.Bi("最後上線", "Last seen");
-            gridDevices.Columns[8].HeaderText = HostUiText.Bi("最後連線", "Last connected");
-            gridDevices.Columns[9].HeaderText = HostUiText.Bi("最後離線", "Last disconnected");
+            gridDevices.Columns[7].HeaderText = HostUiText.Bi("硬體摘要", "Hardware");
+            gridDevices.Columns[8].HeaderText = HostUiText.Bi("作業系統", "OS");
+            gridDevices.Columns[9].HeaderText = HostUiText.Bi("Office", "Office");
+            gridDevices.Columns[10].HeaderText = HostUiText.Bi("最後更新", "Last update");
+            gridDevices.Columns[11].HeaderText = HostUiText.Bi("最後上線", "Last seen");
+            gridDevices.Columns[12].HeaderText = HostUiText.Bi("最後連線", "Last connected");
+            gridDevices.Columns[13].HeaderText = HostUiText.Bi("最後離線", "Last disconnected");
         }
 
         if (gridLogs.Columns.Count >= 8)
@@ -438,6 +442,10 @@ public partial class MainForm : Form
             HostName = source.HostName;
             Resolution = $"{source.ScreenWidth} x {source.ScreenHeight}";
             AgentVersion = source.AgentVersion;
+            HardwareSummary = BuildHardwareSummary(source.Inventory);
+            OsSummary = BuildOsSummary(source.Inventory);
+            OfficeSummary = BuildOfficeSummary(source.Inventory);
+            LastUpdateSummary = BuildLastUpdateSummary(source.Inventory);
             LastSeenAt = source.LastSeenAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
             LastConnectedAt = source.LastConnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
             LastDisconnectedAt = source.LastDisconnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
@@ -451,9 +459,83 @@ public partial class MainForm : Form
         public string HostName { get; }
         public string Resolution { get; }
         public string AgentVersion { get; }
+        public string HardwareSummary { get; }
+        public string OsSummary { get; }
+        public string OfficeSummary { get; }
+        public string LastUpdateSummary { get; }
         public string LastSeenAt { get; }
         public string LastConnectedAt { get; }
         public string LastDisconnectedAt { get; }
+
+        private static string BuildHardwareSummary(AgentInventoryProfile? inventory)
+        {
+            if (inventory is null)
+            {
+                return "-";
+            }
+
+            var memoryText = inventory.InstalledMemoryBytes > 0
+                ? FormatBytes(inventory.InstalledMemoryBytes)
+                : "未知記憶體";
+            return $"{TrimForGrid(inventory.CpuName, 40)} / {memoryText}";
+        }
+
+        private static string BuildOsSummary(AgentInventoryProfile? inventory)
+        {
+            if (inventory is null)
+            {
+                return "-";
+            }
+
+            var name = string.IsNullOrWhiteSpace(inventory.OsName) ? "未知作業系統" : inventory.OsName;
+            var version = string.IsNullOrWhiteSpace(inventory.OsVersion) ? "?" : inventory.OsVersion;
+            var build = string.IsNullOrWhiteSpace(inventory.OsBuildNumber) ? "?" : inventory.OsBuildNumber;
+            return $"{TrimForGrid(name, 30)} {version} ({build})";
+        }
+
+        private static string BuildOfficeSummary(AgentInventoryProfile? inventory)
+        {
+            return inventory is null ? "-" : TrimForGrid(inventory.OfficeVersion, 36);
+        }
+
+        private static string BuildLastUpdateSummary(AgentInventoryProfile? inventory)
+        {
+            if (inventory is null)
+            {
+                return "-";
+            }
+
+            var title = string.IsNullOrWhiteSpace(inventory.LastWindowsUpdateTitle)
+                ? "未知更新"
+                : TrimForGrid(inventory.LastWindowsUpdateTitle, 30);
+            var date = inventory.LastWindowsUpdateInstalledAt?.LocalDateTime.ToString("yyyy-MM-dd") ?? "未知日期";
+            return $"{title} / {date}";
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+            var value = (double)Math.Max(bytes, 0);
+            var unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.Length - 1)
+            {
+                value /= 1024;
+                unitIndex++;
+            }
+
+            return $"{value:0.##} {units[unitIndex]}";
+        }
+
+        private static string TrimForGrid(string? value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "-";
+            }
+
+            var trimmed = value.Trim();
+            return trimmed.Length <= maxLength ? trimmed : $"{trimmed[..(maxLength - 3)]}...";
+        }
     }
 
     private sealed class PresenceLogGridItem

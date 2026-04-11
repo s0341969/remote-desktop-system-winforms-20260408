@@ -17,5 +17,7 @@ public sealed class AgentHelloMessage
     public int ScreenWidth { get; init; }
 
     public int ScreenHeight { get; init; }
+
+    public AgentInventoryProfile? Inventory { get; init; }
 }
 

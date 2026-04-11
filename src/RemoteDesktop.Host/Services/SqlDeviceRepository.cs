@@ -1,11 +1,13 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Text.Json;
 using RemoteDesktop.Host.Models;
 
 namespace RemoteDesktop.Host.Services;
 
 public sealed class SqlDeviceRepository : IDeviceRepository
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string _connectionString;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<SqlDeviceRepository> _logger;
@@ -48,6 +50,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     @agentVersion AS AgentVersion,
                     @screenWidth AS ScreenWidth,
                     @screenHeight AS ScreenHeight,
+                    @inventoryJson AS InventoryJson,
+                    @inventoryCollectedAt AS InventoryCollectedAt,
                     @now AS CurrentTime
             ) AS source
             ON target.DeviceId = source.DeviceId
@@ -58,6 +62,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     AgentVersion = source.AgentVersion,
                     ScreenWidth = source.ScreenWidth,
                     ScreenHeight = source.ScreenHeight,
+                    InventoryJson = source.InventoryJson,
+                    InventoryCollectedAt = source.InventoryCollectedAt,
                     IsOnline = 1,
                     LastSeenAt = source.CurrentTime,
                     LastConnectedAt = source.CurrentTime,
@@ -71,6 +77,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     AgentVersion,
                     ScreenWidth,
                     ScreenHeight,
+                    InventoryJson,
+                    InventoryCollectedAt,
                     IsOnline,
                     IsAuthorized,
                     AuthorizedAt,
@@ -88,6 +96,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     source.AgentVersion,
                     source.ScreenWidth,
                     source.ScreenHeight,
+                    source.InventoryJson,
+                    source.InventoryCollectedAt,
                     1,
                     0,
                     NULL,
@@ -108,6 +118,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
             command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = descriptor.ScreenWidth;
             command.Parameters.Add("@screenHeight", SqlDbType.Int).Value = descriptor.ScreenHeight;
+            AddNullableStringParameter(command, "@inventoryJson", SerializeInventory(descriptor.Inventory), -1);
+            command.Parameters.Add("@inventoryCollectedAt", SqlDbType.DateTimeOffset).Value = (object?)descriptor.Inventory?.CollectedAt ?? DBNull.Value;
             command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
         }, cancellationToken);
     }
@@ -246,6 +258,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 AgentVersion,
                 ScreenWidth,
                 ScreenHeight,
+                InventoryJson,
+                InventoryCollectedAt,
                 IsOnline,
                 IsAuthorized,
                 AuthorizedAt,
@@ -283,6 +297,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 AgentVersion,
                 ScreenWidth,
                 ScreenHeight,
+                InventoryJson,
+                InventoryCollectedAt,
                 IsOnline,
                 IsAuthorized,
                 AuthorizedAt,
@@ -363,6 +379,26 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         command.Parameters.Add(name, SqlDbType.NVarChar, length).Value = value ?? string.Empty;
     }
 
+    private static void AddNullableStringParameter(SqlCommand command, string name, string? value, int length)
+    {
+        command.Parameters.Add(name, SqlDbType.NVarChar, length).Value = string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
+    }
+
+    private static string? SerializeInventory(AgentInventoryProfile? inventory)
+    {
+        return inventory is null ? null : JsonSerializer.Serialize(inventory, JsonOptions);
+    }
+
+    private static AgentInventoryProfile? DeserializeInventory(SqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<AgentInventoryProfile>(reader.GetString(ordinal), JsonOptions);
+    }
+
     private static DeviceRecord ReadDevice(SqlDataReader reader)
     {
         return new DeviceRecord
@@ -373,14 +409,15 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AgentVersion = reader.GetString(3),
             ScreenWidth = reader.GetInt32(4),
             ScreenHeight = reader.GetInt32(5),
-            IsOnline = reader.GetBoolean(6),
-            IsAuthorized = reader.GetBoolean(7),
-            AuthorizedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
-            AuthorizedBy = reader.IsDBNull(9) ? null : reader.GetString(9),
-            CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
-            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(11),
-            LastConnectedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-            LastDisconnectedAt = reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13)
+            Inventory = DeserializeInventory(reader, 6),
+            IsOnline = reader.GetBoolean(8),
+            IsAuthorized = reader.GetBoolean(9),
+            AuthorizedAt = reader.IsDBNull(10) ? null : reader.GetFieldValue<DateTimeOffset>(10),
+            AuthorizedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
+            CreatedAt = reader.GetFieldValue<DateTimeOffset>(12),
+            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(13),
+            LastConnectedAt = reader.IsDBNull(14) ? null : reader.GetFieldValue<DateTimeOffset>(14),
+            LastDisconnectedAt = reader.IsDBNull(15) ? null : reader.GetFieldValue<DateTimeOffset>(15)
         };
     }
 }

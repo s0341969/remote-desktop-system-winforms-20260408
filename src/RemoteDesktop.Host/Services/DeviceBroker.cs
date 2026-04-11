@@ -42,7 +42,8 @@ public sealed class DeviceBroker
             HostName = message.HostName?.Trim() ?? string.Empty,
             AgentVersion = message.AgentVersion?.Trim() ?? string.Empty,
             ScreenWidth = message.ScreenWidth,
-            ScreenHeight = message.ScreenHeight
+            ScreenHeight = message.ScreenHeight,
+            Inventory = message.Inventory
         };
 
         if (string.IsNullOrWhiteSpace(descriptor.DeviceId) || string.IsNullOrWhiteSpace(descriptor.DeviceName))

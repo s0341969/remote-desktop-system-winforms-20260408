@@ -29,4 +29,6 @@ public sealed class DeviceRecord
     public DateTimeOffset? LastConnectedAt { get; init; }
 
     public DateTimeOffset? LastDisconnectedAt { get; init; }
+
+    public AgentInventoryProfile? Inventory { get; init; }
 }

@@ -25,6 +25,7 @@ internal static class Program
             .ValidateOnStart();
 
         builder.Services.AddSingleton<AgentRuntimeState>();
+        builder.Services.AddSingleton<AgentInventoryService>();
         builder.Services.AddSingleton<DesktopCaptureService>();
         builder.Services.AddSingleton<ClipboardSyncService>();
         builder.Services.AddSingleton<InputInjectionService>();

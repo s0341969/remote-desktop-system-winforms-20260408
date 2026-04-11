@@ -2,6 +2,10 @@
 
 ## 2026-04-11
 
+- 新增 Agent 軟硬體盤點能力：Agent 啟動時會收集 CPU、總記憶體、固定磁碟摘要、Windows 版本/組建、Office 版本，以及最近一次 Windows 更新名稱與日期，並跟隨 `hello` 註冊流程上報。
+- `RemoteDesktop.Server` 與 `RemoteDesktop.Host` 的 `Memory` / `SqlServer` 裝置儲存現在都會保存 inventory profile；`SqlServer` 模式新增 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。
+- Host 主畫面裝置清單新增硬體摘要、作業系統、Office 與最後更新欄位，讓操作端不用開 Viewer 就能先看盤點結果。
+- 新增中央 inventory smoke test，驗證 Agent 上報的盤點資料可經由 `/api/devices` 正確讀回。
 - 新增 `tests/RemoteDesktop.LoadTests`，可直接模擬 `300 Agent / 5 Viewer` 的中央模式壓測，並輸出 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard latency 報告到 `artifacts/load-tests`。
 - 完成第一輪中央模式壓測，固定情境為 `300 Agent 在線 + 5 Viewer 同時附掛 + 5 台同時串流`，Agent 預設參數維持 `8 FPS / JPEG 55 / MaxWidth 1600` 不變。
 - 壓測最新結果：穩態平均 CPU `0.16%`、穩態峰值 RAM `222.24 MB`、穩態 Ingress `28.74 Mbps`、穩態 Egress `28.71 Mbps`、dashboard online event P95 `40.18 ms`、heartbeat timeout P95 `55.76 s`、WebSocket `unexpected close = 0`。

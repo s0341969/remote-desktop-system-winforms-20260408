@@ -1,6 +1,8 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 為 Agent inventory 補更細的詳細檢視與匯出能力，避免主畫面只看摘要時仍需人工查完整磁碟或更新內容
+- [ ] 為 Agent inventory 增加定期重新收集與變更追蹤，讓 Office 更新、Windows Patch 與硬體變更可自動覆寫或保留歷史
 - [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上中央模式的完整 publish 驗證與跨多台 Console Client 的手動冒煙驗證
 - [ ] 為 Host / Agent / Server 的設定表單補更明確的輸入驗證訊息與範例 placeholder，避免現場輸入不完整 URL 時只能看到一般性錯誤
 - [ ] 盤點單檔 self-contained 發佈後的啟動時間、記憶體占用與防毒掃描行為，確認現場部署不會因單檔解壓或安全軟體誤判造成額外延遲
