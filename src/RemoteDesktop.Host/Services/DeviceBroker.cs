@@ -493,15 +493,17 @@ public sealed class DeviceBroker
 
     public async Task DisconnectStaleAgentsAsync(DateTimeOffset staleBefore, CancellationToken cancellationToken)
     {
-        foreach (var entry in _agents.ToArray())
-        {
-            if (entry.Value.LastHeartbeatAt >= staleBefore)
-            {
-                continue;
-            }
+        var staleAgentIds = _agents.ToArray()
+            .Where(entry => entry.Value.LastHeartbeatAt < staleBefore)
+            .Select(static entry => entry.Key)
+            .ToArray();
 
-            await DisconnectAgentAsync(entry.Key, "heartbeat-timeout", cancellationToken);
+        if (staleAgentIds.Length == 0)
+        {
+            return;
         }
+
+        await Task.WhenAll(staleAgentIds.Select(deviceId => DisconnectAgentAsync(deviceId, "heartbeat-timeout", cancellationToken)));
     }
 
     private static bool FixedTimeEquals(string? left, string? right)
@@ -644,3 +646,4 @@ public sealed class DeviceBroker
         }
     }
 }
+

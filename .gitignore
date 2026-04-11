@@ -12,4 +12,6 @@ audit-log.ndjson
 users.json
 deploy/publish/**/audit-log.ndjson
 deploy/publish/**/users.json
+deploy/publish/**/logs/
+artifacts/load-tests/
 deploy/release/

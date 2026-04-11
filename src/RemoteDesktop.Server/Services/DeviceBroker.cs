@@ -443,23 +443,56 @@ public sealed class DeviceBroker
             return;
         }
 
-        await session.CloseAsync(reason, cancellationToken);
-        await _repository.ClosePresenceAsync(session.PresenceId, session.DeviceId, reason, cancellationToken);
-        _dashboardUpdateHub.Publish("device-offline", deviceId);
-        _logger.LogInformation("Agent disconnected: {DeviceId}, reason: {Reason}", deviceId, reason);
+        try
+        {
+            using var closeTimeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            closeTimeoutSource.CancelAfter(TimeSpan.FromSeconds(2));
+            await session.CloseAsync(reason, closeTimeoutSource.Token);
+        }
+        catch (WebSocketException exception)
+        {
+            _logger.LogWarning(exception, "Closing agent socket failed for {DeviceId}. Continuing repository cleanup.", deviceId);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            session.Abort();
+            _logger.LogWarning(exception, "Closing agent socket timed out for {DeviceId}. Socket was aborted and repository cleanup will continue.", deviceId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Unexpected error while closing agent socket for {DeviceId}. Continuing repository cleanup.", deviceId);
+        }
+        finally
+        {
+            await _repository.ClosePresenceAsync(session.PresenceId, session.DeviceId, reason, cancellationToken);
+            _dashboardUpdateHub.Publish("device-offline", deviceId);
+            _logger.LogInformation("Agent disconnected: {DeviceId}, reason: {Reason}", deviceId, reason);
+        }
+    }
+
+    public Task SweepStaleAgentsAsync(CancellationToken cancellationToken)
+    {
+        var staleBefore = DateTimeOffset.UtcNow.AddSeconds(-_options.AgentHeartbeatTimeoutSeconds);
+        return DisconnectStaleAgentsAsync(staleBefore, cancellationToken);
     }
 
     public async Task DisconnectStaleAgentsAsync(DateTimeOffset staleBefore, CancellationToken cancellationToken)
     {
-        foreach (var entry in _agents.ToArray())
-        {
-            if (entry.Value.LastHeartbeatAt >= staleBefore)
-            {
-                continue;
-            }
+        var staleAgentIds = _agents.ToArray()
+            .Where(entry => entry.Value.LastHeartbeatAt < staleBefore)
+            .Select(static entry => entry.Key)
+            .ToArray();
 
-            await DisconnectAgentAsync(entry.Key, "heartbeat-timeout", cancellationToken);
+        if (staleAgentIds.Length == 0)
+        {
+            return;
         }
+
+        await Task.WhenAll(staleAgentIds.Select(deviceId => DisconnectAgentAsync(deviceId, "heartbeat-timeout", cancellationToken)));
     }
 
     private static bool FixedTimeEquals(string? left, string? right)
@@ -526,6 +559,17 @@ public sealed class DeviceBroker
             finally
             {
                 SendLock.Release();
+            }
+        }
+
+        public void Abort()
+        {
+            try
+            {
+                AgentSocket.Abort();
+            }
+            catch
+            {
             }
         }
 
@@ -596,3 +640,7 @@ public sealed class DeviceBroker
 
     public sealed record ViewerSessionState(bool CanControl, string? ControllerDisplayName, string? Message);
 }
+
+
+
+

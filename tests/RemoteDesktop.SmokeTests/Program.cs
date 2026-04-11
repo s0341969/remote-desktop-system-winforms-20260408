@@ -25,6 +25,7 @@ using ServerControlServerOptions = RemoteDesktop.Server.Options.ControlServerOpt
 await RunHostRelaySmokeTestAsync();
 await RunCentralViewerLockSmokeTestAsync();
 await RunCentralDashboardPushSmokeTestAsync();
+await RunCentralHeartbeatTimeoutSmokeTestAsync();
 await RunCentralSettingsApiSmokeTestAsync();
 await RunFileTransferSmokeTestAsync();
 await RunClipboardSmokeTestAsync();
@@ -341,6 +342,95 @@ static async Task RunCentralDashboardPushSmokeTestAsync()
             || !string.Equals(changedEnvelope.Reason, "device-online", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Central dashboard websocket did not publish the expected device-online event.");
+        }
+    }
+    finally
+    {
+        await app.StopAsync();
+    }
+}
+static async Task RunCentralHeartbeatTimeoutSmokeTestAsync()
+{
+    var port = GetFreeTcpPort();
+    var serverUrl = $"http://127.0.0.1:{port}";
+    var accessKey = "ChangeMe-Agent-Key";
+    var builder = WebApplication.CreateBuilder();
+    builder.WebHost.UseSetting("urls", serverUrl);
+
+    builder.Services.AddSingleton<IOptions<ServerControlServerOptions>>(Options.Create(new ServerControlServerOptions
+    {
+        ServerUrl = serverUrl,
+        ConsoleName = "Central Heartbeat Timeout Smoke Console",
+        AdminUserName = "admin",
+        AdminPassword = "ChangeMe!2026",
+        SharedAccessKey = accessKey,
+        AgentHeartbeatTimeoutSeconds = 3,
+        PersistenceMode = "Memory"
+    }));
+
+    builder.Services.AddSingleton<ServerIDeviceRepository, ServerInMemoryDeviceRepository>();
+    builder.Services.AddRemoteDesktopServerCore();
+
+    await using var app = builder.Build();
+    app.MapRemoteDesktopServerEndpoints();
+    await app.StartAsync();
+
+    try
+    {
+        using var httpClient = new HttpClient { BaseAddress = new Uri(serverUrl, UriKind.Absolute), Timeout = TimeSpan.FromSeconds(5) };
+        var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new { userName = "admin", password = "ChangeMe!2026" });
+        loginResponse.EnsureSuccessStatusCode();
+        var session = await loginResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.UserSessionDto>()
+            ?? throw new InvalidOperationException("Central heartbeat timeout smoke login did not return a session.");
+
+        using var dashboardSocket = new ClientWebSocket();
+        dashboardSocket.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
+        await dashboardSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/dashboard" }.Uri, CancellationToken.None);
+
+        var readyEnvelope = await ReadDashboardEnvelopeAsync(dashboardSocket, CancellationToken.None);
+        if (!string.Equals(readyEnvelope.Type, "dashboard-ready", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Heartbeat timeout smoke dashboard websocket did not return a ready envelope.");
+        }
+
+        using var agentSocket = new ClientWebSocket();
+        await agentSocket.ConnectAsync(new UriBuilder(serverUrl) { Scheme = "ws", Path = "/ws/agent" }.Uri, CancellationToken.None);
+        await SendTextAsync(agentSocket, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.AgentHelloMessage
+        {
+            Type = "hello",
+            DeviceId = "central-heartbeat-device-001",
+            DeviceName = "Central Heartbeat Device",
+            HostName = Environment.MachineName,
+            AgentVersion = "smoke",
+            AccessKey = accessKey,
+            ScreenWidth = 1920,
+            ScreenHeight = 1080
+        }), CancellationToken.None);
+
+        var agentAck = await ReadMessageAsync(agentSocket, CancellationToken.None);
+        if (!Encoding.UTF8.GetString(agentAck.Payload).Contains("\"hello-ack\"", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Heartbeat timeout smoke agent did not receive hello-ack.");
+        }
+
+        var onlineEvent = await WaitForDashboardDeviceEventAsync(dashboardSocket, "central-heartbeat-device-001", "device-online", TimeSpan.FromSeconds(10));
+        if (!string.Equals(onlineEvent.DeviceId, "central-heartbeat-device-001", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Heartbeat timeout smoke did not observe the expected device-online event.");
+        }
+
+        var offlineEvent = await WaitForDashboardDeviceEventAsync(dashboardSocket, "central-heartbeat-device-001", "device-offline", TimeSpan.FromSeconds(15));
+        if (!string.Equals(offlineEvent.DeviceId, "central-heartbeat-device-001", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Heartbeat timeout smoke did not observe the expected device-offline event.");
+        }
+
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var devices = await httpClient.GetFromJsonAsync<List<RemoteDesktop.Shared.Models.DeviceRecord>>("/api/devices?take=20") ?? [];
+        var targetDevice = devices.SingleOrDefault(static item => string.Equals(item.DeviceId, "central-heartbeat-device-001", StringComparison.Ordinal));
+        if (targetDevice is null || targetDevice.IsOnline)
+        {
+            throw new InvalidOperationException("Heartbeat timeout smoke found the device still marked online after timeout.");
         }
     }
     finally
@@ -674,6 +764,20 @@ static async Task<RemoteDesktop.Shared.Models.DashboardUpdateEnvelope> ReadDashb
     return JsonSerializer.Deserialize<RemoteDesktop.Shared.Models.DashboardUpdateEnvelope>(Encoding.UTF8.GetString(payload.Payload), new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("Dashboard websocket returned an invalid envelope.");
 }
+static async Task<RemoteDesktop.Shared.Models.DashboardUpdateEnvelope> WaitForDashboardDeviceEventAsync(ClientWebSocket socket, string deviceId, string reason, TimeSpan timeout)
+{
+    using var timeoutSource = new CancellationTokenSource(timeout);
+    while (true)
+    {
+        var envelope = await ReadDashboardEnvelopeAsync(socket, timeoutSource.Token);
+        if (string.Equals(envelope.Type, "dashboard-changed", StringComparison.Ordinal)
+            && string.Equals(envelope.DeviceId, deviceId, StringComparison.Ordinal)
+            && string.Equals(envelope.Reason, reason, StringComparison.Ordinal))
+        {
+            return envelope;
+        }
+    }
+}
 static async Task<WebSocketPayload> ReadMessageAsync(ClientWebSocket socket, CancellationToken cancellationToken)
 {
     var buffer = new byte[64 * 1024];
@@ -941,6 +1045,8 @@ internal sealed class InMemoryAuditLogStore : IAuditLogStore
         return Task.FromResult<IReadOnlyList<AuditLogEntry>>(Array.Empty<AuditLogEntry>());
     }
 }
+
+
 
 
 

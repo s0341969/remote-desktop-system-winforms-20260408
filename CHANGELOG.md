@@ -2,6 +2,12 @@
 
 ## 2026-04-11
 
+- 新增 `tests/RemoteDesktop.LoadTests`，可直接模擬 `300 Agent / 5 Viewer` 的中央模式壓測，並輸出 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard latency 報告到 `artifacts/load-tests`。
+- 完成第一輪中央模式壓測，固定情境為 `300 Agent 在線 + 5 Viewer 同時附掛 + 5 台同時串流`，Agent 預設參數維持 `8 FPS / JPEG 55 / MaxWidth 1600` 不變。
+- 壓測最新結果：穩態平均 CPU `0.16%`、穩態峰值 RAM `222.24 MB`、穩態 Ingress `28.74 Mbps`、穩態 Egress `28.71 Mbps`、dashboard online event P95 `40.18 ms`、heartbeat timeout P95 `55.76 s`、WebSocket `unexpected close = 0`。
+- 重構中央 Server heartbeat timeout 路徑：Agent monitor 改為依 `AgentHeartbeatTimeoutSeconds` 動態調整掃描頻率（`1-10` 秒），stale agent 改為平行回收，避免多台 timeout 時被逐台關閉拖慢。
+- 修正中央 Server stale disconnect 在 `WebSocket.CloseAsync` 卡住時無法完成 repository cleanup 的問題；現在超過 2 秒會改以 `Abort()` 強制中止，仍會正確落地 `device-offline` 與 presence close。
+- 擴充 `RemoteDesktop.SmokeTests`，新增中央 heartbeat timeout 情境，驗證 dashboard `device-offline` 與 `/api/devices` 的離線狀態會正確出現。
 - 調整交付策略：`Deploy-App.ps1` 現在會將 `RemoteDesktop.Host`、`RemoteDesktop.Agent`、`RemoteDesktop.Server` 全部發布為單檔 `win-x64 self-contained` EXE，保留外部 `appsettings.json` 與資料腳本，改善現場交付與部署便利性。
 - `Clean-App.ps1` 現在會同步清掉 `users.json`、`audit-log.ndjson` 與檔案傳輸日誌，避免將執行期資料誤打進 publish / release 套件。
 - 修正 Host / Agent 的 build 資訊來源，單檔發布後改用 `Environment.ProcessPath` 讀取 EXE 實際時間，不再依賴 `Assembly.Location`。

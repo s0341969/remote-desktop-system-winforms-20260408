@@ -18,7 +18,8 @@ public sealed class AgentMonitorService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        var sweepIntervalSeconds = Math.Clamp(_options.AgentHeartbeatTimeoutSeconds / 3, 1, 10);
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(sweepIntervalSeconds));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try

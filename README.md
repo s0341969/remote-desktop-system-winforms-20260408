@@ -31,6 +31,9 @@
   - 核心通訊 smoke test。
 - `tests/RemoteDesktop.UiAutomation`
   - WinForms UI 自動化測試。
+- `tests/RemoteDesktop.LoadTests`
+  - 中央模式壓測工具。
+  - 可模擬 300 Agent 在線、5 Viewer 同時附掛，並輸出 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard 延遲報告。
 - `RemoteDesktopSystem.csproj`
   - 根目錄聚合建置檔，用來一次建置主要執行專案。
 
@@ -70,6 +73,22 @@
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
 - 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
+- 補上 `tests/RemoteDesktop.LoadTests`，可直接壓測中央 `RemoteDesktop.Server` 在 `300 Agent / 5 Viewer` 情境下的 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard latency。
+- Server heartbeat timeout 路徑已重構：
+  - Agent monitor 掃描頻率改為依 `AgentHeartbeatTimeoutSeconds` 動態調整，區間 `1-10` 秒。
+  - stale agent disconnect 現在改為平行回收，避免多台 timeout 時被逐台 `CloseAsync` 拉長。
+  - 若 agent socket 在 graceful close 超過 2 秒仍未完成，Server 會改用 `Abort()` 強制中止，並持續完成 repository cleanup 與 dashboard `device-offline` 推播。
+- 壓測最新基準結果：
+  - 報告位置：`artifacts/load-tests/central_300agents_5viewers_20260411_223621`
+  - 300 Agent 在線、5 Viewer 同時附掛、其中 5 台同時串流 8 FPS
+  - 穩態平均 CPU：`0.16%`
+  - 穩態峰值 RAM：`222.24 MB`
+  - 穩態網路吞吐：Ingress `28.74 Mbps` / Egress `28.71 Mbps`
+  - WebSocket 穩定性：`300` Agent、`5` Viewer 全部成功連線，`unexpected close = 0`
+  - dashboard online event P95：`40.18 ms`
+  - heartbeat timeout P95：`55.76 s`
+  - timeout probe 後在線裝置數：`290 / 300`
+  - 說明：heartbeat timeout 設定值為 `45 s`，實際觀測值包含 monitor 掃描粒度，因此約為 `45-55 s`
 - 發佈流程已補齊中央 Server：`Publish-App.ps1` 現在支援依專案指定 framework，`Deploy-App.ps1` 可一鍵 clean、build、測試、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 交付包。
 - 新增 `deploy/scripts/Start-Server.cmd` 與 `deploy/scripts/Publish-Server-Launcher.cmd`，讓中央 Server 也能走與 Host/Agent 一致的交付與啟動流程。
 - `Deploy-App.ps1` 現在會在 `deploy/release/current` 產生 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤對應 commit、產生時間與 Host/Agent/Server 封裝大小。
@@ -139,6 +158,32 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\dotnet\dotnet.exe' build .\RemoteDesktopSystem.sln
 ```
+
+### Load Test
+
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' run --project .\tests\RemoteDesktop.LoadTests\RemoteDesktop.LoadTests.csproj
+```
+
+輸出：
+- `artifacts/load-tests/<timestamp>/load-test-report.json`
+- `artifacts/load-tests/<timestamp>/load-test-report.md`
+
+目前固定情境：
+- `300` Agent 在線
+- `5` Viewer 連線
+- `5` 台 Agent 同時串流
+- Agent 預設參數不變：
+  - `CaptureFramesPerSecond = 8`
+  - `JpegQuality = 55`
+  - `MaxFrameWidth = 1600`
+
+量測項目：
+- Server CPU / RAM
+- Server 估算 ingress / egress 網路吞吐
+- WebSocket 穩定性
+- heartbeat timeout
+- dashboard latency
 
 ### 啟動中央 Server
 
