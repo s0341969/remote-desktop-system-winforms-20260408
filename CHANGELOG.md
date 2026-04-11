@@ -8,6 +8,7 @@
 - 重構中央 Server heartbeat timeout 路徑：Agent monitor 改為依 `AgentHeartbeatTimeoutSeconds` 動態調整掃描頻率（`1-10` 秒），stale agent 改為平行回收，避免多台 timeout 時被逐台關閉拖慢。
 - 修正中央 Server stale disconnect 在 `WebSocket.CloseAsync` 卡住時無法完成 repository cleanup 的問題；現在超過 2 秒會改以 `Abort()` 強制中止，仍會正確落地 `device-offline` 與 presence close。
 - 擴充 `RemoteDesktop.SmokeTests`，新增中央 heartbeat timeout 情境，驗證 dashboard `device-offline` 與 `/api/devices` 的離線狀態會正確出現。
+- 新增 [CAPACITY_PLAN.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CAPACITY_PLAN.md)，將 `300 Agent / 5 Viewer` 壓測整理成一頁式容量規劃結論，方便交付與驗收。
 - 調整交付策略：`Deploy-App.ps1` 現在會將 `RemoteDesktop.Host`、`RemoteDesktop.Agent`、`RemoteDesktop.Server` 全部發布為單檔 `win-x64 self-contained` EXE，保留外部 `appsettings.json` 與資料腳本，改善現場交付與部署便利性。
 - `Clean-App.ps1` 現在會同步清掉 `users.json`、`audit-log.ndjson` 與檔案傳輸日誌，避免將執行期資料誤打進 publish / release 套件。
 - 修正 Host / Agent 的 build 資訊來源，單檔發布後改用 `Environment.ProcessPath` 讀取 EXE 實際時間，不再依賴 `Assembly.Location`。

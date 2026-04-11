@@ -34,6 +34,9 @@
 - `tests/RemoteDesktop.LoadTests`
   - 中央模式壓測工具。
   - 可模擬 300 Agent 在線、5 Viewer 同時附掛，並輸出 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard 延遲報告。
+- [CAPACITY_PLAN.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CAPACITY_PLAN.md)
+  - 一頁式容量規劃結論。
+  - 彙整 `300 Agent / 5 Viewer` 壓測結果、部署假設、容量判斷與上線建議。
 - `RemoteDesktopSystem.csproj`
   - 根目錄聚合建置檔，用來一次建置主要執行專案。
 
