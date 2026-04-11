@@ -12,7 +12,17 @@ param(
 
     [string]$Framework = "",
 
-    [string]$SatelliteResourceLanguages = "zh-Hant"
+    [string]$SatelliteResourceLanguages = "zh-Hant",
+
+    [string]$RuntimeIdentifier = "",
+
+    [bool]$SelfContained = $false,
+
+    [bool]$PublishSingleFile = $false,
+
+    [bool]$EnableCompressionInSingleFile = $false,
+
+    [bool]$IncludeNativeLibrariesForSelfExtract = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,8 +53,11 @@ $publishArgs = @(
     $projectPath,
     "-c", $Configuration,
     "-o", $outputPath,
-    "-p:SelfContained=false",
+    "-p:SelfContained=$SelfContained",
     "-p:UseAppHost=true",
+    "-p:PublishSingleFile=$PublishSingleFile",
+    "-p:EnableCompressionInSingleFile=$EnableCompressionInSingleFile",
+    "-p:IncludeNativeLibrariesForSelfExtract=$IncludeNativeLibrariesForSelfExtract",
     "-p:CopyOutputSymbolsToPublishDirectory=false",
     "-p:DebugSymbols=false",
     "-p:DebugType=None",
@@ -53,6 +66,10 @@ $publishArgs = @(
 
 if (-not [string]::IsNullOrWhiteSpace($Framework)) {
     $publishArgs += @("-f", $Framework)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($RuntimeIdentifier)) {
+    $publishArgs += @("-r", $RuntimeIdentifier)
 }
 
 Push-Location $repoRoot

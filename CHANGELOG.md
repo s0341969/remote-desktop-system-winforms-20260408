@@ -2,6 +2,9 @@
 
 ## 2026-04-11
 
+- 調整交付策略：`Deploy-App.ps1` 現在會將 `RemoteDesktop.Host`、`RemoteDesktop.Agent`、`RemoteDesktop.Server` 全部發布為單檔 `win-x64 self-contained` EXE，保留外部 `appsettings.json` 與資料腳本，改善現場交付與部署便利性。
+- `Clean-App.ps1` 現在會同步清掉 `users.json`、`audit-log.ndjson` 與檔案傳輸日誌，避免將執行期資料誤打進 publish / release 套件。
+- 修正 Host / Agent 的 build 資訊來源，單檔發布後改用 `Environment.ProcessPath` 讀取 EXE 實際時間，不再依賴 `Assembly.Location`。
 - 修正 `RemoteDesktop.Host` 的 `CentralServerUrl` 設定驗證，現在允許空值或空字串；只有真的填了內容時才要求是合法完整 URL，避免本機模式下因 DataAnnotation 驗證直接啟動失敗。
 - 補齊中央 Server 的正式交付流程：新增 `deploy/scripts/Deploy-App.ps1`，可一鍵 clean、build、smoke test、UI automation、publish Host/Agent/Server，並重建 `deploy/release/current`、日期版資料夾與 zip 套件。
 - `Publish-App.ps1` 現在改為可依專案指定 framework，不再假設所有專案都走 `net8.0-windows`，因此 `RemoteDesktop.Server` 也可納入同一套 publish 腳本。

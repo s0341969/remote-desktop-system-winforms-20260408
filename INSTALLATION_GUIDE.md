@@ -55,7 +55,7 @@
 
 - Windows 10 / Windows 11
 - 如使用原始碼執行：`.NET 8 SDK`
-- 如使用 `publish` 版本：需安裝對應的 `.NET 8 Desktop Runtime`
+- 如使用 `publish` 版本：目前交付包已為 `win-x64 self-contained`，不需另外安裝 `.NET Runtime`
 - 若要使用資料庫持久化：SQL Server LocalDB 或 SQL Server
 
 ## 4. 專案目錄
@@ -162,19 +162,35 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Host\RemoteDesktop.Host.csproj' `
   -OutputRelativePath 'deploy\publish\Host' `
-  -ExecutableName 'RemoteDesktop.Host.exe'
+  -ExecutableName 'RemoteDesktop.Host.exe' `
+  -Framework 'net8.0-windows' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
   -OutputRelativePath 'deploy\publish\Agent' `
   -ExecutableName 'RemoteDesktop.Agent.exe' `
-  -Framework 'net8.0-windows'
+  -Framework 'net8.0-windows' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Server\RemoteDesktop.Server.csproj' `
   -OutputRelativePath 'deploy\publish\Server' `
   -ExecutableName 'RemoteDesktop.Server.exe' `
-  -Framework 'net8.0'
+  -Framework 'net8.0' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 ```
 
 若要一鍵 clean、build、測試、publish 與建立 release：
@@ -196,6 +212,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設以 `Memory` 模式啟動，不會先連資料庫
+- Host / Agent / Server 現在都已是單檔 `win-x64 self-contained` 發佈，可直接複製到目標機器執行
 
 ### 8.1.1 啟動中央 Server
 
@@ -585,6 +602,7 @@ WinForms UI automation：
 - 中央 `/api/settings/host`：已由 smoke test 驗證可 round-trip 讀取與更新 Host 設定
 - `deploy/scripts/Deploy-App.ps1`：已驗證可產出 `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server` 與 `deploy/release/current`
 - `deploy/scripts/Verify-Central-Release.ps1`：已驗證可直接啟動 publish 版 `RemoteDesktop.Server.exe` 並成功讀取 `/healthz`
+- `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server`：已改為單檔 self-contained 發佈，現場不需再額外安裝 `.NET Runtime`
 
 
 

@@ -114,7 +114,12 @@ try {
             -OutputRelativePath "deploy\publish\Host" `
             -ExecutableName "RemoteDesktop.Host.exe" `
             -Configuration $Configuration `
-            -Framework "net8.0-windows"
+            -Framework "net8.0-windows" `
+            -RuntimeIdentifier "win-x64" `
+            -SelfContained:$true `
+            -PublishSingleFile:$true `
+            -EnableCompressionInSingleFile:$true `
+            -IncludeNativeLibrariesForSelfExtract:$true
 
         if ($LASTEXITCODE -ne 0) {
             throw "Host publish failed with exit code $LASTEXITCODE"
@@ -127,7 +132,12 @@ try {
             -OutputRelativePath "deploy\publish\Agent" `
             -ExecutableName "RemoteDesktop.Agent.exe" `
             -Configuration $Configuration `
-            -Framework "net8.0-windows"
+            -Framework "net8.0-windows" `
+            -RuntimeIdentifier "win-x64" `
+            -SelfContained:$true `
+            -PublishSingleFile:$true `
+            -EnableCompressionInSingleFile:$true `
+            -IncludeNativeLibrariesForSelfExtract:$true
 
         if ($LASTEXITCODE -ne 0) {
             throw "Agent publish failed with exit code $LASTEXITCODE"
@@ -140,7 +150,12 @@ try {
             -OutputRelativePath "deploy\publish\Server" `
             -ExecutableName "RemoteDesktop.Server.exe" `
             -Configuration $Configuration `
-            -Framework "net8.0"
+            -Framework "net8.0" `
+            -RuntimeIdentifier "win-x64" `
+            -SelfContained:$true `
+            -PublishSingleFile:$true `
+            -EnableCompressionInSingleFile:$true `
+            -IncludeNativeLibrariesForSelfExtract:$true
 
         if ($LASTEXITCODE -ne 0) {
             throw "Server publish failed with exit code $LASTEXITCODE"

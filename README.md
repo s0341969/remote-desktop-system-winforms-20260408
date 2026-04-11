@@ -20,11 +20,11 @@
   - Windows Forms Agent。
   - 提供桌面截圖、心跳、輸入回放、自動重連與 Agent 設定表單。
 - `deploy/publish/Host`
-  - Host 的精簡 `win-x64 framework-dependent` 發佈版。
+  - Host 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/publish/Agent`
-  - Agent 的精簡 `win-x64 framework-dependent` 發佈版。
+  - Agent 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/publish/Server`
-  - Server 的精簡 `framework-dependent` 發佈版。
+  - Server 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/scripts`
   - 發佈、清理與整包交付腳本。
 - `tests/RemoteDesktop.SmokeTests`
@@ -47,6 +47,7 @@
 - 保留既有 smoke test，持續驗證核心 WebSocket 與 broker 流程。
 - 補上 `publish` 發佈版、桌面捷徑與 Agent 開機自動啟動捷徑。
 - 新增 `deploy/scripts/Clean-App.ps1`，可一鍵清理 `bin/obj`、`.dotnet` 與執行期垃圾檔。
+- `deploy/scripts/Clean-App.ps1` 現在也會清掉執行期產生的 `users.json`、`audit-log.ndjson` 與檔案傳輸日誌，避免把現場資料誤帶進新的交付包。
 - `deploy/scripts/Publish-App.ps1` 現在會先清空輸出目錄，再以最小必要相依與 `zh-Hant` 資源重建 publish 版，避免舊的 self-contained DLL 殘留。
 - 修正檔案上傳流程造成 Viewer 卡頓的問題：Host 上傳改為背景傳輸，Agent 端進度訊息改為節流回報，並將單一 chunk 降到 16 KB，避免大檔案傳輸時產生過大的 Base64 暫存字串。
 - Host 的上傳按鈕事件現在有最外層例外保護；若實際環境仍遇到傳輸異常，會顯示錯誤訊息而不是直接讓整個 Viewer 當掉。
@@ -74,6 +75,7 @@
 - `Deploy-App.ps1` 現在會在 `deploy/release/current` 產生 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤對應 commit、產生時間與 Host/Agent/Server 封裝大小。
 - `deploy/scripts/Verify-Central-Release.ps1` 可直接驗證 release 套件是否完整，並啟動 publish 版 `RemoteDesktop.Server.exe` 檢查 `/healthz`。
 - 修正 Host 啟動時 `CentralServerUrl` 的驗證邏輯：現在允許空值或空字串，只有真的填了內容時才要求為合法的完整 `http/https/ftp` URL，避免現場未設定中央模式時直接因 DataAnnotation 驗證失敗而無法啟動。
+- `Deploy-App.ps1` 現在會將 Host / Agent / Server 全部發布為單檔 `win-x64 self-contained` EXE；DLL 與 .NET runtime 會內嵌到主執行檔，保留外部 `appsettings.json` 與資料腳本方便現場設定。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -105,6 +107,7 @@
 - Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
+- 這些 publish 版現在已是單檔自帶 runtime，不需要另外安裝 `.NET Desktop Runtime`。
 - Publish 目錄會在每次重建時完整覆蓋；若有自訂設定，應修改 `src/.../appsettings.json` 或在發佈後另外備份部署設定。
 - 可交付壓縮包與固定部署資料夾會輸出到 `deploy/release`。
 - 若要改回 MSSQL：
@@ -173,19 +176,34 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
   -ProjectRelativePath 'src\RemoteDesktop.Host\RemoteDesktop.Host.csproj' `
   -OutputRelativePath 'deploy\publish\Host' `
   -ExecutableName 'RemoteDesktop.Host.exe' `
-  -Framework 'net8.0-windows'
+  -Framework 'net8.0-windows' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
   -OutputRelativePath 'deploy\publish\Agent' `
   -ExecutableName 'RemoteDesktop.Agent.exe' `
-  -Framework 'net8.0-windows'
+  -Framework 'net8.0-windows' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Server\RemoteDesktop.Server.csproj' `
   -OutputRelativePath 'deploy\publish\Server' `
   -ExecutableName 'RemoteDesktop.Server.exe' `
-  -Framework 'net8.0'
+  -Framework 'net8.0' `
+  -RuntimeIdentifier 'win-x64' `
+  -SelfContained $true `
+  -PublishSingleFile $true `
+  -EnableCompressionInSingleFile $true `
+  -IncludeNativeLibrariesForSelfExtract $true
 ```
 
 ### 一鍵部署

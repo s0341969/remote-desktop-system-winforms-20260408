@@ -22,9 +22,9 @@ internal static class AppBuildInfo
     {
         var assembly = Assembly.GetEntryAssembly() ?? typeof(AppBuildInfo).Assembly;
         var version = assembly.GetName().Version?.ToString(3) ?? "1.0.0";
-        var location = assembly.Location;
-        var builtAt = !string.IsNullOrWhiteSpace(location) && File.Exists(location)
-            ? File.GetLastWriteTime(location)
+        var processPath = Environment.ProcessPath;
+        var builtAt = !string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath)
+            ? File.GetLastWriteTime(processPath)
             : DateTime.Now;
 
         return $"Build {version} {builtAt:yyyy-MM-dd HH:mm:ss}";

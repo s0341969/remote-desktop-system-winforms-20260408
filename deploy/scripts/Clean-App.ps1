@@ -36,12 +36,20 @@ foreach ($artifactDirectory in $artifactDirectories) {
     Remove-WorkspacePath -LiteralPath $artifactDirectory
 }
 
-$runtimeFiles = @(
-    (Join-Path $repoRoot "audit-log.ndjson")
+$runtimeFilePatterns = @(
+    "audit-log.ndjson",
+    "users.json",
+    "host-file-transfer.ndjson",
+    "agent-file-transfer.ndjson"
 )
 
-foreach ($runtimeFile in $runtimeFiles) {
-    Remove-WorkspacePath -LiteralPath $runtimeFile
+foreach ($runtimeFilePattern in $runtimeFilePatterns) {
+    $runtimeFiles = Get-ChildItem -Path $repoRoot -Recurse -Force -File -Filter $runtimeFilePattern -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName
+
+    foreach ($runtimeFile in $runtimeFiles) {
+        Remove-WorkspacePath -LiteralPath $runtimeFile
+    }
 }
 
 if ($IncludeDotnetHome) {
