@@ -14,7 +14,7 @@ public partial class AgentMainForm : Form
     private string[] _lastEvents = Array.Empty<string>();
     private bool _allowExit;
     private bool _startHidden;
-    private bool _balloonTipShown;
+    private bool _startupVisibilityHandled;
 
     public AgentMainForm()
     {
@@ -39,15 +39,22 @@ public partial class AgentMainForm : Form
         _startHidden = agentOptions.StartHidden;
     }
 
-    protected override void OnShown(EventArgs e)
+    protected override void OnLoad(EventArgs e)
     {
-        base.OnShown(e);
+        base.OnLoad(e);
         RefreshRuntimeState();
         _refreshTimer.Start();
-        if (_startHidden)
+    }
+
+    protected override void SetVisibleCore(bool value)
+    {
+        if (!_startupVisibilityHandled && _startHidden)
         {
-            BeginInvoke(new Action(HideToTray));
+            _startupVisibilityHandled = true;
+            value = false;
         }
+
+        base.SetVisibleCore(value);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -188,13 +195,6 @@ public partial class AgentMainForm : Form
         Hide();
         ShowInTaskbar = false;
         WindowState = FormWindowState.Normal;
-        if (!_balloonTipShown)
-        {
-            notifyAgent.BalloonTipTitle = AgentUiText.Window("遠端桌面 Agent", "RemoteDesktop Agent");
-            notifyAgent.BalloonTipText = AgentUiText.Bi("Agent 已隱藏到系統匣，雙擊圖示可重新開啟。", "The Agent is running in the system tray. Double-click the icon to open it again.");
-            notifyAgent.ShowBalloonTip(2500);
-            _balloonTipShown = true;
-        }
     }
 
     private void ShowFromTray()

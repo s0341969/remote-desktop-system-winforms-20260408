@@ -153,7 +153,7 @@
 說明：
 - `InventoryRefreshMinutes` 預設為 `360`，表示 Agent 每 6 小時會重新盤點一次。
 - 若新的盤點內容與前一次不同，Host / Server 會覆寫最新 inventory，並保留一筆變更歷史。
-- `StartHidden` 預設為 `true`，表示 Agent 啟動後會直接隱藏到系統匣，不顯示主視窗與工作列按鈕。
+- `StartHidden` 預設為 `true`，表示 Agent 啟動時會直接在背景執行，不先顯示主視窗、不進工作列，也不顯示系統通知。
 
 ## 6. 原始碼建置
 
@@ -322,7 +322,7 @@ Windows 登入後，Agent 會自動啟動。
 補充：
 - `DeviceId` 與 `DeviceName` 會固定顯示為目前電腦的主機名稱。
 - 即使 `appsettings.json` 內保留舊值，Agent 實際註冊到 Host / Server 時仍會以主機名稱為準。
-- Agent 預設啟動後會隱藏到系統匣；若要顯示主畫面，請雙擊系統匣圖示或從系統匣選單按「顯示主視窗」。
+- Agent 預設啟動時會直接在背景常駐，不會先閃出主視窗再隱藏；若要顯示主畫面，請雙擊系統匣圖示或從系統匣選單按「顯示主視窗」。
 
 ### 10.1 Agent 主畫面功能下拉
 
