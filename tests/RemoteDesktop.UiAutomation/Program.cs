@@ -175,9 +175,10 @@ static void TestHostMainForm()
     var viewerSessionBrokerFactory = new RemoteViewerSessionBrokerFactory(broker, options, sessionState);
     var viewerFactory = new RemoteViewerFormFactory(viewerSessionBrokerFactory, new RemoteDesktop.Host.Services.FileTransferTraceService());
     var dashboardDataSourceFactory = new MainDashboardDataSourceFactory(repo, broker, options, sessionState);
+    var detailsFactory = new DeviceInventoryDetailsFormFactory(dashboardDataSourceFactory, new InventoryExportService());
 
     using var form = new MainForm();
-    form.Bind(dashboardDataSourceFactory.Create(), options.Value, viewerFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
+    form.Bind(dashboardDataSourceFactory.Create(), options.Value, viewerFactory, detailsFactory, settingsFactory, userManagementFactory, auditLogFactory, currentUser);
     form.Show();
     WaitUntil(() => GetControl<DataGridView>(form, "gridDevices").Rows.Count >= 2, 3000);
 
@@ -846,11 +847,13 @@ internal sealed class FakeDeviceRepository : IDeviceRepository
 {
     private readonly List<DeviceRecord> _devices = new();
     private readonly List<AgentPresenceLogRecord> _logs = new();
+    private readonly Dictionary<string, List<InventoryHistoryRecord>> _history = new(StringComparer.OrdinalIgnoreCase);
 
     public void Seed(params DeviceRecord[] devices)
     {
         _devices.Clear();
         _devices.AddRange(devices);
+        _history.Clear();
         _logs.Clear();
         _logs.AddRange(devices.Select(device => new AgentPresenceLogRecord
         {
@@ -865,6 +868,23 @@ internal sealed class FakeDeviceRepository : IDeviceRepository
             DisconnectReason = device.IsOnline ? null : "offline",
             OnlineSeconds = 30
         }));
+
+        foreach (var device in devices.Where(static item => item.Inventory is not null))
+        {
+            _history[device.DeviceId] =
+            [
+                new InventoryHistoryRecord
+                {
+                    HistoryId = Guid.NewGuid(),
+                    DeviceId = device.DeviceId,
+                    InventoryFingerprint = "seed",
+                    ChangeSummary = "首次盤點。 / Initial inventory snapshot.",
+                    CollectedAt = device.Inventory!.CollectedAt,
+                    RecordedAt = device.Inventory.CollectedAt,
+                    Inventory = device.Inventory
+                }
+            ];
+        }
     }
 
     public Task InitializeSchemaAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -904,6 +924,9 @@ internal sealed class FakeDeviceRepository : IDeviceRepository
     public Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<DeviceRecord>>(_devices.Take(take).ToList());
     public Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken) => Task.FromResult(_devices.FirstOrDefault(x => x.DeviceId == deviceId));
     public Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentPresenceLogRecord>>(_logs.Take(take).ToList());
+    public Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<InventoryHistoryRecord>>(_history.TryGetValue(deviceId, out var items) ? items.Take(take).ToList() : []);
 }
 
 internal sealed class InMemoryUserAccountStore : IUserAccountStore

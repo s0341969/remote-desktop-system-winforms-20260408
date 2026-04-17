@@ -2,8 +2,10 @@
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
 - [ ] 若後續需要跨網域或同名主機環境，盤點 Agent 身分規則是否要從單純 `MachineName` 升級為 `MachineName + SID/UUID`，避免極端情況下仍重複
-- [ ] 為 Agent inventory 補更細的詳細檢視與匯出能力，避免主畫面只看摘要時仍需人工查完整磁碟或更新內容
-- [ ] 為 Agent inventory 增加定期重新收集與變更追蹤，讓 Office 更新、Windows Patch 與硬體變更可自動覆寫或保留歷史
+- [ ] 為 inventory 詳細視窗補更多欄位，包含主機板、序號、網卡、IP、已安裝軟體與多磁碟明細，避免目前仍以摘要字串呈現
+- [ ] 為 inventory 匯出補真正的 `.xlsx` 格式驗證與欄位模板鎖定，確認 Excel 匯出在不同版本 Office 下都能穩定開啟
+- [ ] 為 inventory 重新盤點補手動立即重抓入口與中央 Server 端排程策略，避免只能等 Agent 週期性回報
+- [ ] 為 inventory 變更追蹤補差異比對視圖與通知策略，讓 Office 更新、Windows Patch 與硬體變更不只留歷史，也能主動提醒
 - [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上中央模式的完整 publish 驗證與跨多台 Console Client 的手動冒煙驗證
 - [ ] 為 Host / Agent / Server 的設定表單補更明確的輸入驗證訊息與範例 placeholder，避免現場輸入不完整 URL 時只能看到一般性錯誤
 - [ ] 盤點單檔 self-contained 發佈後的啟動時間、記憶體占用與防毒掃描行為，確認現場部署不會因單檔解壓或安全軟體誤判造成額外延遲

@@ -13,6 +13,7 @@ public partial class MainForm : Form
     private IMainDashboardDataSource? _dashboardDataSource;
     private ControlServerOptions? _options;
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
+    private DeviceInventoryDetailsFormFactory? _deviceInventoryDetailsFormFactory;
     private HostSettingsFormFactory? _hostSettingsFormFactory;
     private UserManagementFormFactory? _userManagementFormFactory;
     private AuditLogFormFactory? _auditLogFormFactory;
@@ -36,6 +37,7 @@ public partial class MainForm : Form
         IMainDashboardDataSource dashboardDataSource,
         ControlServerOptions options,
         RemoteViewerFormFactory remoteViewerFormFactory,
+        DeviceInventoryDetailsFormFactory deviceInventoryDetailsFormFactory,
         HostSettingsFormFactory hostSettingsFormFactory,
         UserManagementFormFactory userManagementFormFactory,
         AuditLogFormFactory auditLogFormFactory,
@@ -44,6 +46,7 @@ public partial class MainForm : Form
         _dashboardDataSource = dashboardDataSource;
         _options = options;
         _remoteViewerFormFactory = remoteViewerFormFactory;
+        _deviceInventoryDetailsFormFactory = deviceInventoryDetailsFormFactory;
         _hostSettingsFormFactory = hostSettingsFormFactory;
         _userManagementFormFactory = userManagementFormFactory;
         _auditLogFormFactory = auditLogFormFactory;
@@ -109,6 +112,11 @@ public partial class MainForm : Form
     private void btnOpenViewer_Click(object sender, EventArgs e)
     {
         OpenSelectedViewer();
+    }
+
+    private void btnDeviceDetails_Click(object sender, EventArgs e)
+    {
+        OpenSelectedDeviceDetails();
     }
 
     private async void btnApproveDevice_Click(object sender, EventArgs e)
@@ -186,6 +194,7 @@ public partial class MainForm : Form
             _refreshing = true;
             btnRefresh.Enabled = false;
             btnOpenViewer.Enabled = false;
+            btnDeviceDetails.Enabled = false;
             btnApproveDevice.Enabled = false;
             btnAudit.Enabled = false;
             btnSettings.Enabled = false;
@@ -314,6 +323,23 @@ public partial class MainForm : Form
         viewerForm.Show(this);
     }
 
+    private void OpenSelectedDeviceDetails()
+    {
+        if (_deviceInventoryDetailsFormFactory is null)
+        {
+            return;
+        }
+
+        var selected = GetSelectedDevice();
+        if (selected is null)
+        {
+            return;
+        }
+
+        using var detailsForm = _deviceInventoryDetailsFormFactory.Create(selected.Source.DeviceId);
+        detailsForm.ShowDialog(this);
+    }
+
     private DeviceGridItem? GetSelectedDevice()
     {
         if (gridDevices.SelectedRows.Count > 0)
@@ -372,6 +398,7 @@ public partial class MainForm : Form
     {
         var selected = GetSelectedDevice();
         btnOpenViewer.Enabled = _dashboardDataSource is { SupportsViewerSessions: true } && selected is { Source.IsOnline: true, Source.IsAuthorized: true };
+        btnDeviceDetails.Enabled = selected is not null;
         btnApproveDevice.Enabled = _signedInUser?.CanManageDeviceAuthorization == true && selected is not null && !selected.Source.IsAuthorized;
         btnRevokeDevice.Enabled = _signedInUser?.CanManageDeviceAuthorization == true && selected is not null && selected.Source.IsAuthorized;
     }
@@ -385,6 +412,7 @@ public partial class MainForm : Form
         HostUiText.ApplyButton(btnRevokeDevice, "撤銷", "Revoke");
         HostUiText.ApplyButton(btnUsers, "使用者", "Users");
         HostUiText.ApplyButton(btnSettings, "設定", "Settings");
+        HostUiText.ApplyButton(btnDeviceDetails, "裝置詳細資訊", "Device Details");
         HostUiText.ApplyButton(btnOpenViewer, "開啟 Viewer", "Open Viewer");
         HostUiText.ApplyButton(btnRefresh, "重新整理", "Refresh");
         lblConsoleNameCaption.Text = HostUiText.Bi("主控台", "Console");

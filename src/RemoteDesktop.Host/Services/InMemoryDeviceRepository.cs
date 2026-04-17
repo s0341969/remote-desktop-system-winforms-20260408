@@ -7,6 +7,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
     private readonly object _sync = new();
     private readonly Dictionary<string, DeviceRecord> _devices = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Guid, AgentPresenceLogRecord> _presenceLogs = new();
+    private readonly Dictionary<string, List<InventoryHistoryRecord>> _inventoryHistory = new(StringComparer.OrdinalIgnoreCase);
 
     public Task InitializeSchemaAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -37,6 +38,8 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                 LastConnectedAt = now,
                 LastDisconnectedAt = null
             };
+
+            TrackInventoryChangeLocked(descriptor.DeviceId, existing?.Inventory, descriptor.Inventory);
         }
 
         return Task.CompletedTask;
@@ -225,5 +228,156 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                 .ToList();
             return Task.FromResult(result);
         }
+    }
+
+    public Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_devices.TryGetValue(deviceId, out var device))
+            {
+                return Task.CompletedTask;
+            }
+
+            _devices[deviceId] = new DeviceRecord
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.DeviceName,
+                HostName = device.HostName,
+                AgentVersion = device.AgentVersion,
+                ScreenWidth = device.ScreenWidth,
+                ScreenHeight = device.ScreenHeight,
+                Inventory = inventory,
+                IsOnline = device.IsOnline,
+                IsAuthorized = device.IsAuthorized,
+                AuthorizedAt = device.AuthorizedAt,
+                AuthorizedBy = device.AuthorizedBy,
+                CreatedAt = device.CreatedAt,
+                LastSeenAt = device.LastSeenAt,
+                LastConnectedAt = device.LastConnectedAt,
+                LastDisconnectedAt = device.LastDisconnectedAt
+            };
+
+            TrackInventoryChangeLocked(deviceId, device.Inventory, inventory);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_inventoryHistory.TryGetValue(deviceId, out var items))
+            {
+                return Task.FromResult<IReadOnlyList<InventoryHistoryRecord>>([]);
+            }
+
+            return Task.FromResult<IReadOnlyList<InventoryHistoryRecord>>(items
+                .OrderByDescending(static item => item.RecordedAt)
+                .Take(take)
+                .ToList());
+        }
+    }
+
+    private void TrackInventoryChangeLocked(string deviceId, AgentInventoryProfile? previousInventory, AgentInventoryProfile? currentInventory)
+    {
+        if (currentInventory is null)
+        {
+            return;
+        }
+
+        var fingerprint = CalculateFingerprint(currentInventory);
+        var previousFingerprint = previousInventory is null ? null : CalculateFingerprint(previousInventory);
+        if (string.Equals(fingerprint, previousFingerprint, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!_inventoryHistory.TryGetValue(deviceId, out var items))
+        {
+            items = [];
+            _inventoryHistory[deviceId] = items;
+        }
+
+        items.Add(new InventoryHistoryRecord
+        {
+            HistoryId = Guid.NewGuid(),
+            DeviceId = deviceId,
+            InventoryFingerprint = fingerprint,
+            ChangeSummary = BuildChangeSummary(previousInventory, currentInventory),
+            CollectedAt = currentInventory.CollectedAt,
+            RecordedAt = DateTimeOffset.UtcNow,
+            Inventory = currentInventory
+        });
+    }
+
+    private static string CalculateFingerprint(AgentInventoryProfile inventory)
+    {
+        var payload = string.Join("|", new[]
+        {
+            inventory.CpuName,
+            inventory.InstalledMemoryBytes.ToString(),
+            inventory.StorageSummary,
+            inventory.OsName,
+            inventory.OsVersion,
+            inventory.OsBuildNumber,
+            inventory.OfficeVersion,
+            inventory.LastWindowsUpdateTitle,
+            inventory.LastWindowsUpdateInstalledAt?.UtcDateTime.ToString("O") ?? string.Empty
+        });
+
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private static string BuildChangeSummary(AgentInventoryProfile? previousInventory, AgentInventoryProfile currentInventory)
+    {
+        if (previousInventory is null)
+        {
+            return "首次盤點。 / Initial inventory snapshot.";
+        }
+
+        var changes = new List<string>();
+        AppendChange(changes, "CPU", previousInventory.CpuName, currentInventory.CpuName);
+        AppendChange(changes, "記憶體", FormatBytes(previousInventory.InstalledMemoryBytes), FormatBytes(currentInventory.InstalledMemoryBytes));
+        AppendChange(changes, "磁碟", previousInventory.StorageSummary, currentInventory.StorageSummary);
+        AppendChange(changes, "作業系統", $"{previousInventory.OsName} {previousInventory.OsVersion} ({previousInventory.OsBuildNumber})", $"{currentInventory.OsName} {currentInventory.OsVersion} ({currentInventory.OsBuildNumber})");
+        AppendChange(changes, "Office", previousInventory.OfficeVersion, currentInventory.OfficeVersion);
+        AppendChange(changes, "最後更新", $"{previousInventory.LastWindowsUpdateTitle} {previousInventory.LastWindowsUpdateInstalledAt:yyyy-MM-dd}", $"{currentInventory.LastWindowsUpdateTitle} {currentInventory.LastWindowsUpdateInstalledAt:yyyy-MM-dd}");
+
+        return changes.Count == 0
+            ? "盤點時間更新，內容無變更。 / Inventory refreshed without content changes."
+            : string.Join("；", changes);
+    }
+
+    private static void AppendChange(List<string> changes, string label, string? before, string? after)
+    {
+        var normalizedBefore = string.IsNullOrWhiteSpace(before) ? "-" : before.Trim();
+        var normalizedAfter = string.IsNullOrWhiteSpace(after) ? "-" : after.Trim();
+        if (string.Equals(normalizedBefore, normalizedAfter, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        changes.Add($"{label}: {normalizedBefore} -> {normalizedAfter}");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "未知";
+        }
+
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        var value = (double)bytes;
+        var unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return $"{value:0.##} {units[unitIndex]}";
     }
 }

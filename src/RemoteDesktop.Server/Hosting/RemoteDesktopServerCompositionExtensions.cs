@@ -134,6 +134,28 @@ public static class RemoteDesktopServerCompositionExtensions
             return Results.Ok(devices);
         });
 
+        app.MapGet("/api/devices/{deviceId}", async (HttpContext context, string deviceId, IDeviceRepository repository, ConsoleSessionTokenService sessionTokenService, CancellationToken cancellationToken) =>
+        {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out _))
+            {
+                return Results.Unauthorized();
+            }
+
+            var device = await repository.GetDeviceAsync(deviceId, cancellationToken);
+            return device is null ? Results.NotFound() : Results.Ok(device);
+        });
+
+        app.MapGet("/api/devices/{deviceId}/inventory-history", async (HttpContext context, string deviceId, IDeviceRepository repository, ConsoleSessionTokenService sessionTokenService, int? take, CancellationToken cancellationToken) =>
+        {
+            if (!sessionTokenService.TryAuthenticate(context.Request, out _))
+            {
+                return Results.Unauthorized();
+            }
+
+            var items = await repository.GetInventoryHistoryAsync(deviceId, Math.Clamp(take ?? 100, 1, 500), cancellationToken);
+            return Results.Ok(items);
+        });
+
         app.MapGet("/api/presence-logs", async (HttpContext context, IDeviceRepository repository, ConsoleSessionTokenService sessionTokenService, int? take, CancellationToken cancellationToken) =>
         {
             if (!sessionTokenService.TryAuthenticate(context.Request, out _))

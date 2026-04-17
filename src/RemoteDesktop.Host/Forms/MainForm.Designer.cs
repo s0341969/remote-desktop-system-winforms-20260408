@@ -10,6 +10,7 @@ partial class MainForm
     private Button btnAudit;
     private Button btnUsers;
     private Button btnSettings;
+    private Button btnDeviceDetails;
     private Button btnRevokeDevice;
     private Button btnApproveDevice;
     private Button btnOpenViewer;
@@ -55,6 +56,7 @@ partial class MainForm
         btnAudit = new Button();
         btnUsers = new Button();
         btnSettings = new Button();
+        btnDeviceDetails = new Button();
         btnRevokeDevice = new Button();
         btnApproveDevice = new Button();
         btnOpenViewer = new Button();
@@ -109,11 +111,12 @@ partial class MainForm
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 168F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
-        layoutRoot.Size = new Size(1384, 861);
+        layoutRoot.Size = new Size(1500, 861);
         // panelHeader
         panelHeader.Controls.Add(btnAudit);
         panelHeader.Controls.Add(btnUsers);
         panelHeader.Controls.Add(btnSettings);
+        panelHeader.Controls.Add(btnDeviceDetails);
         panelHeader.Controls.Add(btnRevokeDevice);
         panelHeader.Controls.Add(btnApproveDevice);
         panelHeader.Controls.Add(btnOpenViewer);
@@ -122,7 +125,7 @@ partial class MainForm
         panelHeader.Dock = DockStyle.Fill;
         panelHeader.Location = new Point(3, 3);
         panelHeader.Name = "panelHeader";
-        panelHeader.Size = new Size(1378, 86);
+        panelHeader.Size = new Size(1494, 86);
         // btnAudit
         btnAudit.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnAudit.Location = new Point(651, 18);
@@ -150,40 +153,49 @@ partial class MainForm
         btnSettings.Text = "Settings";
         btnSettings.UseVisualStyleBackColor = true;
         btnSettings.Click += btnSettings_Click;
+        // btnDeviceDetails
+        btnDeviceDetails.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnDeviceDetails.Location = new Point(945, 18);
+        btnDeviceDetails.Name = "btnDeviceDetails";
+        btnDeviceDetails.Size = new Size(116, 46);
+        btnDeviceDetails.TabIndex = 3;
+        btnDeviceDetails.Text = "Device Details";
+        btnDeviceDetails.UseVisualStyleBackColor = true;
+        btnDeviceDetails.Click += btnDeviceDetails_Click;
         // btnRevokeDevice
         btnRevokeDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnRevokeDevice.Location = new Point(951, 18);
+        btnRevokeDevice.Location = new Point(1061, 18);
         btnRevokeDevice.Name = "btnRevokeDevice";
         btnRevokeDevice.Size = new Size(96, 46);
-        btnRevokeDevice.TabIndex = 3;
+        btnRevokeDevice.TabIndex = 4;
         btnRevokeDevice.Text = "Revoke";
         btnRevokeDevice.UseVisualStyleBackColor = true;
         btnRevokeDevice.Click += btnRevokeDevice_Click;
         // btnApproveDevice
         btnApproveDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnApproveDevice.Location = new Point(1047, 18);
+        btnApproveDevice.Location = new Point(1157, 18);
         btnApproveDevice.Name = "btnApproveDevice";
         btnApproveDevice.Size = new Size(96, 46);
-        btnApproveDevice.TabIndex = 4;
+        btnApproveDevice.TabIndex = 5;
         btnApproveDevice.Text = "Approve";
         btnApproveDevice.UseVisualStyleBackColor = true;
         btnApproveDevice.Click += btnApproveDevice_Click;
         // btnOpenViewer
         btnOpenViewer.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnOpenViewer.Enabled = false;
-        btnOpenViewer.Location = new Point(1143, 18);
+        btnOpenViewer.Location = new Point(1253, 18);
         btnOpenViewer.Name = "btnOpenViewer";
         btnOpenViewer.Size = new Size(110, 46);
-        btnOpenViewer.TabIndex = 5;
+        btnOpenViewer.TabIndex = 6;
         btnOpenViewer.Text = "Open Viewer";
         btnOpenViewer.UseVisualStyleBackColor = true;
         btnOpenViewer.Click += btnOpenViewer_Click;
         // btnRefresh
         btnRefresh.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnRefresh.Location = new Point(1259, 18);
+        btnRefresh.Location = new Point(1369, 18);
         btnRefresh.Name = "btnRefresh";
         btnRefresh.Size = new Size(104, 46);
-        btnRefresh.TabIndex = 6;
+        btnRefresh.TabIndex = 7;
         btnRefresh.Text = "Refresh";
         btnRefresh.UseVisualStyleBackColor = true;
         btnRefresh.Click += btnRefresh_Click;
@@ -414,7 +426,7 @@ partial class MainForm
         // MainForm
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1384, 861);
+        ClientSize = new Size(1500, 861);
         Controls.Add(layoutRoot);
         MinimumSize = new Size(1180, 760);
         Name = "MainForm";

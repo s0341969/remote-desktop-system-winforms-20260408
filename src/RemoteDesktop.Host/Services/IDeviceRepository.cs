@@ -21,4 +21,8 @@ public interface IDeviceRepository
     Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken);
+
+    Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken);
 }

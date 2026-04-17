@@ -21,6 +21,7 @@
 - 裝置清單
 - 在線數量與連線紀錄
 - 裝置硬體摘要、作業系統、Office 與最後更新欄位
+- 裝置詳細資訊視窗
 - 遠端畫面檢視與控制
 - Remote Viewer `功能` 下拉選單
 - Remote Viewer 全螢幕與縮放
@@ -48,6 +49,7 @@
 - 桌面擷取
 - 心跳回報
 - 啟動時自動收集軟硬體盤點資訊
+- 定期重新盤點與 inventory 變更回報
 - 滑鼠與鍵盤輸入回放
 - 自動重連
 - `功能` 下拉選單
@@ -125,6 +127,7 @@
 - `Agent:JpegQuality`
 - `Agent:MaxFrameWidth`
 - `Agent:ReconnectDelaySeconds`
+- `Agent:InventoryRefreshMinutes`
 
 範例：
 
@@ -138,10 +141,15 @@
     "CaptureFramesPerSecond": 8,
     "JpegQuality": 55,
     "MaxFrameWidth": 1600,
-    "ReconnectDelaySeconds": 5
+    "ReconnectDelaySeconds": 5,
+    "InventoryRefreshMinutes": 360
   }
 }
 ```
+
+說明：
+- `InventoryRefreshMinutes` 預設為 `360`，表示 Agent 每 6 小時會重新盤點一次。
+- 若新的盤點內容與前一次不同，Host / Server 會覆寫最新 inventory，並保留一筆變更歷史。
 
 ## 6. 原始碼建置
 
@@ -338,6 +346,32 @@ Remote Viewer 右上角提供：
 
 - `功能 / Actions` 下拉
 - `縮放 / Zoom` 下拉
+
+### 11.0 裝置詳細資訊
+
+操作步驟：
+
+1. 在 Host 主畫面選取一台裝置
+2. 按 `裝置詳細資訊`
+3. 視窗會顯示：
+   - 裝置摘要
+   - 目前 inventory 詳細欄位
+   - inventory 變更歷史清單
+   - 所選歷史快照的詳細欄位
+4. 可按：
+   - `重新整理`
+   - `匯出 CSV`
+   - `匯出 Excel`
+
+匯出內容：
+- `CSV`：目前盤點 + 歷史變更
+- `Excel`：
+  - 工作表 1：目前盤點
+  - 工作表 2：變更追蹤
+
+中央模式補充：
+- 詳細視窗會透過 `GET /api/devices/{deviceId}` 與 `GET /api/devices/{deviceId}/inventory-history` 載入資料。
+- `SqlServer` 模式會將變更歷史寫入 `dbo.RemoteDesktopInventoryHistory`。
 
 ### 11.1 功能下拉
 
@@ -602,12 +636,14 @@ WinForms UI automation：
 - Host/Agent `appsettings.json` 已確認會輸出到執行目錄
 - Agent 主畫面 `功能 / Actions` 下拉：已驗證
 - Host Remote Viewer `功能 / Actions` 下拉：已驗證
+- 裝置詳細資訊視窗、CSV 匯出、Excel 匯出：已驗證
 - Viewer 縮放與全螢幕：已驗證
 - Viewer upload/download 流程：已驗證
 - 遠端檔案總管載入、移動、下載：已由 UI automation 驗證
 - `RemoteDesktop.Server`：已驗證可啟動、可接收 Agent `hello/heartbeat`，`/healthz` 會反映在線裝置數
 - 中央 `/ws/dashboard`：已由 smoke test 驗證會在 Agent 上線時推送 `dashboard-ready` / `dashboard-changed`
 - 中央 `/api/settings/host`：已由 smoke test 驗證可 round-trip 讀取與更新 Host 設定
+- 中央 `/api/devices/{deviceId}` 與 `/api/devices/{deviceId}/inventory-history`：已由 smoke test 驗證 inventory 更新與歷史追蹤
 - `deploy/scripts/Deploy-App.ps1`：已驗證可產出 `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server` 與 `deploy/release/current`
 - `deploy/scripts/Verify-Central-Release.ps1`：已驗證可直接啟動 publish 版 `RemoteDesktop.Server.exe` 並成功讀取 `/healthz`
 - `deploy/publish/Host`、`deploy/publish/Agent`、`deploy/publish/Server`：已改為單檔 self-contained 發佈，現場不需再額外安裝 `.NET Runtime`

@@ -43,6 +43,7 @@ public static class RemoteDesktopHostCompositionExtensions
                 : ActivatorUtilities.CreateInstance<RemoteAuditService>(serviceProvider);
         });
         services.AddSingleton<MainDashboardDataSourceFactory>();
+        services.AddSingleton<InventoryExportService>();
         services.AddSingleton<HostSettingsStore>();
         services.AddSingleton<IHostSettingsStore>(static serviceProvider =>
         {
@@ -53,6 +54,7 @@ public static class RemoteDesktopHostCompositionExtensions
         });
         services.AddSingleton<LoginFormFactory>();
         services.AddSingleton<MainFormFactory>();
+        services.AddSingleton<DeviceInventoryDetailsFormFactory>();
         services.AddSingleton<RemoteViewerFormFactory>();
         services.AddSingleton<HostSettingsFormFactory>();
         services.AddSingleton<UserManagementFormFactory>();

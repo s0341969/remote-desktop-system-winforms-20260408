@@ -27,6 +27,10 @@ public interface IMainDashboardDataSource
 
     Task<IReadOnlyList<DeviceRecord>> GetDevicesAsync(int take, CancellationToken cancellationToken);
 
+    Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken);
 
     Task<bool> SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedBy, CancellationToken cancellationToken);
@@ -100,6 +104,16 @@ internal sealed class LocalMainDashboardDataSource : IMainDashboardDataSource
         return _repository.GetDevicesAsync(take, cancellationToken);
     }
 
+    public Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken)
+    {
+        return _repository.GetDeviceAsync(deviceId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+    {
+        return _repository.GetInventoryHistoryAsync(deviceId, take, cancellationToken);
+    }
+
     public Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken)
     {
         return _repository.GetPresenceLogsAsync(take, cancellationToken);
@@ -163,6 +177,29 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
         response.EnsureSuccessStatusCode();
         var devices = await response.Content.ReadFromJsonAsync<List<SharedDeviceRecord>>(cancellationToken: cancellationToken);
         return devices?.Select(MapDeviceRecord).ToList() ?? [];
+    }
+
+    public async Task<DeviceRecord?> GetDeviceAsync(string deviceId, CancellationToken cancellationToken)
+    {
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, $"/api/devices/{Uri.EscapeDataString(deviceId)}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        var device = await response.Content.ReadFromJsonAsync<SharedDeviceRecord>(cancellationToken: cancellationToken);
+        return device is null ? null : MapDeviceRecord(device);
+    }
+
+    public async Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+    {
+        using var request = CreateAuthorizedRequest(HttpMethod.Get, $"/api/devices/{Uri.EscapeDataString(deviceId)}/inventory-history?take={Math.Clamp(take, 1, 500)}");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var items = await response.Content.ReadFromJsonAsync<List<RemoteDesktop.Shared.Models.InventoryHistoryRecord>>(cancellationToken: cancellationToken);
+        return items?.Select(MapInventoryHistoryRecord).ToList() ?? [];
     }
 
     public async Task<IReadOnlyList<AgentPresenceLogRecord>> GetPresenceLogsAsync(int take, CancellationToken cancellationToken)
@@ -365,6 +402,20 @@ internal sealed class RemoteMainDashboardDataSource : IMainDashboardDataSource, 
             DisconnectedAt = source.DisconnectedAt,
             DisconnectReason = source.DisconnectReason,
             OnlineSeconds = source.OnlineSeconds
+        };
+    }
+
+    private static InventoryHistoryRecord MapInventoryHistoryRecord(RemoteDesktop.Shared.Models.InventoryHistoryRecord source)
+    {
+        return new InventoryHistoryRecord
+        {
+            HistoryId = source.HistoryId,
+            DeviceId = source.DeviceId,
+            InventoryFingerprint = source.InventoryFingerprint,
+            ChangeSummary = source.ChangeSummary,
+            CollectedAt = source.CollectedAt,
+            RecordedAt = source.RecordedAt,
+            Inventory = MapInventory(source.Inventory) ?? new AgentInventoryProfile()
         };
     }
 }

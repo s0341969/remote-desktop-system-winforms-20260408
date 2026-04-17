@@ -13,6 +13,7 @@ public sealed class MainFormFactory
     private readonly MainDashboardDataSourceFactory _mainDashboardDataSourceFactory;
     private readonly IOptions<ControlServerOptions> _options;
     private readonly RemoteViewerFormFactory _remoteViewerFormFactory;
+    private readonly DeviceInventoryDetailsFormFactory _deviceInventoryDetailsFormFactory;
     private readonly HostSettingsFormFactory _hostSettingsFormFactory;
     private readonly UserManagementFormFactory _userManagementFormFactory;
     private readonly AuditLogFormFactory _auditLogFormFactory;
@@ -21,6 +22,7 @@ public sealed class MainFormFactory
         MainDashboardDataSourceFactory mainDashboardDataSourceFactory,
         IOptions<ControlServerOptions> options,
         RemoteViewerFormFactory remoteViewerFormFactory,
+        DeviceInventoryDetailsFormFactory deviceInventoryDetailsFormFactory,
         HostSettingsFormFactory hostSettingsFormFactory,
         UserManagementFormFactory userManagementFormFactory,
         AuditLogFormFactory auditLogFormFactory)
@@ -28,6 +30,7 @@ public sealed class MainFormFactory
         _mainDashboardDataSourceFactory = mainDashboardDataSourceFactory;
         _options = options;
         _remoteViewerFormFactory = remoteViewerFormFactory;
+        _deviceInventoryDetailsFormFactory = deviceInventoryDetailsFormFactory;
         _hostSettingsFormFactory = hostSettingsFormFactory;
         _userManagementFormFactory = userManagementFormFactory;
         _auditLogFormFactory = auditLogFormFactory;
@@ -36,7 +39,7 @@ public sealed class MainFormFactory
     public MainForm Create(AuthenticatedUserSession signedInUser)
     {
         var form = new MainForm();
-        form.Bind(_mainDashboardDataSourceFactory.Create(), _options.Value, _remoteViewerFormFactory, _hostSettingsFormFactory, _userManagementFormFactory, _auditLogFormFactory, signedInUser);
+        form.Bind(_mainDashboardDataSourceFactory.Create(), _options.Value, _remoteViewerFormFactory, _deviceInventoryDetailsFormFactory, _hostSettingsFormFactory, _userManagementFormFactory, _auditLogFormFactory, signedInUser);
         return form;
     }
 }

@@ -47,6 +47,10 @@
 - Agent 現在會強制將 `DeviceId` 與 `DeviceName` 正規化為本機 `Environment.MachineName`，避免現場手動輸入造成重複或命名不一致。
 - 裝置盤點會沿著 Agent `hello` 註冊流程一路帶進 Host / Server，並可同時儲存在記憶體模式與 `SqlServer` 模式；資料庫模式會寫入 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。
 - Host 主畫面現在會直接顯示裝置的硬體摘要、作業系統、Office 與最後更新摘要，方便操作端先做盤點，不必先開 Viewer。
+- Host 主畫面新增「裝置詳細資訊」，可展開查看目前裝置的完整 inventory 與歷史快照，不必再只看摘要欄位。
+- 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`。
+- Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；若 CPU、記憶體、磁碟、OS、Office 或最後更新摘要改變，Host / Server 會留下變更歷史。
+- `SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory`，會保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要；`Memory` 模式也會同步保留最近歷史。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
 - Host 預設改為 `Memory` 儲存模式，不再要求先安裝 LocalDB 才能啟動；需要持久化時可在 Host 設定中勾選資料庫模式。
 - Host 主畫面新增設定入口，Agent 主畫面新增設定入口。
@@ -113,6 +117,7 @@
 - `tests/RemoteDesktop.UiAutomation` 現在已涵蓋 Viewer 檔案上傳、目的地顯示與開啟資料夾流程。
 - `tests/RemoteDesktop.UiAutomation` 現在也涵蓋遠端檔案總管的載入、切換資料夾、移動與下載流程。
 - `tests/RemoteDesktop.SmokeTests` 現在新增 Agent inventory round-trip 驗證，確認中央模式 `/api/devices` 真的會回傳 CPU、OS、Office 等盤點資料，而不是只在 Agent 端記憶體暫存。
+- `tests/RemoteDesktop.SmokeTests` 現在也會驗證 inventory 定期更新與歷史追蹤：Agent 重新上報盤點後，中央 `/api/devices/{deviceId}` 會回最新資料，`/api/devices/{deviceId}/inventory-history` 會回傳變更紀錄。
 
 ## 使用 Visual Studio 2022
 

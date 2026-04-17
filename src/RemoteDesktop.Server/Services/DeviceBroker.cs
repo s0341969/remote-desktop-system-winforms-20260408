@@ -56,6 +56,10 @@ public sealed class DeviceBroker
         }
 
         await _repository.UpsertDeviceOnlineAsync(descriptor, cancellationToken);
+        if (descriptor.Inventory is not null)
+        {
+            await _repository.UpdateInventoryAsync(descriptor.DeviceId, descriptor.Inventory, cancellationToken);
+        }
         var deviceRecord = await _repository.GetDeviceAsync(descriptor.DeviceId, cancellationToken);
         var presenceId = await _repository.StartPresenceAsync(descriptor, cancellationToken);
 
@@ -75,6 +79,17 @@ public sealed class DeviceBroker
 
         session.LastHeartbeatAt = DateTimeOffset.UtcNow;
         await _repository.TouchPresenceAsync(session.PresenceId, session.DeviceId, screenWidth, screenHeight, cancellationToken);
+    }
+
+    public async Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken)
+    {
+        if (_agents.TryGetValue(deviceId, out var session))
+        {
+            session.LastHeartbeatAt = DateTimeOffset.UtcNow;
+        }
+
+        await _repository.UpdateInventoryAsync(deviceId, inventory, cancellationToken);
+        _dashboardUpdateHub.Publish("device-inventory-changed", deviceId);
     }
 
     public async Task PublishFrameAsync(string deviceId, byte[] payload, CancellationToken cancellationToken)

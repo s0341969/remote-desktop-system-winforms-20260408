@@ -2,6 +2,13 @@
 
 ## 2026-04-11
 
+- Host 主畫面新增「裝置詳細資訊」視窗，可查看單一裝置的完整 inventory、最近盤點時間、歷史快照與變更摘要。
+- 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史匯出為 `CSV` 與 `Excel (.xlsx)`。
+- Agent 新增 `Agent:InventoryRefreshMinutes`，預設每 `360` 分鐘重新盤點一次，並透過新的 `inventory-update` 訊息將更新送回 Host / Server。
+- `RemoteDesktop.Server` 與 `RemoteDesktop.Host` 的 `Memory` / `SqlServer` 裝置儲存現在都會追蹤 inventory 變更歷史；`SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory` 保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要。
+- 中央 Server 新增 `GET /api/devices/{deviceId}` 與 `GET /api/devices/{deviceId}/inventory-history`，供 Host 詳細視窗載入目前盤點與變更歷史。
+- 擴充 `RemoteDesktop.SmokeTests`，新增 inventory update/history round-trip 驗證，確認 Agent 重新盤點後會覆寫最新 inventory 並追加歷史紀錄。
+
 - Agent 現在會固定以本機主機名稱作為 `DeviceId` 與 `DeviceName`；設定表單中的這兩個欄位改為唯讀提示，不再允許手動輸入與實際註冊值脫節。
 - 新增 Agent 軟硬體盤點能力：Agent 啟動時會收集 CPU、總記憶體、固定磁碟摘要、Windows 版本/組建、Office 版本，以及最近一次 Windows 更新名稱與日期，並跟隨 `hello` 註冊流程上報。
 - `RemoteDesktop.Server` 與 `RemoteDesktop.Host` 的 `Memory` / `SqlServer` 裝置儲存現在都會保存 inventory profile；`SqlServer` 模式新增 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。

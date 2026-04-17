@@ -900,6 +900,53 @@ static async Task RunCentralAgentInventorySmokeTestAsync()
         {
             throw new InvalidOperationException("Inventory smoke device record did not return the expected inventory fields.");
         }
+
+        await SendTextAsync(agentSocket, JsonSerializer.Serialize(new RemoteDesktop.Shared.Models.AgentInventoryUpdateMessage
+        {
+            Inventory = new RemoteDesktop.Shared.Models.AgentInventoryProfile
+            {
+                CpuName = "Intel(R) Core(TM) Smoke CPU",
+                InstalledMemoryBytes = 34359738368,
+                StorageSummary = "C: 476 GB / 可用 118 GB",
+                OsName = "Windows 11 Pro",
+                OsVersion = "10.0.22631",
+                OsBuildNumber = "22631",
+                OfficeVersion = "Microsoft 365 Apps 16.0.12346.10000",
+                LastWindowsUpdateTitle = "KB5031111 - Security Update",
+                LastWindowsUpdateInstalledAt = new DateTimeOffset(2026, 4, 11, 0, 0, 0, TimeSpan.Zero),
+                CollectedAt = DateTimeOffset.UtcNow
+            }
+        }), CancellationToken.None);
+
+        await Task.Delay(300);
+
+        var updatedDeviceResponse = await httpClient.GetAsync("/api/devices/central-inventory-device-001", CancellationToken.None);
+        updatedDeviceResponse.EnsureSuccessStatusCode();
+        var updatedDevice = await updatedDeviceResponse.Content.ReadFromJsonAsync<RemoteDesktop.Shared.Models.DeviceRecord>(cancellationToken: CancellationToken.None)
+            ?? throw new InvalidOperationException("Updated inventory device response was empty.");
+
+        if (updatedDevice.Inventory is null
+            || !string.Equals(updatedDevice.Inventory.OfficeVersion, "Microsoft 365 Apps 16.0.12346.10000", StringComparison.Ordinal)
+            || !string.Equals(updatedDevice.Inventory.LastWindowsUpdateTitle, "KB5031111 - Security Update", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Inventory update smoke did not overwrite the latest device inventory.");
+        }
+
+        var historyResponse = await httpClient.GetAsync("/api/devices/central-inventory-device-001/inventory-history?take=10", CancellationToken.None);
+        historyResponse.EnsureSuccessStatusCode();
+        var history = await historyResponse.Content.ReadFromJsonAsync<List<RemoteDesktop.Shared.Models.InventoryHistoryRecord>>(cancellationToken: CancellationToken.None)
+            ?? throw new InvalidOperationException("Inventory history response was empty.");
+
+        if (history.Count < 2)
+        {
+            throw new InvalidOperationException("Inventory history did not keep both the initial snapshot and the later refresh.");
+        }
+
+        if (!history.Any(static item => item.ChangeSummary.Contains("Office", StringComparison.Ordinal))
+            || !history.Any(static item => item.Inventory.LastWindowsUpdateTitle.Contains("KB5031111", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("Inventory history did not record the expected changed fields.");
+        }
     }
     finally
     {
@@ -915,6 +962,7 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
     private readonly object _sync = new();
     private readonly Dictionary<string, DeviceRecord> _devices = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Guid, AgentPresenceLogRecord> _presenceLogs = new();
+    private readonly Dictionary<string, List<InventoryHistoryRecord>> _inventoryHistory = new(StringComparer.OrdinalIgnoreCase);
 
     public Task InitializeSchemaAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -944,6 +992,8 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                 LastConnectedAt = now,
                 LastDisconnectedAt = null
             };
+
+            TrackInventoryChangeLocked(descriptor.DeviceId, existing?.Inventory, descriptor.Inventory);
         }
 
         return Task.CompletedTask;
@@ -986,6 +1036,7 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                     AgentVersion = device.AgentVersion,
                     ScreenWidth = screenWidth,
                     ScreenHeight = screenHeight,
+                    Inventory = device.Inventory,
                     IsOnline = true,
                     IsAuthorized = device.IsAuthorized,
                     AuthorizedAt = device.AuthorizedAt,
@@ -1033,6 +1084,7 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                     AgentVersion = device.AgentVersion,
                     ScreenWidth = device.ScreenWidth,
                     ScreenHeight = device.ScreenHeight,
+                    Inventory = device.Inventory,
                     IsOnline = false,
                     IsAuthorized = device.IsAuthorized,
                     AuthorizedAt = device.AuthorizedAt,
@@ -1082,6 +1134,7 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                 AgentVersion = device.AgentVersion,
                 ScreenWidth = device.ScreenWidth,
                 ScreenHeight = device.ScreenHeight,
+                Inventory = device.Inventory,
                 IsOnline = device.IsOnline,
                 IsAuthorized = isAuthorized,
                 AuthorizedAt = isAuthorized ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
@@ -1128,6 +1181,88 @@ internal sealed class InMemoryDeviceRepository : IDeviceRepository
                 .ToList();
             return Task.FromResult(result);
         }
+    }
+
+    public Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_devices.TryGetValue(deviceId, out var device))
+            {
+                return Task.CompletedTask;
+            }
+
+            _devices[deviceId] = new DeviceRecord
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.DeviceName,
+                HostName = device.HostName,
+                AgentVersion = device.AgentVersion,
+                ScreenWidth = device.ScreenWidth,
+                ScreenHeight = device.ScreenHeight,
+                Inventory = inventory,
+                IsOnline = device.IsOnline,
+                IsAuthorized = device.IsAuthorized,
+                AuthorizedAt = device.AuthorizedAt,
+                AuthorizedBy = device.AuthorizedBy,
+                CreatedAt = device.CreatedAt,
+                LastSeenAt = device.LastSeenAt,
+                LastConnectedAt = device.LastConnectedAt,
+                LastDisconnectedAt = device.LastDisconnectedAt
+            };
+
+            TrackInventoryChangeLocked(deviceId, device.Inventory, inventory);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+    {
+        lock (_sync)
+        {
+            if (!_inventoryHistory.TryGetValue(deviceId, out var items))
+            {
+                return Task.FromResult<IReadOnlyList<InventoryHistoryRecord>>([]);
+            }
+
+            return Task.FromResult<IReadOnlyList<InventoryHistoryRecord>>(items
+                .OrderByDescending(static item => item.RecordedAt)
+                .Take(take)
+                .ToList());
+        }
+    }
+
+    private void TrackInventoryChangeLocked(string deviceId, AgentInventoryProfile? previousInventory, AgentInventoryProfile? currentInventory)
+    {
+        if (currentInventory is null)
+        {
+            return;
+        }
+
+        var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(currentInventory))));
+        var previousFingerprint = previousInventory is null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(previousInventory))));
+        if (string.Equals(fingerprint, previousFingerprint, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!_inventoryHistory.TryGetValue(deviceId, out var history))
+        {
+            history = [];
+            _inventoryHistory[deviceId] = history;
+        }
+
+        history.Add(new InventoryHistoryRecord
+        {
+            HistoryId = Guid.NewGuid(),
+            DeviceId = deviceId,
+            InventoryFingerprint = fingerprint,
+            ChangeSummary = previousInventory is null ? "首次盤點。 / Initial inventory snapshot." : $"Office: {previousInventory.OfficeVersion} -> {currentInventory.OfficeVersion}",
+            CollectedAt = currentInventory.CollectedAt,
+            RecordedAt = DateTimeOffset.UtcNow,
+            Inventory = currentInventory
+        });
     }
 }
 

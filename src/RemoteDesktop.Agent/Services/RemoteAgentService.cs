@@ -94,13 +94,14 @@ public sealed class RemoteAgentService : BackgroundService
         var receiveTask = ReceiveLoopAsync(socket, sendLock, loopCts.Token);
         var heartbeatTask = HeartbeatLoopAsync(socket, sendLock, loopCts.Token);
         var captureTask = CaptureLoopAsync(socket, sendLock, loopCts.Token);
-        var completedTask = await Task.WhenAny(receiveTask, heartbeatTask, captureTask);
+        var inventoryTask = InventoryLoopAsync(socket, sendLock, loopCts.Token);
+        var completedTask = await Task.WhenAny(receiveTask, heartbeatTask, captureTask, inventoryTask);
         loopCts.Cancel();
 
         try
         {
             await completedTask;
-            await Task.WhenAll(receiveTask, heartbeatTask, captureTask);
+            await Task.WhenAll(receiveTask, heartbeatTask, captureTask, inventoryTask);
         }
         catch (OperationCanceledException) when (loopCts.IsCancellationRequested)
         {
@@ -295,6 +296,21 @@ public sealed class RemoteAgentService : BackgroundService
             }
 
             await Task.Delay(delayMs, cancellationToken);
+        }
+    }
+
+    private async Task InventoryLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_options.InventoryRefreshMinutes));
+        while (await timer.WaitForNextTickAsync(cancellationToken))
+        {
+            var inventory = _inventoryService.Collect();
+            var payload = JsonSerializer.Serialize(new AgentInventoryUpdateMessage
+            {
+                Inventory = inventory
+            }, JsonOptions);
+
+            await SendTextAsync(socket, sendLock, payload, cancellationToken);
         }
     }
 

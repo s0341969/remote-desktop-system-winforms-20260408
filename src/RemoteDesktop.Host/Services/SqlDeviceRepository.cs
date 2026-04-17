@@ -1,5 +1,7 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using RemoteDesktop.Host.Models;
 
@@ -365,6 +367,121 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         return result;
     }
 
+    public async Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken)
+    {
+        var serializedInventory = SerializeInventory(inventory) ?? throw new InvalidOperationException("Inventory payload could not be serialized.");
+        var fingerprint = CalculateFingerprint(serializedInventory);
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var currentSnapshot = await GetCurrentInventorySnapshotAsync(connection, deviceId, cancellationToken);
+        var changeSummary = BuildChangeSummary(currentSnapshot?.Inventory, inventory);
+
+        const string updateSql = """
+            UPDATE dbo.RemoteDesktopDevices
+            SET
+                InventoryJson = @inventoryJson,
+                InventoryCollectedAt = @inventoryCollectedAt,
+                UpdatedAt = @updatedAt
+            WHERE DeviceId = @deviceId;
+            """;
+
+        await using (var updateCommand = new SqlCommand(updateSql, connection))
+        {
+            AddStringParameter(updateCommand, "@deviceId", deviceId, 128);
+            AddNullableStringParameter(updateCommand, "@inventoryJson", serializedInventory, -1);
+            updateCommand.Parameters.Add("@inventoryCollectedAt", SqlDbType.DateTimeOffset).Value = inventory.CollectedAt;
+            updateCommand.Parameters.Add("@updatedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.UtcNow;
+            await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (currentSnapshot is { } existingSnapshot && string.Equals(existingSnapshot.Fingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        const string insertHistorySql = """
+            INSERT INTO dbo.RemoteDesktopInventoryHistory
+            (
+                HistoryId,
+                DeviceId,
+                InventoryFingerprint,
+                InventoryJson,
+                CollectedAt,
+                RecordedAt,
+                ChangeSummary
+            )
+            VALUES
+            (
+                @historyId,
+                @deviceId,
+                @inventoryFingerprint,
+                @inventoryJson,
+                @collectedAt,
+                @recordedAt,
+                @changeSummary
+            );
+            """;
+
+        await using var insertCommand = new SqlCommand(insertHistorySql, connection);
+        insertCommand.Parameters.Add("@historyId", SqlDbType.UniqueIdentifier).Value = Guid.NewGuid();
+        AddStringParameter(insertCommand, "@deviceId", deviceId, 128);
+        AddStringParameter(insertCommand, "@inventoryFingerprint", fingerprint, 64);
+        AddNullableStringParameter(insertCommand, "@inventoryJson", serializedInventory, -1);
+        insertCommand.Parameters.Add("@collectedAt", SqlDbType.DateTimeOffset).Value = inventory.CollectedAt;
+        insertCommand.Parameters.Add("@recordedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.UtcNow;
+        AddStringParameter(insertCommand, "@changeSummary", changeSummary, 512);
+        await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<InventoryHistoryRecord>> GetInventoryHistoryAsync(string deviceId, int take, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT TOP (@take)
+                HistoryId,
+                DeviceId,
+                InventoryFingerprint,
+                InventoryJson,
+                CollectedAt,
+                RecordedAt,
+                ChangeSummary
+            FROM dbo.RemoteDesktopInventoryHistory
+            WHERE DeviceId = @deviceId
+            ORDER BY RecordedAt DESC;
+            """;
+
+        var result = new List<InventoryHistoryRecord>(take);
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@take", SqlDbType.Int).Value = take;
+        AddStringParameter(command, "@deviceId", deviceId, 128);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var inventory = DeserializeInventory(reader, 3);
+            if (inventory is null)
+            {
+                continue;
+            }
+
+            result.Add(new InventoryHistoryRecord
+            {
+                HistoryId = reader.GetGuid(0),
+                DeviceId = reader.GetString(1),
+                InventoryFingerprint = reader.GetString(2),
+                Inventory = inventory,
+                CollectedAt = reader.GetFieldValue<DateTimeOffset>(4),
+                RecordedAt = reader.GetFieldValue<DateTimeOffset>(5),
+                ChangeSummary = reader.IsDBNull(6) ? string.Empty : reader.GetString(6)
+            });
+        }
+
+        return result;
+    }
+
     private async Task ExecuteAsync(string sql, Action<SqlCommand> parameterize, CancellationToken cancellationToken)
     {
         await using var connection = new SqlConnection(_connectionString);
@@ -384,9 +501,83 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         command.Parameters.Add(name, SqlDbType.NVarChar, length).Value = string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
     }
 
+    private static async Task<(string Fingerprint, AgentInventoryProfile? Inventory)?> GetCurrentInventorySnapshotAsync(SqlConnection connection, string deviceId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT InventoryJson
+            FROM dbo.RemoteDesktopDevices
+            WHERE DeviceId = @deviceId;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        AddStringParameter(command, "@deviceId", deviceId, 128);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        if (result is not string inventoryJson || string.IsNullOrWhiteSpace(inventoryJson))
+        {
+            return null;
+        }
+
+        return (CalculateFingerprint(inventoryJson), JsonSerializer.Deserialize<AgentInventoryProfile>(inventoryJson, JsonOptions));
+    }
+
     private static string? SerializeInventory(AgentInventoryProfile? inventory)
     {
         return inventory is null ? null : JsonSerializer.Serialize(inventory, JsonOptions);
+    }
+
+    private static string CalculateFingerprint(string serializedInventory)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedInventory)));
+    }
+
+    private static string BuildChangeSummary(AgentInventoryProfile? previousInventory, AgentInventoryProfile currentInventory)
+    {
+        if (previousInventory is null)
+        {
+            return "首次盤點。 / Initial inventory snapshot.";
+        }
+
+        var changes = new List<string>();
+        AppendChange(changes, "CPU", previousInventory.CpuName, currentInventory.CpuName);
+        AppendChange(changes, "記憶體", FormatBytes(previousInventory.InstalledMemoryBytes), FormatBytes(currentInventory.InstalledMemoryBytes));
+        AppendChange(changes, "磁碟", previousInventory.StorageSummary, currentInventory.StorageSummary);
+        AppendChange(changes, "作業系統", $"{previousInventory.OsName} {previousInventory.OsVersion} ({previousInventory.OsBuildNumber})", $"{currentInventory.OsName} {currentInventory.OsVersion} ({currentInventory.OsBuildNumber})");
+        AppendChange(changes, "Office", previousInventory.OfficeVersion, currentInventory.OfficeVersion);
+        AppendChange(changes, "最後更新", $"{previousInventory.LastWindowsUpdateTitle} {previousInventory.LastWindowsUpdateInstalledAt:yyyy-MM-dd}", $"{currentInventory.LastWindowsUpdateTitle} {currentInventory.LastWindowsUpdateInstalledAt:yyyy-MM-dd}");
+        return changes.Count == 0
+            ? "盤點時間更新，內容無變更。 / Inventory refreshed without content changes."
+            : string.Join("；", changes);
+    }
+
+    private static void AppendChange(List<string> changes, string label, string? before, string? after)
+    {
+        var normalizedBefore = string.IsNullOrWhiteSpace(before) ? "-" : before.Trim();
+        var normalizedAfter = string.IsNullOrWhiteSpace(after) ? "-" : after.Trim();
+        if (string.Equals(normalizedBefore, normalizedAfter, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        changes.Add($"{label}: {normalizedBefore} -> {normalizedAfter}");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "未知";
+        }
+
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        var value = (double)bytes;
+        var unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return $"{value:0.##} {units[unitIndex]}";
     }
 
     private static AgentInventoryProfile? DeserializeInventory(SqlDataReader reader, int ordinal)

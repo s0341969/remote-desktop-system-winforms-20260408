@@ -35,4 +35,7 @@ public sealed class AgentOptions
 
     [Range(1, 60)]
     public int ReconnectDelaySeconds { get; init; } = 5;
+
+    [Range(5, 1440)]
+    public int InventoryRefreshMinutes { get; init; } = 360;
 }

@@ -94,6 +94,15 @@ public sealed class AgentWebSocketHandler
                     continue;
                 }
 
+                var inventoryUpdate = JsonSerializer.Deserialize<AgentInventoryUpdateMessage>(payload, JsonOptions);
+                if (inventoryUpdate is not null
+                    && string.Equals(inventoryUpdate.Type, "inventory-update", StringComparison.OrdinalIgnoreCase)
+                    && inventoryUpdate.Inventory is not null)
+                {
+                    await _broker.UpdateInventoryAsync(session.DeviceId, inventoryUpdate.Inventory, context.RequestAborted);
+                    continue;
+                }
+
                 var transferStatus = JsonSerializer.Deserialize<AgentFileTransferStatusMessage>(payload, JsonOptions);
                 if (transferStatus is not null && string.Equals(transferStatus.Type, "file-transfer-status", StringComparison.OrdinalIgnoreCase))
                 {
