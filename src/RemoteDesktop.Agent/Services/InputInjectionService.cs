@@ -98,12 +98,23 @@ public sealed class InputInjectionService
                 case "text":
                     SendUnicodeText(request.Key);
                     break;
+                case "secure-attention":
+                    SwitchToSigninScreen();
+                    break;
             }
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Input injection failed for command type {CommandType}.", request.Type);
             PublishInjectionWarning(exception.Message);
+        }
+    }
+
+    public void SwitchToSigninScreen()
+    {
+        if (!LockWorkStation())
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "LockWorkStation failed.");
         }
     }
 
@@ -343,6 +354,10 @@ public sealed class InputInjectionService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LockWorkStation();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

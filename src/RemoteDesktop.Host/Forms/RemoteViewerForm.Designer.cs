@@ -15,6 +15,7 @@ partial class RemoteViewerForm
     private ToolStripMenuItem menuUploadFile;
     private ToolStripMenuItem menuDownloadFile;
     private ToolStripMenuItem menuTakeControl;
+    private ToolStripMenuItem menuSecureAttention;
     private ToolStripMenuItem menuFullscreen;
     private ToolStripMenuItem menuFocusRemote;
     private ToolStripMenuItem menuDisconnect;
@@ -67,6 +68,7 @@ partial class RemoteViewerForm
         menuUploadFile = new ToolStripMenuItem();
         menuDownloadFile = new ToolStripMenuItem();
         menuTakeControl = new ToolStripMenuItem();
+        menuSecureAttention = new ToolStripMenuItem();
         menuFullscreen = new ToolStripMenuItem();
         menuFocusRemote = new ToolStripMenuItem();
         menuDisconnect = new ToolStripMenuItem();
@@ -163,9 +165,9 @@ partial class RemoteViewerForm
         // 
         // menuActions
         // 
-        menuActions.Items.AddRange(new ToolStripItem[] { menuOpenTransferFolder, menuSendClipboard, menuGetClipboard, menuUploadFile, menuDownloadFile, menuTakeControl, menuFullscreen, menuFocusRemote, menuDisconnect });
+        menuActions.Items.AddRange(new ToolStripItem[] { menuOpenTransferFolder, menuSendClipboard, menuGetClipboard, menuUploadFile, menuDownloadFile, menuTakeControl, menuSecureAttention, menuFullscreen, menuFocusRemote, menuDisconnect });
         menuActions.Name = "menuActions";
-        menuActions.Size = new Size(181, 224);
+        menuActions.Size = new Size(208, 246);
         // 
         // menuOpenTransferFolder
         // 
@@ -209,24 +211,31 @@ partial class RemoteViewerForm
         menuTakeControl.Text = "Take Control";
         menuTakeControl.Click += menuTakeControl_Click;
         // 
+        // menuSecureAttention
+        // 
+        menuSecureAttention.Name = "menuSecureAttention";
+        menuSecureAttention.Size = new Size(207, 22);
+        menuSecureAttention.Text = "Switch to Sign-in";
+        menuSecureAttention.Click += menuSecureAttention_Click;
+        // 
         // menuFullscreen
         // 
         menuFullscreen.Name = "menuFullscreen";
-        menuFullscreen.Size = new Size(180, 22);
+        menuFullscreen.Size = new Size(207, 22);
         menuFullscreen.Text = "Fullscreen";
         menuFullscreen.Click += menuFullscreen_Click;
         // 
         // menuFocusRemote
         // 
         menuFocusRemote.Name = "menuFocusRemote";
-        menuFocusRemote.Size = new Size(180, 22);
+        menuFocusRemote.Size = new Size(207, 22);
         menuFocusRemote.Text = "Focus";
         menuFocusRemote.Click += btnFocusRemote_Click;
         // 
         // menuDisconnect
         // 
         menuDisconnect.Name = "menuDisconnect";
-        menuDisconnect.Size = new Size(180, 22);
+        menuDisconnect.Size = new Size(207, 22);
         menuDisconnect.Text = "Disconnect";
         menuDisconnect.Click += btnDisconnect_Click;
         // 

@@ -159,6 +159,12 @@ public sealed class RemoteAgentService : BackgroundService
                 continue;
             }
 
+            if (string.Equals(command.Type, "secure-attention", StringComparison.OrdinalIgnoreCase))
+            {
+                _inputInjectionService.SwitchToSigninScreen();
+                continue;
+            }
+
             _inputInjectionService.Apply(command);
         }
     }

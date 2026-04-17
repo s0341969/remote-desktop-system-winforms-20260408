@@ -733,6 +733,11 @@ public partial class RemoteViewerForm : Form
         btnDownloadFile_Click(sender, e);
     }
 
+    private async void menuSecureAttention_Click(object sender, EventArgs e)
+    {
+        await HandleSecureAttentionAsync();
+    }
+
     private void menuFullscreen_Click(object sender, EventArgs e)
     {
         btnFullscreen_Click(sender, e);
@@ -773,6 +778,34 @@ public partial class RemoteViewerForm : Form
         }
 
         await StartDownloadAsync(remotePath, localPath);
+    }
+
+    private async Task HandleSecureAttentionAsync()
+    {
+        if (!EnsureInteractivePermission(HostUiText.Bi("此帳號沒有切換遠端登入畫面的權限。", "This account does not have permission to switch the remote device to the sign-in screen.")))
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            HostUiText.Bi(
+                "這會將遠端電腦切換到登入/鎖定畫面。Windows 不允許一般桌面程式直接模擬標準 Ctrl + Alt + Del，因此系統會改用安全的鎖定工作站方式處理。要繼續嗎？",
+                "This will switch the remote computer to the sign-in or lock screen. Windows does not allow a normal desktop app to inject a standard Ctrl+Alt+Del sequence directly, so the system will use a secure workstation lock instead. Continue?"),
+            HostUiText.Window("切換登入畫面", "Switch to Sign-in Screen"),
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (result != DialogResult.Yes)
+        {
+            return;
+        }
+
+        await SendViewerCommandCoreAsync(new ViewerCommandMessage
+        {
+            Type = "secure-attention"
+        }, CancellationToken.None);
+
+        lblStatusValue.Text = HostUiText.Bi("已要求遠端電腦切換到登入畫面。", "Requested the remote computer to switch to the sign-in screen.");
     }
 
     private async void btnSendClipboard_Click(object sender, EventArgs e)
@@ -1989,6 +2022,8 @@ public partial class RemoteViewerForm : Form
         menuDownloadFile.Enabled = btnDownloadFile.Enabled;
         menuTakeControl.Visible = _viewer?.CanControlRemote == true;
         menuTakeControl.Enabled = _viewer?.CanControlRemote == true && !_sessionCanControl;
+        menuSecureAttention.Visible = true;
+        menuSecureAttention.Enabled = _sessionCanControl;
         menuFocusRemote.Enabled = true;
         menuDisconnect.Enabled = true;
         menuFullscreen.Text = _isFullscreen
@@ -2212,6 +2247,7 @@ public partial class RemoteViewerForm : Form
         menuGetClipboard.Text = HostUiText.Bi("取得剪貼簿", "Get Clipboard");
         menuUploadFile.Text = HostUiText.Bi("上傳檔案", "Upload File");
         menuTakeControl.Text = HostUiText.Bi("取得控制權", "Take Control");
+        menuSecureAttention.Text = HostUiText.Bi("切換登入畫面", "Switch to Sign-in");
         menuFocusRemote.Text = HostUiText.Bi("聚焦 Viewer", "Focus Viewer");
         menuDisconnect.Text = HostUiText.Bi("中斷連線", "Disconnect");
         menuFullscreen.Text = HostUiText.Bi("全螢幕", "Fullscreen");
