@@ -50,6 +50,7 @@
 - 心跳回報
 - 啟動時自動收集軟硬體盤點資訊
 - 定期重新盤點與 inventory 變更回報
+- 系統匣常駐執行
 - 滑鼠與鍵盤輸入回放
 - 自動重連
 - `功能` 下拉選單
@@ -128,6 +129,7 @@
 - `Agent:MaxFrameWidth`
 - `Agent:ReconnectDelaySeconds`
 - `Agent:InventoryRefreshMinutes`
+- `Agent:StartHidden`
 
 範例：
 
@@ -142,7 +144,8 @@
     "JpegQuality": 55,
     "MaxFrameWidth": 1600,
     "ReconnectDelaySeconds": 5,
-    "InventoryRefreshMinutes": 360
+    "InventoryRefreshMinutes": 360,
+    "StartHidden": true
   }
 }
 ```
@@ -150,6 +153,7 @@
 說明：
 - `InventoryRefreshMinutes` 預設為 `360`，表示 Agent 每 6 小時會重新盤點一次。
 - 若新的盤點內容與前一次不同，Host / Server 會覆寫最新 inventory，並保留一筆變更歷史。
+- `StartHidden` 預設為 `true`，表示 Agent 啟動後會直接隱藏到系統匣，不顯示主視窗與工作列按鈕。
 
 ## 6. 原始碼建置
 
@@ -318,6 +322,7 @@ Windows 登入後，Agent 會自動啟動。
 補充：
 - `DeviceId` 與 `DeviceName` 會固定顯示為目前電腦的主機名稱。
 - 即使 `appsettings.json` 內保留舊值，Agent 實際註冊到 Host / Server 時仍會以主機名稱為準。
+- Agent 預設啟動後會隱藏到系統匣；若要顯示主畫面，請雙擊系統匣圖示或從系統匣選單按「顯示主視窗」。
 
 ### 10.1 Agent 主畫面功能下拉
 
@@ -332,6 +337,19 @@ Agent 右上角提供 `功能 / Actions` 下拉，包含：
 - 現場快速複製主機名稱給 Host 管理員核對
 - 快速確認 Agent 正在連哪一個 Host URL
 - 設定更新後立即要求刷新狀態
+
+### 10.2 Agent 系統匣
+
+Agent 啟動後預設會常駐在系統匣，支援：
+
+- 雙擊圖示：顯示主視窗
+- 右鍵選單 `顯示主視窗`
+- 右鍵選單 `開啟設定`
+- 右鍵選單 `結束`
+
+目前行為：
+- 使用者按視窗右上角關閉鈕時，Agent 不會直接結束，而是隱藏回系統匣。
+- 若要真正結束程式，請從系統匣選單按 `結束`。
 
 ## 11. Remote Viewer 操作方式
 

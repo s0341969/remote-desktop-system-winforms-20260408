@@ -13,6 +13,12 @@ partial class AgentMainForm
     private ToolStripMenuItem menuCopyDeviceId;
     private ToolStripMenuItem menuCopyServerUrl;
     private ToolStripMenuItem menuRefresh;
+    private NotifyIcon notifyAgent;
+    private ContextMenuStrip menuTray;
+    private ToolStripMenuItem menuTrayShow;
+    private ToolStripMenuItem menuTraySettings;
+    private ToolStripSeparator menuTraySeparator;
+    private ToolStripMenuItem menuTrayExit;
     private TableLayoutPanel layoutSummary;
     private Label lblServerUrlCaption;
     private Label lblServerUrlValue;
@@ -52,6 +58,12 @@ partial class AgentMainForm
         menuCopyDeviceId = new ToolStripMenuItem();
         menuCopyServerUrl = new ToolStripMenuItem();
         menuRefresh = new ToolStripMenuItem();
+        notifyAgent = new NotifyIcon(components);
+        menuTray = new ContextMenuStrip(components);
+        menuTrayShow = new ToolStripMenuItem();
+        menuTraySettings = new ToolStripMenuItem();
+        menuTraySeparator = new ToolStripSeparator();
+        menuTrayExit = new ToolStripMenuItem();
         lblTitle = new Label();
         layoutSummary = new TableLayoutPanel();
         lblServerUrlCaption = new Label();
@@ -131,6 +143,33 @@ partial class AgentMainForm
         menuRefresh.Size = new Size(180, 22);
         menuRefresh.Text = "立即重新整理";
         menuRefresh.Click += menuRefresh_Click;
+        // notifyAgent
+        notifyAgent.ContextMenuStrip = menuTray;
+        notifyAgent.Text = "遠端桌面 Agent";
+        notifyAgent.Visible = true;
+        notifyAgent.DoubleClick += notifyAgent_DoubleClick;
+        // menuTray
+        menuTray.Items.AddRange(new ToolStripItem[] { menuTrayShow, menuTraySettings, menuTraySeparator, menuTrayExit });
+        menuTray.Name = "menuTray";
+        menuTray.Size = new Size(181, 98);
+        // menuTrayShow
+        menuTrayShow.Name = "menuTrayShow";
+        menuTrayShow.Size = new Size(180, 22);
+        menuTrayShow.Text = "顯示主視窗";
+        menuTrayShow.Click += menuTrayShow_Click;
+        // menuTraySettings
+        menuTraySettings.Name = "menuTraySettings";
+        menuTraySettings.Size = new Size(180, 22);
+        menuTraySettings.Text = "開啟設定";
+        menuTraySettings.Click += menuTraySettings_Click;
+        // menuTraySeparator
+        menuTraySeparator.Name = "menuTraySeparator";
+        menuTraySeparator.Size = new Size(177, 6);
+        // menuTrayExit
+        menuTrayExit.Name = "menuTrayExit";
+        menuTrayExit.Size = new Size(180, 22);
+        menuTrayExit.Text = "結束";
+        menuTrayExit.Click += menuTrayExit_Click;
         // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 16F, FontStyle.Bold, GraphicsUnit.Point);
@@ -233,6 +272,7 @@ partial class AgentMainForm
         Name = "AgentMainForm";
         StartPosition = FormStartPosition.CenterScreen;
         Text = "遠端桌面 Agent / RemoteDesktop Agent";
+        ShowInTaskbar = false;
         layoutRoot.ResumeLayout(false);
         layoutRoot.PerformLayout();
         panelHeader.ResumeLayout(false);

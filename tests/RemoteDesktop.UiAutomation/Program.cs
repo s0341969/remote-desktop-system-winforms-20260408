@@ -675,7 +675,9 @@ static void TestAgentMainForm()
         CaptureFramesPerSecond = 8,
         JpegQuality = 55,
         MaxFrameWidth = 1600,
-        ReconnectDelaySeconds = 5
+        ReconnectDelaySeconds = 5,
+        InventoryRefreshMinutes = 360,
+        StartHidden = false
     });
 
     var runtimeState = new AgentRuntimeState(options);
@@ -685,7 +687,7 @@ static void TestAgentMainForm()
     var settingsFactory = new AgentSettingsFormFactory(new InMemoryAgentSettingsStore());
 
     using var form = new AgentMainForm();
-    form.Bind(runtimeState, settingsFactory);
+    form.Bind(runtimeState, settingsFactory, options.Value);
     form.Show();
     PumpUi();
 

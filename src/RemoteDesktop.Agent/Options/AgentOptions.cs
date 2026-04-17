@@ -38,4 +38,6 @@ public sealed class AgentOptions
 
     [Range(5, 1440)]
     public int InventoryRefreshMinutes { get; init; } = 360;
+
+    public bool StartHidden { get; init; } = true;
 }
