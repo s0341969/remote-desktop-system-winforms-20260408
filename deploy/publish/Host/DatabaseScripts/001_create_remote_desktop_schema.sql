@@ -8,6 +8,8 @@ BEGIN
         AgentVersion NVARCHAR(32) NOT NULL,
         ScreenWidth INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenWidth DEFAULT (0),
         ScreenHeight INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenHeight DEFAULT (0),
+        InventoryJson NVARCHAR(MAX) NULL,
+        InventoryCollectedAt DATETIMEOFFSET(0) NULL,
         IsOnline BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsOnline DEFAULT (0),
         IsAuthorized BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsAuthorized DEFAULT (0),
         AuthorizedAt DATETIMEOFFSET(0) NULL,
@@ -20,16 +22,66 @@ BEGIN
     );
 END;
 
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'InventoryJson') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD InventoryJson NVARCHAR(MAX) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'InventoryCollectedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD InventoryCollectedAt DATETIMEOFFSET(0) NULL;
+END;
+
+IF OBJECT_ID(N'dbo.RemoteDesktopInventoryHistory', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RemoteDesktopInventoryHistory
+    (
+        HistoryId UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RemoteDesktopInventoryHistory PRIMARY KEY,
+        DeviceId NVARCHAR(64) NOT NULL,
+        InventoryFingerprint NVARCHAR(64) NOT NULL,
+        InventoryJson NVARCHAR(MAX) NOT NULL,
+        CollectedAt DATETIMEOFFSET(0) NOT NULL,
+        RecordedAt DATETIMEOFFSET(0) NOT NULL,
+        ChangeSummary NVARCHAR(512) NULL
+    );
+END;
+
 IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'IsAuthorized') IS NULL
 BEGIN
     ALTER TABLE dbo.RemoteDesktopDevices
     ADD IsAuthorized BIT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_IsAuthorized_Compat DEFAULT (0);
 END;
 
+IF COL_LENGTH(N'dbo.RemoteDesktopInventoryHistory', N'InventoryFingerprint') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopInventoryHistory
+    ADD InventoryFingerprint NVARCHAR(64) NOT NULL CONSTRAINT DF_RemoteDesktopInventoryHistory_InventoryFingerprint DEFAULT (N'');
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopInventoryHistory', N'ChangeSummary') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopInventoryHistory
+    ADD ChangeSummary NVARCHAR(512) NULL;
+END;
+
 IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'AuthorizedAt') IS NULL
 BEGIN
     ALTER TABLE dbo.RemoteDesktopDevices
     ADD AuthorizedAt DATETIMEOFFSET(0) NULL;
+END;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_RemoteDesktopInventoryHistory_DeviceId'
+      AND object_id = OBJECT_ID(N'dbo.RemoteDesktopInventoryHistory')
+)
+BEGIN
+    CREATE INDEX IX_RemoteDesktopInventoryHistory_DeviceId
+        ON dbo.RemoteDesktopInventoryHistory (DeviceId, RecordedAt DESC);
 END;
 
 IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'AuthorizedBy') IS NULL
