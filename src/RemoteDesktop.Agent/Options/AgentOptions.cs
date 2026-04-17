@@ -40,4 +40,6 @@ public sealed class AgentOptions
     public int InventoryRefreshMinutes { get; init; } = 360;
 
     public bool StartHidden { get; init; } = true;
+
+    public bool ShowTrayIcon { get; init; } = true;
 }

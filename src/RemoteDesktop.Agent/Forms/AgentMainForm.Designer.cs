@@ -146,7 +146,7 @@ partial class AgentMainForm
         // notifyAgent
         notifyAgent.ContextMenuStrip = menuTray;
         notifyAgent.Text = "遠端桌面 Agent";
-        notifyAgent.Visible = true;
+        notifyAgent.Visible = false;
         notifyAgent.DoubleClick += notifyAgent_DoubleClick;
         // menuTray
         menuTray.Items.AddRange(new ToolStripItem[] { menuTrayShow, menuTraySettings, menuTraySeparator, menuTrayExit });

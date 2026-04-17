@@ -4,6 +4,7 @@
 
 - `RemoteDesktop.Agent` 新增系統匣常駐模式，預設啟動時直接在背景執行，不先顯示主視窗，也不顯示系統通知；可從系統匣圖示顯示主視窗、開啟設定或結束程式。
 - 新增 `Agent:StartHidden` 設定，預設為 `true`，可依現場需求切換是否啟動時顯示主視窗。
+- 新增 `Agent:ShowTrayIcon` 設定，預設為 `true`；若設為 `false`，Agent 會完全背景執行，不顯示系統匣圖示。
 
 - Host 主畫面新增「裝置詳細資訊」視窗，可查看單一裝置的完整 inventory、最近盤點時間、歷史快照與變更摘要。
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史匯出為 `CSV` 與 `Excel (.xlsx)`。

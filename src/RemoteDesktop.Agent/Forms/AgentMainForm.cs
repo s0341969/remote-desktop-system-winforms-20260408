@@ -15,6 +15,7 @@ public partial class AgentMainForm : Form
     private bool _allowExit;
     private bool _startHidden;
     private bool _startupVisibilityHandled;
+    private bool _showTrayIcon;
 
     public AgentMainForm()
     {
@@ -37,6 +38,8 @@ public partial class AgentMainForm : Form
         _agentSettingsFormFactory = agentSettingsFormFactory;
         _agentOptions = agentOptions;
         _startHidden = agentOptions.StartHidden;
+        _showTrayIcon = agentOptions.ShowTrayIcon;
+        notifyAgent.Visible = _showTrayIcon;
     }
 
     protected override void OnLoad(EventArgs e)
@@ -77,7 +80,7 @@ public partial class AgentMainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (!_allowExit && e.CloseReason == CloseReason.UserClosing)
+        if (!_allowExit && _showTrayIcon && e.CloseReason == CloseReason.UserClosing)
         {
             e.Cancel = true;
             HideToTray();
@@ -124,11 +127,21 @@ public partial class AgentMainForm : Form
 
     private void notifyAgent_DoubleClick(object? sender, EventArgs e)
     {
+        if (!_showTrayIcon)
+        {
+            return;
+        }
+
         ShowFromTray();
     }
 
     private void menuTrayShow_Click(object sender, EventArgs e)
     {
+        if (!_showTrayIcon)
+        {
+            return;
+        }
+
         ShowFromTray();
     }
 
@@ -192,6 +205,11 @@ public partial class AgentMainForm : Form
 
     private void HideToTray()
     {
+        if (!_showTrayIcon)
+        {
+            return;
+        }
+
         Hide();
         ShowInTaskbar = false;
         WindowState = FormWindowState.Normal;

@@ -130,6 +130,7 @@
 - `Agent:ReconnectDelaySeconds`
 - `Agent:InventoryRefreshMinutes`
 - `Agent:StartHidden`
+- `Agent:ShowTrayIcon`
 
 範例：
 
@@ -145,7 +146,8 @@
     "MaxFrameWidth": 1600,
     "ReconnectDelaySeconds": 5,
     "InventoryRefreshMinutes": 360,
-    "StartHidden": true
+    "StartHidden": true,
+    "ShowTrayIcon": true
   }
 }
 ```
@@ -154,6 +156,7 @@
 - `InventoryRefreshMinutes` 預設為 `360`，表示 Agent 每 6 小時會重新盤點一次。
 - 若新的盤點內容與前一次不同，Host / Server 會覆寫最新 inventory，並保留一筆變更歷史。
 - `StartHidden` 預設為 `true`，表示 Agent 啟動時會直接在背景執行，不先顯示主視窗、不進工作列，也不顯示系統通知。
+- `ShowTrayIcon` 預設為 `true`；若設為 `false`，Agent 會完全背景執行，不顯示系統匣圖示。
 
 ## 6. 原始碼建置
 
@@ -323,6 +326,7 @@ Windows 登入後，Agent 會自動啟動。
 - `DeviceId` 與 `DeviceName` 會固定顯示為目前電腦的主機名稱。
 - 即使 `appsettings.json` 內保留舊值，Agent 實際註冊到 Host / Server 時仍會以主機名稱為準。
 - Agent 預設啟動時會直接在背景常駐，不會先閃出主視窗再隱藏；若要顯示主畫面，請雙擊系統匣圖示或從系統匣選單按「顯示主視窗」。
+- 若 `ShowTrayIcon = false`，Agent 啟動後將不顯示系統匣圖示，也無法從本機 UI 重新叫回主畫面；需改回設定值或由工作管理員/服務管理方式處理。
 
 ### 10.1 Agent 主畫面功能下拉
 
@@ -350,6 +354,7 @@ Agent 啟動後預設會常駐在系統匣，支援：
 目前行為：
 - 使用者按視窗右上角關閉鈕時，Agent 不會直接結束，而是隱藏回系統匣。
 - 若要真正結束程式，請從系統匣選單按 `結束`。
+- 若 `ShowTrayIcon = false`，本章節的系統匣操作不適用。
 
 ## 11. Remote Viewer 操作方式
 
