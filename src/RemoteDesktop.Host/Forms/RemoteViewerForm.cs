@@ -1718,6 +1718,7 @@ public partial class RemoteViewerForm : Form
     {
         string? selectedFilePath = null;
         Exception? selectionException = null;
+        var ownerHandle = ResolveOwnerHandle(owner);
         using var completed = new ManualResetEventSlim(false);
 
         var dialogThread = new Thread(() =>
@@ -1733,7 +1734,9 @@ public partial class RemoteViewerForm : Form
                     AutoUpgradeEnabled = true
                 };
 
-                var result = dialog.ShowDialog();
+                var result = ownerHandle != IntPtr.Zero
+                    ? dialog.ShowDialog(new DialogOwnerWindow(ownerHandle))
+                    : dialog.ShowDialog();
                 if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
                 {
                     selectedFilePath = dialog.FileName;
@@ -1778,6 +1781,7 @@ public partial class RemoteViewerForm : Form
     {
         string? selectedFilePath = null;
         Exception? selectionException = null;
+        var ownerHandle = ResolveOwnerHandle(owner);
         using var completed = new ManualResetEventSlim(false);
 
         var dialogThread = new Thread(() =>
@@ -1794,7 +1798,9 @@ public partial class RemoteViewerForm : Form
                     AutoUpgradeEnabled = true
                 };
 
-                var result = dialog.ShowDialog();
+                var result = ownerHandle != IntPtr.Zero
+                    ? dialog.ShowDialog(new DialogOwnerWindow(ownerHandle))
+                    : dialog.ShowDialog();
                 if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
                 {
                     selectedFilePath = dialog.FileName;
@@ -1825,6 +1831,28 @@ public partial class RemoteViewerForm : Form
         }
 
         return selectedFilePath;
+    }
+
+    private static IntPtr ResolveOwnerHandle(IWin32Window owner)
+    {
+        try
+        {
+            return owner?.Handle ?? IntPtr.Zero;
+        }
+        catch
+        {
+            return IntPtr.Zero;
+        }
+    }
+
+    private sealed class DialogOwnerWindow : IWin32Window
+    {
+        public DialogOwnerWindow(IntPtr handle)
+        {
+            Handle = handle;
+        }
+
+        public IntPtr Handle { get; }
     }
 
     protected virtual void OpenTransferFolder(string directoryPath)

@@ -206,6 +206,7 @@ public class RemoteFileBrowserForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        ModalDialogFrontHelper.BringToFront(this);
         await LoadDirectoryAsync(_initialPath);
     }
 
@@ -621,6 +622,7 @@ internal sealed class RemoteFolderPickerForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        ModalDialogFrontHelper.BringToFront(this);
         await LoadDirectoryAsync(_initialPath);
     }
 
@@ -730,5 +732,36 @@ internal sealed class RemoteFolderPickerForm : Form
         _btnRefresh.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_currentDirectoryPath);
         _btnUp.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_parentDirectoryPath);
         _btnSelectCurrent.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_currentDirectoryPath);
+    }
+}
+
+internal static class ModalDialogFrontHelper
+{
+    public static void BringToFront(Form dialog)
+    {
+        if (dialog.IsDisposed)
+        {
+            return;
+        }
+
+        dialog.BeginInvoke(new Action(() =>
+        {
+            if (dialog.IsDisposed)
+            {
+                return;
+            }
+
+            var originalTopMost = dialog.TopMost;
+            try
+            {
+                dialog.TopMost = true;
+                dialog.Activate();
+                dialog.BringToFront();
+            }
+            finally
+            {
+                dialog.TopMost = originalTopMost;
+            }
+        }));
     }
 }
