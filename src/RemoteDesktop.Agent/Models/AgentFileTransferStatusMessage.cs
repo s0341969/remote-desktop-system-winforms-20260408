@@ -34,5 +34,7 @@ public sealed class AgentFileTransferStatusMessage
 
     public bool EntriesTruncated { get; init; }
 
+    public IReadOnlyList<string> RootPaths { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<RemoteFileBrowserEntry> Entries { get; init; } = Array.Empty<RemoteFileBrowserEntry>();
 }

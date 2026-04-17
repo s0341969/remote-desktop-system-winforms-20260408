@@ -361,6 +361,7 @@ internal sealed class CentralServerRemoteViewerSessionBroker : IRemoteViewerSess
             ParentDirectoryPath = source.ParentDirectoryPath,
             CanNavigateUp = source.CanNavigateUp,
             EntriesTruncated = source.EntriesTruncated,
+            RootPaths = source.RootPaths.ToArray(),
             Entries = source.Entries.Select(static item => new RemoteFileBrowserEntry
             {
                 Name = item.Name,

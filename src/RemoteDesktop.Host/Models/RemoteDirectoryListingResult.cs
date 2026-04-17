@@ -12,5 +12,7 @@ public sealed class RemoteDirectoryListingResult
 
     public string Message { get; init; } = string.Empty;
 
+    public IReadOnlyList<string> RootPaths { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<RemoteFileBrowserEntry> Entries { get; init; } = Array.Empty<RemoteFileBrowserEntry>();
 }

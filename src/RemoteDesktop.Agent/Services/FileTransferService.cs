@@ -430,6 +430,8 @@ public sealed class FileTransferService
                 throw new DirectoryNotFoundException(AgentUiText.Bi("指定的遠端資料夾不存在。", "The requested remote directory does not exist."));
             }
 
+            var rootPaths = GetBrowsableRootPaths();
+
             var directories = directoryInfo.EnumerateDirectories()
                 .OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase)
                 .Take(MaxBrowserEntries + 1)
@@ -482,6 +484,7 @@ public sealed class FileTransferService
                 ParentDirectoryPath = parentDirectoryPath,
                 CanNavigateUp = !string.IsNullOrWhiteSpace(parentDirectoryPath),
                 EntriesTruncated = entriesTruncated,
+                RootPaths = rootPaths,
                 Entries = entries,
                 Message = entriesTruncated
                     ? AgentUiText.Bi($"已列出 {entries.Count} 個項目（已截斷）。", $"Listed {entries.Count} items (truncated).")
@@ -768,6 +771,16 @@ public sealed class FileTransferService
         }
 
         return session.BytesTransferred - session.LastPublishedBytesTransferred >= ProgressPublishThresholdBytes;
+    }
+
+    private static IReadOnlyList<string> GetBrowsableRootPaths()
+    {
+        return DriveInfo.GetDrives()
+            .Where(static drive => drive.DriveType != DriveType.NoRootDirectory)
+            .Select(static drive => drive.RootDirectory.FullName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static string ResolveUniqueTargetPath(string directory, string fileName)

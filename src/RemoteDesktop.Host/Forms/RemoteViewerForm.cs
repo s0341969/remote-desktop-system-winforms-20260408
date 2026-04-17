@@ -1144,6 +1144,7 @@ public partial class RemoteViewerForm : Form
                 CanNavigateUp = status.CanNavigateUp,
                 EntriesTruncated = status.EntriesTruncated,
                 Message = status.Message,
+                RootPaths = status.RootPaths,
                 Entries = status.Entries
             };
         }

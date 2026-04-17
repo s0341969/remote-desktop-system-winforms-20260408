@@ -7,6 +7,7 @@ public class RemoteFileBrowserForm : Form
     private readonly Func<string?, CancellationToken, Task<RemoteDirectoryListingResult>> _loadDirectoryAsync;
     private readonly Func<string, string, CancellationToken, Task<RemoteMoveResult>>? _moveEntryAsync;
     private readonly string? _initialPath;
+    private readonly ComboBox _cboRoots;
     private readonly TextBox _txtPath;
     private readonly Button _btnLoad;
     private readonly Button _btnRefresh;
@@ -24,6 +25,7 @@ public class RemoteFileBrowserForm : Form
     private string? _currentDirectoryPath;
     private string? _parentDirectoryPath;
     private bool _isLoading;
+    private bool _isUpdatingRoots;
 
     public RemoteFileBrowserForm(
         string? initialPath,
@@ -43,20 +45,38 @@ public class RemoteFileBrowserForm : Form
         var panelTop = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 168
+            Height = 204
         };
+
+        var lblRoot = new Label
+        {
+            AutoSize = false,
+            Location = new Point(16, 12),
+            Size = new Size(120, 44),
+            Text = HostUiText.Bi("槽區", "Drive")
+        };
+
+        _cboRoots = new ComboBox
+        {
+            Location = new Point(142, 18),
+            Size = new Size(230, 23),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Name = "cboRoots"
+        };
+        _cboRoots.SelectedIndexChanged += async (_, _) => await HandleRootSelectionChangedAsync();
 
         var lblPath = new Label
         {
             AutoSize = false,
-            Location = new Point(16, 12),
+            Location = new Point(16, 52),
             Size = new Size(120, 44),
             Text = HostUiText.Bi("遠端路徑", "Remote Path")
         };
 
         _txtPath = new TextBox
         {
-            Location = new Point(142, 18),
+            Location = new Point(142, 58),
             Size = new Size(620, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Name = "txtPath"
@@ -64,7 +84,7 @@ public class RemoteFileBrowserForm : Form
 
         _btnLoad = new Button
         {
-            Location = new Point(774, 12),
+            Location = new Point(774, 52),
             Size = new Size(116, 44),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             Name = "btnLoad"
@@ -75,7 +95,7 @@ public class RemoteFileBrowserForm : Form
         _lblStatus = new Label
         {
             AutoSize = false,
-            Location = new Point(16, 54),
+            Location = new Point(16, 98),
             Size = new Size(974, 24),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Name = "lblStatus",
@@ -84,7 +104,7 @@ public class RemoteFileBrowserForm : Form
 
         _btnRefresh = new Button
         {
-            Location = new Point(16, 90),
+            Location = new Point(16, 134),
             Size = new Size(130, 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
             Name = "btnRefresh"
@@ -94,7 +114,7 @@ public class RemoteFileBrowserForm : Form
 
         _btnUp = new Button
         {
-            Location = new Point(152, 90),
+            Location = new Point(152, 134),
             Size = new Size(120, 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
             Name = "btnUp"
@@ -104,7 +124,7 @@ public class RemoteFileBrowserForm : Form
 
         _btnMove = new Button
         {
-            Location = new Point(278, 90),
+            Location = new Point(278, 134),
             Size = new Size(180, 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
             Name = "btnMove"
@@ -114,7 +134,7 @@ public class RemoteFileBrowserForm : Form
 
         _btnDownload = new Button
         {
-            Location = new Point(464, 90),
+            Location = new Point(464, 134),
             Size = new Size(190, 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
             Name = "btnDownload"
@@ -125,13 +145,15 @@ public class RemoteFileBrowserForm : Form
         _lblHints = new Label
         {
             AutoSize = false,
-            Location = new Point(16, 132),
+            Location = new Point(16, 176),
             Size = new Size(974, 24),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Name = "lblHints",
-            Text = HostUiText.Bi("提示：F5 重新整理，雙擊資料夾可進入。", "Hint: Press F5 to refresh. Double-click a folder to open it.")
+            Text = HostUiText.Bi("提示：先切換槽區，再按 F5 重新整理；雙擊資料夾可進入。", "Hint: Choose a drive first, press F5 to refresh, and double-click a folder to open it.")
         };
 
+        panelTop.Controls.Add(lblRoot);
+        panelTop.Controls.Add(_cboRoots);
         panelTop.Controls.Add(lblPath);
         panelTop.Controls.Add(_txtPath);
         panelTop.Controls.Add(_btnLoad);
@@ -248,6 +270,7 @@ public class RemoteFileBrowserForm : Form
             _currentDirectoryPath = result.DirectoryPath;
             _parentDirectoryPath = result.CanNavigateUp ? result.ParentDirectoryPath : null;
             _txtPath.Text = result.DirectoryPath;
+            SyncRootOptions(result.RootPaths, result.DirectoryPath);
             _lblStatus.Text = result.Message;
             PopulateEntries(result.Entries);
 
@@ -428,6 +451,7 @@ public class RemoteFileBrowserForm : Form
         var canMove = !_isLoading && _moveEntryAsync is not null && selectedEntry is not null;
 
         _btnLoad.Enabled = !_isLoading;
+        _cboRoots.Enabled = !_isLoading && _cboRoots.Items.Count > 0;
         _btnRefresh.Enabled = canRefresh;
         _btnUp.Enabled = canNavigateUp;
         _btnDownload.Enabled = canDownload;
@@ -435,6 +459,68 @@ public class RemoteFileBrowserForm : Form
         _menuRefresh.Enabled = canRefresh;
         _menuMove.Enabled = canMove;
         _menuDownload.Enabled = canDownload;
+    }
+
+    private async Task HandleRootSelectionChangedAsync()
+    {
+        if (_isLoading || _isUpdatingRoots)
+        {
+            return;
+        }
+
+        if (_cboRoots.SelectedItem is not string rootPath || string.IsNullOrWhiteSpace(rootPath))
+        {
+            return;
+        }
+
+        if (string.Equals(Path.GetPathRoot(_currentDirectoryPath ?? string.Empty), rootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await LoadDirectoryAsync(rootPath);
+    }
+
+    private void SyncRootOptions(IReadOnlyList<string> rootPaths, string currentDirectoryPath)
+    {
+        var selectedRoot = Path.GetPathRoot(currentDirectoryPath) ?? string.Empty;
+        var normalizedRoots = rootPaths
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _isUpdatingRoots = true;
+        try
+        {
+            _cboRoots.BeginUpdate();
+            try
+            {
+                _cboRoots.Items.Clear();
+                foreach (var rootPath in normalizedRoots)
+                {
+                    _cboRoots.Items.Add(rootPath);
+                }
+
+                if (normalizedRoots.Length > 0)
+                {
+                    var matchIndex = Array.FindIndex(normalizedRoots, path => string.Equals(path, selectedRoot, StringComparison.OrdinalIgnoreCase));
+                    _cboRoots.SelectedIndex = matchIndex >= 0 ? matchIndex : 0;
+                }
+                else
+                {
+                    _cboRoots.SelectedIndex = -1;
+                }
+            }
+            finally
+            {
+                _cboRoots.EndUpdate();
+            }
+        }
+        finally
+        {
+            _isUpdatingRoots = false;
+        }
     }
 
     private static string GetPathDisplayName(string path)
@@ -462,6 +548,7 @@ internal sealed class RemoteFolderPickerForm : Form
 {
     private readonly Func<string?, CancellationToken, Task<RemoteDirectoryListingResult>> _loadDirectoryAsync;
     private readonly string? _initialPath;
+    private readonly ComboBox _cboRoots;
     private readonly TextBox _txtPath;
     private readonly Label _lblStatus;
     private readonly ListView _listDirectories;
@@ -472,6 +559,7 @@ internal sealed class RemoteFolderPickerForm : Form
     private string? _currentDirectoryPath;
     private string? _parentDirectoryPath;
     private bool _isLoading;
+    private bool _isUpdatingRoots;
 
     public RemoteFolderPickerForm(
         string? initialPath,
@@ -490,7 +578,7 @@ internal sealed class RemoteFolderPickerForm : Form
         var panelTop = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 112
+            Height = 152
         };
 
         var lblInstruction = new Label
@@ -501,17 +589,35 @@ internal sealed class RemoteFolderPickerForm : Form
             Text = instructionText
         };
 
-        var lblPath = new Label
+        var lblRoot = new Label
         {
             AutoSize = false,
             Location = new Point(16, 50),
+            Size = new Size(120, 44),
+            Text = HostUiText.Bi("槽區", "Drive")
+        };
+
+        _cboRoots = new ComboBox
+        {
+            Location = new Point(142, 56),
+            Size = new Size(190, 23),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Name = "cboFolderRoots"
+        };
+        _cboRoots.SelectedIndexChanged += async (_, _) => await HandleRootSelectionChangedAsync();
+
+        var lblPath = new Label
+        {
+            AutoSize = false,
+            Location = new Point(16, 90),
             Size = new Size(120, 44),
             Text = HostUiText.Bi("遠端路徑", "Remote Path")
         };
 
         _txtPath = new TextBox
         {
-            Location = new Point(142, 56),
+            Location = new Point(142, 96),
             Size = new Size(520, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Name = "txtFolderPath"
@@ -519,7 +625,7 @@ internal sealed class RemoteFolderPickerForm : Form
 
         _btnLoad = new Button
         {
-            Location = new Point(676, 50),
+            Location = new Point(676, 90),
             Size = new Size(82, 44),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             Name = "btnFolderLoad"
@@ -529,7 +635,7 @@ internal sealed class RemoteFolderPickerForm : Form
 
         _btnRefresh = new Button
         {
-            Location = new Point(764, 50),
+            Location = new Point(764, 90),
             Size = new Size(104, 44),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             Name = "btnFolderRefresh"
@@ -539,7 +645,7 @@ internal sealed class RemoteFolderPickerForm : Form
 
         _btnUp = new Button
         {
-            Location = new Point(874, 50),
+            Location = new Point(874, 90),
             Size = new Size(70, 44),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             Name = "btnFolderUp"
@@ -548,6 +654,8 @@ internal sealed class RemoteFolderPickerForm : Form
         _btnUp.Click += async (_, _) => await LoadDirectoryAsync(_parentDirectoryPath);
 
         panelTop.Controls.Add(lblInstruction);
+        panelTop.Controls.Add(lblRoot);
+        panelTop.Controls.Add(_cboRoots);
         panelTop.Controls.Add(lblPath);
         panelTop.Controls.Add(_txtPath);
         panelTop.Controls.Add(_btnLoad);
@@ -659,6 +767,7 @@ internal sealed class RemoteFolderPickerForm : Form
             _currentDirectoryPath = result.DirectoryPath;
             _parentDirectoryPath = result.CanNavigateUp ? result.ParentDirectoryPath : null;
             _txtPath.Text = result.DirectoryPath;
+            SyncRootOptions(result.RootPaths, result.DirectoryPath);
             _lblStatus.Text = result.Message;
 
             _listDirectories.BeginUpdate();
@@ -729,9 +838,72 @@ internal sealed class RemoteFolderPickerForm : Form
     private void SyncSelectionState()
     {
         _btnLoad.Enabled = !_isLoading;
+        _cboRoots.Enabled = !_isLoading && _cboRoots.Items.Count > 0;
         _btnRefresh.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_currentDirectoryPath);
         _btnUp.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_parentDirectoryPath);
         _btnSelectCurrent.Enabled = !_isLoading && !string.IsNullOrWhiteSpace(_currentDirectoryPath);
+    }
+
+    private async Task HandleRootSelectionChangedAsync()
+    {
+        if (_isLoading || _isUpdatingRoots)
+        {
+            return;
+        }
+
+        if (_cboRoots.SelectedItem is not string rootPath || string.IsNullOrWhiteSpace(rootPath))
+        {
+            return;
+        }
+
+        if (string.Equals(Path.GetPathRoot(_currentDirectoryPath ?? string.Empty), rootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await LoadDirectoryAsync(rootPath);
+    }
+
+    private void SyncRootOptions(IReadOnlyList<string> rootPaths, string currentDirectoryPath)
+    {
+        var selectedRoot = Path.GetPathRoot(currentDirectoryPath) ?? string.Empty;
+        var normalizedRoots = rootPaths
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _isUpdatingRoots = true;
+        try
+        {
+            _cboRoots.BeginUpdate();
+            try
+            {
+                _cboRoots.Items.Clear();
+                foreach (var rootPath in normalizedRoots)
+                {
+                    _cboRoots.Items.Add(rootPath);
+                }
+
+                if (normalizedRoots.Length > 0)
+                {
+                    var matchIndex = Array.FindIndex(normalizedRoots, path => string.Equals(path, selectedRoot, StringComparison.OrdinalIgnoreCase));
+                    _cboRoots.SelectedIndex = matchIndex >= 0 ? matchIndex : 0;
+                }
+                else
+                {
+                    _cboRoots.SelectedIndex = -1;
+                }
+            }
+            finally
+            {
+                _cboRoots.EndUpdate();
+            }
+        }
+        finally
+        {
+            _isUpdatingRoots = false;
+        }
     }
 }
 
