@@ -13,10 +13,11 @@ public sealed class AgentRuntimeState
     public AgentRuntimeState(IOptions<AgentOptions> options)
     {
         _options = options.Value;
+        var machineIdentity = AgentIdentity.GetMachineIdentity();
         CurrentStatus = AgentUiText.Bi("閒置", "Idle");
         ServerUrl = _options.ServerUrl;
-        DeviceId = _options.DeviceId;
-        DeviceName = _options.DeviceName;
+        DeviceId = machineIdentity;
+        DeviceName = machineIdentity;
     }
 
     public string CurrentStatus { get; private set; }

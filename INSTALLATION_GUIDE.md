@@ -53,6 +53,10 @@
 - `功能` 下拉選單
 - Agent 設定表單
 
+補充：
+- Agent 的 `裝置 ID` 與 `裝置名稱` 現在固定使用該台電腦的主機名稱。
+- 設定表單仍會顯示這兩個欄位，但僅供查看，不再作為可自訂識別值。
+
 ## 3. 需求
 
 - Windows 10 / Windows 11
@@ -116,8 +120,6 @@
 
 主要欄位：
 - `Agent:ServerUrl`
-- `Agent:DeviceId`
-- `Agent:DeviceName`
 - `Agent:SharedAccessKey`
 - `Agent:CaptureFramesPerSecond`
 - `Agent:JpegQuality`
@@ -130,8 +132,8 @@
 {
   "Agent": {
     "ServerUrl": "http://localhost:5106",
-    "DeviceId": "pc-office-01",
-    "DeviceName": "辦公室主機 01",
+    "DeviceId": "DESKTOP-EXAMPLE",
+    "DeviceName": "DESKTOP-EXAMPLE",
     "SharedAccessKey": "ChangeThisAgentSharedKey!2026",
     "CaptureFramesPerSecond": 8,
     "JpegQuality": 55,
@@ -305,6 +307,10 @@ Windows 登入後，Agent 會自動啟動。
 3. 按「設定」可修改 Agent 參數
 4. 修改後重新啟動 Agent 生效
 
+補充：
+- `DeviceId` 與 `DeviceName` 會固定顯示為目前電腦的主機名稱。
+- 即使 `appsettings.json` 內保留舊值，Agent 實際註冊到 Host / Server 時仍會以主機名稱為準。
+
 ### 10.1 Agent 主畫面功能下拉
 
 Agent 右上角提供 `功能 / Actions` 下拉，包含：
@@ -315,7 +321,7 @@ Agent 右上角提供 `功能 / Actions` 下拉，包含：
 - `立即重新整理 / Refresh now`
 
 適用情境：
-- 現場快速複製 DeviceId 給 Host 管理員核對
+- 現場快速複製主機名稱給 Host 管理員核對
 - 快速確認 Agent 正在連哪一個 Host URL
 - 設定更新後立即要求刷新狀態
 

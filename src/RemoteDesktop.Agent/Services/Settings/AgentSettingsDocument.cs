@@ -4,17 +4,19 @@ namespace RemoteDesktop.Agent.Services.Settings;
 
 public sealed class AgentSettingsDocument
 {
+    private static readonly string MachineIdentity = Agent.Services.AgentIdentity.GetMachineIdentity();
+
     [Required]
     [Url]
     public string ServerUrl { get; set; } = "http://localhost:5106";
 
     [Required]
     [MinLength(3)]
-    public string DeviceId { get; set; } = "device-demo-001";
+    public string DeviceId { get; set; } = MachineIdentity;
 
     [Required]
     [MinLength(3)]
-    public string DeviceName { get; set; } = "Demo Operator PC";
+    public string DeviceName { get; set; } = MachineIdentity;
 
     [Required]
     [MinLength(12)]

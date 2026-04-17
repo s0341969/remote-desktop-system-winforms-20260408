@@ -2,6 +2,7 @@
 
 ## 2026-04-11
 
+- Agent 現在會固定以本機主機名稱作為 `DeviceId` 與 `DeviceName`；設定表單中的這兩個欄位改為唯讀提示，不再允許手動輸入與實際註冊值脫節。
 - 新增 Agent 軟硬體盤點能力：Agent 啟動時會收集 CPU、總記憶體、固定磁碟摘要、Windows 版本/組建、Office 版本，以及最近一次 Windows 更新名稱與日期，並跟隨 `hello` 註冊流程上報。
 - `RemoteDesktop.Server` 與 `RemoteDesktop.Host` 的 `Memory` / `SqlServer` 裝置儲存現在都會保存 inventory profile；`SqlServer` 模式新增 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。
 - Host 主畫面裝置清單新增硬體摘要、作業系統、Office 與最後更新欄位，讓操作端不用開 Viewer 就能先看盤點結果。

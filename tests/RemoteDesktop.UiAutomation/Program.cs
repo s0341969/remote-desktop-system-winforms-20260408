@@ -105,13 +105,13 @@ static void TestAgentSettingsForm()
 {
     var store = new InMemoryAgentSettingsStore();
     var document = store.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    var machineIdentity = Environment.MachineName;
     using var form = new AgentSettingsForm(false);
     form.Bind(store, document, false);
     form.Show();
     PumpUi();
 
     GetControl<TextBox>(form, "txtServerUrl").Text = "http://localhost:5402";
-    GetControl<TextBox>(form, "txtDeviceName").Text = "QA Agent";
     GetControl<TextBox>(form, "txtFileTransferDirectory").Text = "C:\\Temp\\RemoteTransfers";
     GetControl<NumericUpDown>(form, "numCaptureFps").Value = 12;
     GetControl<NumericUpDown>(form, "numReconnectDelay").Value = 8;
@@ -119,10 +119,11 @@ static void TestAgentSettingsForm()
     PumpUi();
 
     var saved = store.LastSaved ?? throw new InvalidOperationException("Agent settings were not saved.");
-    if (!string.Equals(saved.DeviceName, "QA Agent", StringComparison.Ordinal)
+    if (!string.Equals(saved.DeviceId, machineIdentity, StringComparison.Ordinal)
+        || !string.Equals(saved.DeviceName, machineIdentity, StringComparison.Ordinal)
         || !string.Equals(saved.ServerUrl, "http://localhost:5402", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Agent settings form did not persist the edited values.");
+        throw new InvalidOperationException("Agent settings form did not persist the normalized machine identity.");
     }
 }
 
@@ -663,6 +664,7 @@ static void TestHostAuditLogForm()
 
 static void TestAgentMainForm()
 {
+    var machineIdentity = Environment.MachineName;
     var options = Options.Create(new AgentOptions
     {
         ServerUrl = "http://localhost:5106",
@@ -686,9 +688,14 @@ static void TestAgentMainForm()
     form.Show();
     PumpUi();
 
-    if (!string.Equals(GetControl<Label>(form, "lblDeviceIdValue").Text, "agent-ui-001", StringComparison.Ordinal))
+    if (!string.Equals(GetControl<Label>(form, "lblDeviceIdValue").Text, machineIdentity, StringComparison.Ordinal))
     {
         throw new InvalidOperationException("Agent main form did not render the expected device id.");
+    }
+
+    if (!string.Equals(GetControl<Label>(form, "lblDeviceNameValue").Text, machineIdentity, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Agent main form did not render the expected device name.");
     }
 
     var actualStatus = GetControl<Label>(form, "lblStatusValue").Text;

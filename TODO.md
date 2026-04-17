@@ -1,6 +1,7 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 若後續需要跨網域或同名主機環境，盤點 Agent 身分規則是否要從單純 `MachineName` 升級為 `MachineName + SID/UUID`，避免極端情況下仍重複
 - [ ] 為 Agent inventory 補更細的詳細檢視與匯出能力，避免主畫面只看摘要時仍需人工查完整磁碟或更新內容
 - [ ] 為 Agent inventory 增加定期重新收集與變更追蹤，讓 Office 更新、Windows Patch 與硬體變更可自動覆寫或保留歷史
 - [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上中央模式的完整 publish 驗證與跨多台 Console Client 的手動冒煙驗證

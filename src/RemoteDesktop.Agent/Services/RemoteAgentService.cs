@@ -301,11 +301,12 @@ public sealed class RemoteAgentService : BackgroundService
     private string CreateHelloPayload(int screenWidth, int screenHeight, AgentInventoryProfile inventory)
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        var machineIdentity = AgentIdentity.GetMachineIdentity();
         return JsonSerializer.Serialize(new AgentHelloMessage
         {
-            DeviceId = _options.DeviceId,
-            DeviceName = _options.DeviceName,
-            HostName = Environment.MachineName,
+            DeviceId = machineIdentity,
+            DeviceName = machineIdentity,
+            HostName = machineIdentity,
             AgentVersion = version,
             AccessKey = _options.SharedAccessKey,
             ScreenWidth = screenWidth,

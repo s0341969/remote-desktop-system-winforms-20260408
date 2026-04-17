@@ -33,11 +33,12 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
 
     public async Task<AgentSettingsDocument> LoadAsync(CancellationToken cancellationToken)
     {
+        var machineIdentity = AgentIdentity.GetMachineIdentity();
         var document = new AgentSettingsDocument
         {
             ServerUrl = _options.Value.ServerUrl,
-            DeviceId = _options.Value.DeviceId,
-            DeviceName = _options.Value.DeviceName,
+            DeviceId = machineIdentity,
+            DeviceName = machineIdentity,
             SharedAccessKey = _options.Value.SharedAccessKey,
             FileTransferDirectory = _options.Value.FileTransferDirectory,
             CaptureFramesPerSecond = _options.Value.CaptureFramesPerSecond,
@@ -56,8 +57,8 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
         if (agent is not null)
         {
             document.ServerUrl = agent["ServerUrl"]?.GetValue<string>() ?? document.ServerUrl;
-            document.DeviceId = agent["DeviceId"]?.GetValue<string>() ?? document.DeviceId;
-            document.DeviceName = agent["DeviceName"]?.GetValue<string>() ?? document.DeviceName;
+            document.DeviceId = machineIdentity;
+            document.DeviceName = machineIdentity;
             document.SharedAccessKey = agent["SharedAccessKey"]?.GetValue<string>() ?? document.SharedAccessKey;
             document.FileTransferDirectory = agent["FileTransferDirectory"]?.GetValue<string>() ?? document.FileTransferDirectory;
             document.CaptureFramesPerSecond = agent["CaptureFramesPerSecond"]?.GetValue<int?>() ?? document.CaptureFramesPerSecond;
@@ -71,12 +72,15 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
 
     public async Task SaveAsync(AgentSettingsDocument document, CancellationToken cancellationToken)
     {
+        var machineIdentity = AgentIdentity.GetMachineIdentity();
+        document.DeviceId = machineIdentity;
+        document.DeviceName = machineIdentity;
         Validate(document);
         var root = await ReadRootAsync(cancellationToken) ?? new JsonObject();
         var agent = root[AgentOptions.SectionName] as JsonObject ?? new JsonObject();
         agent["ServerUrl"] = document.ServerUrl.Trim();
-        agent["DeviceId"] = document.DeviceId.Trim();
-        agent["DeviceName"] = document.DeviceName.Trim();
+        agent["DeviceId"] = machineIdentity;
+        agent["DeviceName"] = machineIdentity;
         agent["SharedAccessKey"] = document.SharedAccessKey;
         agent["FileTransferDirectory"] = document.FileTransferDirectory.Trim();
         agent["CaptureFramesPerSecond"] = document.CaptureFramesPerSecond;
