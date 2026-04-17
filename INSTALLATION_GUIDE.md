@@ -157,6 +157,7 @@
 - 若新的盤點內容與前一次不同，Host / Server 會覆寫最新 inventory，並保留一筆變更歷史。
 - `StartHidden` 預設為 `true`，表示 Agent 啟動時會直接在背景執行，不先顯示主視窗、不進工作列，也不顯示系統通知。
 - `ShowTrayIcon` 預設為 `true`；若設為 `false`，Agent 會完全背景執行，不顯示系統匣圖示。
+- 若同時設為 `StartHidden = true` 與 `ShowTrayIcon = false`，Agent 會以完全無 UI 模式啟動；現場端沒有可點擊入口，需改設定檔後重啟或由工作管理員處理。
 
 ## 6. 原始碼建置
 

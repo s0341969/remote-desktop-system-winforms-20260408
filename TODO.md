@@ -2,6 +2,7 @@
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
 - [ ] 盤點 Agent 背景模式要不要加「禁止一般使用者自行結束」、「需管理密碼才能顯示主視窗」，以及 `ShowTrayIcon = false` 時的受控喚回機制
+- [ ] 若 Agent 採 `StartHidden = true` 且 `ShowTrayIcon = false`，評估是否要補遠端或命令列喚回/重設設定的維運機制，避免現場無 UI 可操作
 - [ ] 若後續需要跨網域或同名主機環境，盤點 Agent 身分規則是否要從單純 `MachineName` 升級為 `MachineName + SID/UUID`，避免極端情況下仍重複
 - [ ] 為 inventory 詳細視窗補更多欄位，包含主機板、序號、網卡、IP、已安裝軟體與多磁碟明細，避免目前仍以摘要字串呈現
 - [ ] 為 inventory 匯出補真正的 `.xlsx` 格式驗證與欄位模板鎖定，確認 Excel 匯出在不同版本 Office 下都能穩定開啟

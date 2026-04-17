@@ -83,6 +83,7 @@
 - Agent 現在支援系統匣常駐模式，預設啟動時會直接在背景執行，不先顯示主視窗，也不顯示系統通知；可依 `Agent:ShowTrayIcon` 決定是否顯示系統匣圖示。
 - `Agent:StartHidden` 預設為 `true`，若需要現場顯示主視窗，可在 `appsettings.json` 改成 `false`。
 - `Agent:ShowTrayIcon` 預設為 `true`；若改成 `false`，Agent 會完全背景執行，不會出現在系統匣。
+- 若同時設為 `StartHidden = true` 與 `ShowTrayIcon = false`，Agent 會以完全無 UI 的背景模式執行；本機端不會有主視窗、工作列或系統匣入口。
 - 第一階段新增 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared`，把中央 Host Server 所需的通訊契約、裝置儲存與 Agent WebSocket 通道獨立出來，為後續多主控台 Console Client 做準備。
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
