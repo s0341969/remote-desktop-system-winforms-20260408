@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-19
+
+- 修正 Host 主控台 `MainForm` 的裝置清單與在線紀錄 GridView 刷新行為：背景輪詢或 dashboard push 更新時，現在會保留目前排序、選取列與卷動位置，避免整個表格反覆跳動。
+- Host 主控台的裝置清單與在線紀錄現在支援所有欄位點擊排序，並會在後續自動刷新時延續使用者目前選定的排序欄位與方向。
+
 ## 2026-04-11
 
 - Host Remote Viewer 新增「切換登入畫面」動作，會透過 Agent 要求遠端 Windows 切到登入/鎖定畫面；因 Windows 限制，一般桌面程式不能直接模擬標準 `Ctrl + Alt + Del`，因此改用 `LockWorkStation()` 提供穩定可用的等效行為。

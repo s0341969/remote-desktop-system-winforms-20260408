@@ -10,6 +10,8 @@ namespace RemoteDesktop.Host.Forms;
 public partial class MainForm : Form
 {
     private readonly System.Windows.Forms.Timer _refreshTimer;
+    private readonly BindingSource _deviceBindingSource = new();
+    private readonly BindingSource _logBindingSource = new();
     private IMainDashboardDataSource? _dashboardDataSource;
     private ControlServerOptions? _options;
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
@@ -21,11 +23,18 @@ public partial class MainForm : Form
     private bool _refreshing;
     private string? _lastRefreshErrorMessage;
     private bool _dashboardUpdateSubscriptionAttached;
+    private List<DeviceGridItem> _deviceGridItems = [];
+    private List<PresenceLogGridItem> _logGridItems = [];
+    private string? _deviceGridSnapshot;
+    private string? _logGridSnapshot;
+    private GridSortState? _deviceGridSortState = new(nameof(DeviceGridItem.DeviceId), SortOrder.Ascending);
+    private GridSortState? _logGridSortState = new(nameof(PresenceLogGridItem.ConnectedAt), SortOrder.Descending);
 
     public MainForm()
     {
         InitializeComponent();
         InitializeUiText();
+        InitializeGridBehavior();
         _refreshTimer = new System.Windows.Forms.Timer
         {
             Interval = 5000
@@ -211,7 +220,7 @@ public partial class MainForm : Form
             var logs = await logsTask;
 
             BindDeviceGrid(devices, selectedDeviceId);
-            gridLogs.DataSource = logs.Select(static item => new PresenceLogGridItem(item)).ToList();
+            BindLogGrid(logs);
 
             var onlineCount = devices.Count(static item => item.IsOnline);
             lblOnlineCountValue.Text = onlineCount.ToString();
@@ -260,25 +269,30 @@ public partial class MainForm : Form
 
     private void BindDeviceGrid(IReadOnlyList<DeviceRecord> devices, string? selectedDeviceId)
     {
-        var items = devices.Select(static item => new DeviceGridItem(item)).ToList();
-        gridDevices.DataSource = items;
+        var snapshot = BuildDeviceSnapshot(devices);
+        if (!string.Equals(_deviceGridSnapshot, snapshot, StringComparison.Ordinal))
+        {
+            _deviceGridItems = devices.Select(static item => new DeviceGridItem(item)).ToList();
+            ApplySort(_deviceGridItems, _deviceGridSortState, GetDeviceGridSortValue);
+            UpdateBindingSource(gridDevices, _deviceBindingSource, _deviceGridItems);
+            _deviceGridSnapshot = snapshot;
+        }
 
-        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        RestoreDeviceSelection(selectedDeviceId);
+    }
+
+    private void BindLogGrid(IReadOnlyList<AgentPresenceLogRecord> logs)
+    {
+        var snapshot = BuildLogSnapshot(logs);
+        if (string.Equals(_logGridSnapshot, snapshot, StringComparison.Ordinal))
         {
             return;
         }
 
-        foreach (DataGridViewRow row in gridDevices.Rows)
-        {
-            if (row.DataBoundItem is not DeviceGridItem item || !string.Equals(item.DeviceId, selectedDeviceId, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            row.Selected = true;
-            gridDevices.CurrentCell = row.Cells[0];
-            break;
-        }
+        _logGridItems = logs.Select(static item => new PresenceLogGridItem(item)).ToList();
+        ApplySort(_logGridItems, _logGridSortState, GetPresenceLogGridSortValue);
+        UpdateBindingSource(gridLogs, _logBindingSource, _logGridItems);
+        _logGridSnapshot = snapshot;
     }
 
     private void OpenSelectedViewer()
@@ -458,6 +472,312 @@ public partial class MainForm : Form
         }
     }
 
+    private void InitializeGridBehavior()
+    {
+        ConfigureGridForStableRefresh(gridDevices);
+        ConfigureGridForStableRefresh(gridLogs);
+
+        gridDevices.DataSource = _deviceBindingSource;
+        gridLogs.DataSource = _logBindingSource;
+
+        gridDevices.ColumnHeaderMouseClick += gridDevices_ColumnHeaderMouseClick;
+        gridLogs.ColumnHeaderMouseClick += gridLogs_ColumnHeaderMouseClick;
+    }
+
+    private static void ConfigureGridForStableRefresh(DataGridView grid)
+    {
+        grid.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
+        grid.AllowUserToResizeRows = false;
+
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            column.SortMode = DataGridViewColumnSortMode.Programmatic;
+        }
+    }
+
+    private void gridDevices_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= gridDevices.Columns.Count)
+        {
+            return;
+        }
+
+        var column = gridDevices.Columns[e.ColumnIndex];
+        _deviceGridSortState = BuildNextSortState(_deviceGridSortState, column.DataPropertyName);
+        ApplySort(_deviceGridItems, _deviceGridSortState, GetDeviceGridSortValue);
+        UpdateBindingSource(gridDevices, _deviceBindingSource, _deviceGridItems);
+    }
+
+    private void gridLogs_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= gridLogs.Columns.Count)
+        {
+            return;
+        }
+
+        var column = gridLogs.Columns[e.ColumnIndex];
+        _logGridSortState = BuildNextSortState(_logGridSortState, column.DataPropertyName);
+        ApplySort(_logGridItems, _logGridSortState, GetPresenceLogGridSortValue);
+        UpdateBindingSource(gridLogs, _logBindingSource, _logGridItems);
+    }
+
+    private void RestoreDeviceSelection(string? selectedDeviceId)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        {
+            return;
+        }
+
+        foreach (DataGridViewRow row in gridDevices.Rows)
+        {
+            if (row.DataBoundItem is not DeviceGridItem item || !string.Equals(item.DeviceId, selectedDeviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            row.Selected = true;
+            gridDevices.CurrentCell = row.Cells[0];
+            return;
+        }
+    }
+
+    private void UpdateBindingSource<TItem>(DataGridView grid, BindingSource bindingSource, List<TItem> items)
+    {
+        var selectedKey = GetSelectedKey(grid);
+        var firstDisplayedRowIndex = GetFirstDisplayedRowIndex(grid);
+
+        bindingSource.DataSource = null;
+        bindingSource.DataSource = items;
+
+        RestoreSelectedRow(grid, selectedKey);
+        RestoreFirstDisplayedRow(grid, firstDisplayedRowIndex);
+        ApplySortGlyphs(grid, grid == gridDevices ? _deviceGridSortState : _logGridSortState);
+    }
+
+    private static string? GetSelectedKey(DataGridView grid)
+    {
+        var item = grid.SelectedRows.Count > 0
+            ? grid.SelectedRows[0].DataBoundItem
+            : grid.CurrentRow?.DataBoundItem;
+
+        return item switch
+        {
+            DeviceGridItem deviceItem => deviceItem.DeviceId,
+            PresenceLogGridItem logItem => logItem.RowKey,
+            _ => null
+        };
+    }
+
+    private static int? GetFirstDisplayedRowIndex(DataGridView grid)
+    {
+        try
+        {
+            var rowIndex = grid.FirstDisplayedScrollingRowIndex;
+            return rowIndex >= 0 ? rowIndex : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void RestoreSelectedRow(DataGridView grid, string? selectedKey)
+    {
+        if (string.IsNullOrWhiteSpace(selectedKey))
+        {
+            return;
+        }
+
+        foreach (DataGridViewRow row in grid.Rows)
+        {
+            var key = row.DataBoundItem switch
+            {
+                DeviceGridItem deviceItem => deviceItem.DeviceId,
+                PresenceLogGridItem logItem => logItem.RowKey,
+                _ => null
+            };
+
+            if (!string.Equals(key, selectedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            row.Selected = true;
+            if (row.Cells.Count > 0)
+            {
+                grid.CurrentCell = row.Cells[0];
+            }
+
+            return;
+        }
+    }
+
+    private static void RestoreFirstDisplayedRow(DataGridView grid, int? firstDisplayedRowIndex)
+    {
+        if (!firstDisplayedRowIndex.HasValue)
+        {
+            return;
+        }
+
+        if (grid.Rows.Count == 0)
+        {
+            return;
+        }
+
+        var targetIndex = Math.Clamp(firstDisplayedRowIndex.Value, 0, grid.Rows.Count - 1);
+        try
+        {
+            grid.FirstDisplayedScrollingRowIndex = targetIndex;
+        }
+        catch
+        {
+        }
+    }
+
+    private static GridSortState BuildNextSortState(GridSortState? currentState, string dataPropertyName)
+    {
+        var direction = currentState is not null &&
+                        string.Equals(currentState.ColumnName, dataPropertyName, StringComparison.Ordinal) &&
+                        currentState.Direction == SortOrder.Ascending
+            ? SortOrder.Descending
+            : SortOrder.Ascending;
+
+        return new GridSortState(dataPropertyName, direction);
+    }
+
+    private static void ApplySort<TItem>(List<TItem> items, GridSortState? sortState, Func<TItem, string, IComparable> getSortValue)
+    {
+        if (sortState is null || string.IsNullOrWhiteSpace(sortState.ColumnName))
+        {
+            return;
+        }
+
+        items.Sort((left, right) =>
+        {
+            var leftValue = getSortValue(left, sortState.ColumnName);
+            var rightValue = getSortValue(right, sortState.ColumnName);
+            var result = Comparer<IComparable>.Default.Compare(leftValue, rightValue);
+            if (result == 0)
+            {
+                result = StringComparer.OrdinalIgnoreCase.Compare(left?.ToString(), right?.ToString());
+            }
+
+            return sortState.Direction == SortOrder.Descending ? -result : result;
+        });
+    }
+
+    private static void ApplySortGlyphs(DataGridView grid, GridSortState? sortState)
+    {
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            column.HeaderCell.SortGlyphDirection = SortOrder.None;
+        }
+
+        if (sortState is null)
+        {
+            return;
+        }
+
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            if (!string.Equals(column.DataPropertyName, sortState.ColumnName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            column.HeaderCell.SortGlyphDirection = sortState.Direction;
+            return;
+        }
+    }
+
+    private static string BuildDeviceSnapshot(IReadOnlyList<DeviceRecord> devices)
+    {
+        return string.Join(
+            '\n',
+            devices
+                .OrderBy(static item => item.DeviceId, StringComparer.OrdinalIgnoreCase)
+                .Select(static item => string.Join(
+                    '|',
+                    item.DeviceId,
+                    item.DeviceName,
+                    item.HostName,
+                    item.IsOnline,
+                    item.IsAuthorized,
+                    item.ScreenWidth,
+                    item.ScreenHeight,
+                    item.AgentVersion,
+                    item.LastSeenAt.UtcDateTime.Ticks,
+                    item.LastConnectedAt?.UtcDateTime.Ticks ?? 0,
+                    item.LastDisconnectedAt?.UtcDateTime.Ticks ?? 0,
+                    item.Inventory?.CpuName ?? string.Empty,
+                    item.Inventory?.InstalledMemoryBytes ?? 0,
+                    item.Inventory?.OsName ?? string.Empty,
+                    item.Inventory?.OsVersion ?? string.Empty,
+                    item.Inventory?.OsBuildNumber ?? string.Empty,
+                    item.Inventory?.OfficeVersion ?? string.Empty,
+                    item.Inventory?.LastWindowsUpdateTitle ?? string.Empty,
+                    item.Inventory?.LastWindowsUpdateInstalledAt?.UtcDateTime.Ticks ?? 0)));
+    }
+
+    private static string BuildLogSnapshot(IReadOnlyList<AgentPresenceLogRecord> logs)
+    {
+        return string.Join(
+            '\n',
+            logs
+                .OrderBy(static item => item.PresenceId)
+                .Select(static item => string.Join(
+                    '|',
+                    item.PresenceId,
+                    item.DeviceId,
+                    item.DeviceName,
+                    item.HostName,
+                    item.ConnectedAt.UtcDateTime.Ticks,
+                    item.LastSeenAt.UtcDateTime.Ticks,
+                    item.DisconnectedAt?.UtcDateTime.Ticks ?? 0,
+                    item.DisconnectReason ?? string.Empty,
+                    item.OnlineSeconds)));
+    }
+
+    private static IComparable GetDeviceGridSortValue(DeviceGridItem item, string propertyName)
+    {
+        return propertyName switch
+        {
+            nameof(DeviceGridItem.StatusText) => item.Source.IsOnline ? 1 : 0,
+            nameof(DeviceGridItem.AccessText) => item.Source.IsAuthorized ? 1 : 0,
+            nameof(DeviceGridItem.DeviceId) => item.DeviceId,
+            nameof(DeviceGridItem.DeviceName) => item.DeviceName,
+            nameof(DeviceGridItem.HostName) => item.HostName,
+            nameof(DeviceGridItem.Resolution) => item.Source.ScreenWidth * 100000 + item.Source.ScreenHeight,
+            nameof(DeviceGridItem.AgentVersion) => item.AgentVersion,
+            nameof(DeviceGridItem.HardwareSummary) => item.HardwareSummary,
+            nameof(DeviceGridItem.OsSummary) => item.OsSummary,
+            nameof(DeviceGridItem.OfficeSummary) => item.OfficeSummary,
+            nameof(DeviceGridItem.LastUpdateSummary) => item.LastUpdateSummary,
+            nameof(DeviceGridItem.LastSeenAt) => item.Source.LastSeenAt.UtcDateTime,
+            nameof(DeviceGridItem.LastConnectedAt) => item.Source.LastConnectedAt?.UtcDateTime ?? DateTime.MinValue,
+            nameof(DeviceGridItem.LastDisconnectedAt) => item.Source.LastDisconnectedAt?.UtcDateTime ?? DateTime.MinValue,
+            _ => item.DeviceId
+        };
+    }
+
+    private static IComparable GetPresenceLogGridSortValue(PresenceLogGridItem item, string propertyName)
+    {
+        return propertyName switch
+        {
+            nameof(PresenceLogGridItem.DeviceId) => item.DeviceId,
+            nameof(PresenceLogGridItem.DeviceName) => item.DeviceName,
+            nameof(PresenceLogGridItem.HostName) => item.HostName,
+            nameof(PresenceLogGridItem.ConnectedAt) => item.Source.ConnectedAt.UtcDateTime,
+            nameof(PresenceLogGridItem.LastSeenAt) => item.Source.LastSeenAt.UtcDateTime,
+            nameof(PresenceLogGridItem.DisconnectedAt) => item.Source.DisconnectedAt?.UtcDateTime ?? DateTime.MinValue,
+            nameof(PresenceLogGridItem.DisconnectReason) => item.DisconnectReason,
+            nameof(PresenceLogGridItem.OnlineSeconds) => item.Source.OnlineSeconds,
+            _ => item.RowKey
+        };
+    }
+
+    private sealed record GridSortState(string ColumnName, SortOrder Direction);
+
     private sealed class DeviceGridItem
     {
         public DeviceGridItem(DeviceRecord source)
@@ -570,6 +890,8 @@ public partial class MainForm : Form
     {
         public PresenceLogGridItem(AgentPresenceLogRecord source)
         {
+            Source = source;
+            RowKey = source.PresenceId.ToString("N");
             DeviceId = source.DeviceId;
             DeviceName = source.DeviceName;
             HostName = source.HostName;
@@ -580,6 +902,8 @@ public partial class MainForm : Form
             OnlineSeconds = source.OnlineSeconds.ToString();
         }
 
+        public AgentPresenceLogRecord Source { get; }
+        public string RowKey { get; }
         public string DeviceId { get; }
         public string DeviceName { get; }
         public string HostName { get; }
