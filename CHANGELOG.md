@@ -5,6 +5,7 @@
 - 修正 Host 主控台 `MainForm` 的裝置清單與在線紀錄 GridView 刷新行為：背景輪詢或 dashboard push 更新時，現在會保留目前排序、選取列與卷動位置，避免整個表格反覆跳動。
 - Host 主控台的裝置清單與在線紀錄現在支援所有欄位點擊排序，並會在後續自動刷新時延續使用者目前選定的排序欄位與方向。
 - 修正 Host / Server 的 Agent WebSocket 關閉容錯：當 Agent 重連取代舊連線，或對端直接斷線未完成 close handshake 時，現在會安全 close/abort 並持續完成 repository cleanup，不再把這類可預期斷線記成 `Agent WebSocket processing failed`。
+- 再修正 Host / Server 的 Agent socket 關閉判定：若 `CloseAsync` 期間底層 socket 已先被 dispose/abort，現在會視為預期結束，不再額外記錄 `Closing agent socket timed out ... ObjectDisposedException` warning。
 
 ## 2026-04-11
 

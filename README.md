@@ -92,6 +92,7 @@
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
 - Host / Server 的 Agent WebSocket 關閉路徑現在會容忍對端未完成 close handshake 的直接斷線；裝置重連取代舊連線或網路中斷時，會改記錄為可預期的 warning/資訊並持續完成 presence cleanup，不再把正常重連噴成 `Agent WebSocket processing failed`。
+- Agent socket 關閉時若底層已經先被對端或 framework dispose/abort，現在也會視為可預期結束而非 timeout 警告，避免日誌反覆出現 `Closing agent socket timed out ... ObjectDisposedException` 的假警報。
 - 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
 - 補上 `tests/RemoteDesktop.LoadTests`，可直接壓測中央 `RemoteDesktop.Server` 在 `300 Agent / 5 Viewer` 情境下的 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard latency。
 - Server heartbeat timeout 路徑已重構：

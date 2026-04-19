@@ -473,6 +473,13 @@ public sealed class DeviceBroker
         {
             _logger.LogWarning(exception, "Closing agent socket failed for {DeviceId}. Continuing repository cleanup.", session.DeviceId);
         }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested && IsExpectedSocketCloseCancellation(exception))
+        {
+            session.Abort();
+        }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             session.Abort();
@@ -520,6 +527,13 @@ public sealed class DeviceBroker
         var leftHash = SHA256.HashData(Encoding.UTF8.GetBytes(left ?? string.Empty));
         var rightHash = SHA256.HashData(Encoding.UTF8.GetBytes(right ?? string.Empty));
         return CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
+    }
+
+    private static bool IsExpectedSocketCloseCancellation(OperationCanceledException exception)
+    {
+        return exception.Message.Contains("Aborted", StringComparison.OrdinalIgnoreCase)
+               || exception.InnerException is ObjectDisposedException
+               || exception.InnerException?.Message.Contains("disposed object", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     public sealed class AgentRegistrationResult
