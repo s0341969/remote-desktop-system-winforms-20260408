@@ -51,8 +51,7 @@ public sealed class DeviceBroker
 
         if (_agents.TryRemove(descriptor.DeviceId, out var existing))
         {
-            await existing.CloseAsync("replaced-by-new-agent", cancellationToken);
-            await _repository.ClosePresenceAsync(existing.PresenceId, existing.DeviceId, "replaced-by-new-agent", cancellationToken);
+            await CloseAgentSessionSafelyAsync(existing, "replaced-by-new-agent", cancellationToken);
         }
 
         await _repository.UpsertDeviceOnlineAsync(descriptor, cancellationToken);
@@ -459,6 +458,11 @@ public sealed class DeviceBroker
             return;
         }
 
+        await CloseAgentSessionSafelyAsync(session, reason, cancellationToken);
+    }
+
+    private async Task CloseAgentSessionSafelyAsync(AgentSession session, string reason, CancellationToken cancellationToken)
+    {
         try
         {
             using var closeTimeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -467,12 +471,12 @@ public sealed class DeviceBroker
         }
         catch (WebSocketException exception)
         {
-            _logger.LogWarning(exception, "Closing agent socket failed for {DeviceId}. Continuing repository cleanup.", deviceId);
+            _logger.LogWarning(exception, "Closing agent socket failed for {DeviceId}. Continuing repository cleanup.", session.DeviceId);
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             session.Abort();
-            _logger.LogWarning(exception, "Closing agent socket timed out for {DeviceId}. Socket was aborted and repository cleanup will continue.", deviceId);
+            _logger.LogWarning(exception, "Closing agent socket timed out for {DeviceId}. Socket was aborted and repository cleanup will continue.", session.DeviceId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -480,13 +484,13 @@ public sealed class DeviceBroker
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Unexpected error while closing agent socket for {DeviceId}. Continuing repository cleanup.", deviceId);
+            _logger.LogWarning(exception, "Unexpected error while closing agent socket for {DeviceId}. Continuing repository cleanup.", session.DeviceId);
         }
         finally
         {
             await _repository.ClosePresenceAsync(session.PresenceId, session.DeviceId, reason, cancellationToken);
-            _dashboardUpdateHub.Publish("device-offline", deviceId);
-            _logger.LogInformation("Agent disconnected: {DeviceId}, reason: {Reason}", deviceId, reason);
+            _dashboardUpdateHub.Publish("device-offline", session.DeviceId);
+            _logger.LogInformation("Agent disconnected: {DeviceId}, reason: {Reason}", session.DeviceId, reason);
         }
     }
 

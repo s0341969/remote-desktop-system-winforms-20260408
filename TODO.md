@@ -16,6 +16,7 @@
 - [ ] 盤點單檔 self-contained 發佈後的啟動時間、記憶體占用與防毒掃描行為，確認現場部署不會因單檔解壓或安全軟體誤判造成額外延遲
 - [ ] 為中央儀表板推播補事件節流、批次合併與離線重連後的狀態快照策略，避免大量 Agent 變動時造成多台 Console Client 短時間連續刷新
 - [ ] 盤點 Host 主控台表格排序偏好是否要持久化，讓每台 Console Client 重開後可沿用使用者上次選定的欄位與方向
+- [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
 - [ ] 為中央 Viewer Session Lock 補更多策略，包含排隊、控制逾時、自動回收與管理員強制踢除
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
 - [ ] 繼續強化遠端檢視表單，補上快捷鍵提示與遠端輸入失敗原因的 Host 端可視化回報

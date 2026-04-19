@@ -120,6 +120,12 @@ public sealed class AgentWebSocketHandler
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
         }
+        catch (WebSocketException) when (context.RequestAborted.IsCancellationRequested || socket.State is WebSocketState.Aborted or WebSocketState.Closed)
+        {
+        }
+        catch (WebSocketException exception) when (session is not null && IsExpectedSocketClosure(exception))
+        {
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Agent WebSocket processing failed.");
@@ -131,5 +137,11 @@ public sealed class AgentWebSocketHandler
                 await _broker.DisconnectAgentAsync(session.DeviceId, "socket-closed", CancellationToken.None);
             }
         }
+    }
+
+    private static bool IsExpectedSocketClosure(WebSocketException exception)
+    {
+        return exception.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely
+            || exception.Message.Contains("closed the WebSocket connection without completing the close handshake", StringComparison.OrdinalIgnoreCase);
     }
 }
