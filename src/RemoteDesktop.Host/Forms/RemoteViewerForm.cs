@@ -1114,10 +1114,9 @@ public partial class RemoteViewerForm : Form
         _activeDownloadId = transferId;
         _lastDownloadFilePath = null;
         _downloadTargetPath = localPath;
-        _downloadTempPath = $"{localPath}.downloading";
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-        TryDeleteFile(_downloadTempPath);
-        _downloadStream = new FileStream(_downloadTempPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+        _downloadTempPath = CreateDownloadTempPath(localPath);
+        _downloadStream = new FileStream(_downloadTempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
 
         SetTransferPanelVisible(true);
         progressFileTransfer.Value = 0;
@@ -1452,9 +1451,10 @@ public partial class RemoteViewerForm : Form
                 throw new InvalidOperationException(HostUiText.Bi("本機下載目的地不存在。", "The local download target was not prepared."));
             }
 
-            TryDeleteFile(_downloadTargetPath);
-            File.Move(_downloadTempPath, _downloadTargetPath, overwrite: false);
-            _lastDownloadFilePath = _downloadTargetPath;
+            var resolvedTargetPath = ResolveDownloadTargetPath(_downloadTargetPath);
+            File.Move(_downloadTempPath, resolvedTargetPath, overwrite: false);
+            _lastDownloadFilePath = resolvedTargetPath;
+            _downloadTargetPath = resolvedTargetPath;
             _activeDownloadId = null;
             btnUploadFile.Enabled = _sessionCanControl;
             btnDownloadFile.Enabled = _sessionCanControl;
@@ -2065,6 +2065,60 @@ public partial class RemoteViewerForm : Form
         }
         catch
         {
+        }
+    }
+
+    private static string CreateDownloadTempPath(string localPath)
+    {
+        var directory = Path.GetDirectoryName(localPath)!;
+        var baseName = Path.GetFileName(localPath);
+        return Path.Combine(directory, $".{baseName}.{Guid.NewGuid():N}.downloading");
+    }
+
+    private static string ResolveDownloadTargetPath(string requestedPath)
+    {
+        if (!File.Exists(requestedPath))
+        {
+            return requestedPath;
+        }
+
+        if (TryDeleteFileIfAvailable(requestedPath))
+        {
+            return requestedPath;
+        }
+
+        var directory = Path.GetDirectoryName(requestedPath)!;
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(requestedPath);
+        var extension = Path.GetExtension(requestedPath);
+        for (var index = 1; index <= 99; index++)
+        {
+            var candidatePath = Path.Combine(directory, $"{fileNameWithoutExtension} ({index}){extension}");
+            if (!File.Exists(candidatePath))
+            {
+                return candidatePath;
+            }
+
+            if (TryDeleteFileIfAvailable(candidatePath))
+            {
+                return candidatePath;
+            }
+        }
+
+        throw new IOException(HostUiText.Bi(
+            "本機下載目的地與自動遞補檔名都被占用，無法完成下載。請關閉占用中的檔案後再試一次。",
+            "The local download target and fallback file names are all in use. Close the files in use and try again."));
+    }
+
+    private static bool TryDeleteFileIfAvailable(string path)
+    {
+        try
+        {
+            File.Delete(path);
+            return !File.Exists(path);
+        }
+        catch
+        {
+            return false;
         }
     }
 
