@@ -8,6 +8,7 @@
 - Host / Server 現在會在 Agent 註冊時擷取遠端 IP，並將 IP 同步保存到 `Memory` repository、`SqlServer` 的 `RemoteDesktopDevices` 與 `RemoteDesktopAgentPresenceLogs`。
 - Host / Server 的資料庫初始化腳本新增 `RemoteIpAddress` 欄位相容升級邏輯，既有資料庫啟動後可直接補欄位，不需要手動重建資料表。
 - 修正 Host Viewer 的下載流程在實機上可能卡住、不再跳出下載目的地視窗的問題；下載按鈕現在會先 dispatch 回 UI 訊息迴圈，`SaveFileDialog` 也改回優先由 UI 執行緒顯示，避免跨執行緒 owner/等待造成整個 Viewer 停住。
+- 修正 Agent 下載遠端檔案時的開檔分享模式；現在會用允許 `ReadWrite/Delete` 的共享讀取方式開啟檔案，改善遠端檔案仍被應用程式開啟時無法下載的問題，只有真正的獨占鎖才會繼續拒絕。
 
 ## 2026-04-19
 

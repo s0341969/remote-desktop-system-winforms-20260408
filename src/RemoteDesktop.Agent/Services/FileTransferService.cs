@@ -13,6 +13,7 @@ public sealed class FileTransferService
     private const int MaxChunkBase64Characters = 24_000;
     private const int ProgressPublishThresholdBytes = 256 * 1024;
     private const int MaxBrowserEntries = 2_000;
+    private static readonly FileShare DownloadReadSharing = FileShare.ReadWrite | FileShare.Delete;
     private readonly AgentOptions _options;
     private readonly ILogger<FileTransferService> _logger;
     private readonly FileTransferTraceService _fileTransferTraceService;
@@ -314,6 +315,8 @@ public sealed class FileTransferService
                 throw new FileNotFoundException(AgentUiText.Bi("指定的下載檔案不存在。", "The requested download file does not exist."), filePath);
             }
 
+            await using var stream = OpenDownloadReadStream(fileInfo);
+            var fileSize = stream.Length;
             await publishStatusAsync(new AgentFileTransferStatusMessage
             {
                 UploadId = transferId,
@@ -322,12 +325,11 @@ public sealed class FileTransferService
                 FileName = fileInfo.Name,
                 StoredFileName = fileInfo.Name,
                 StoredFilePath = fileInfo.FullName,
-                FileSize = fileInfo.Length,
+                FileSize = fileSize,
                 BytesTransferred = 0,
                 Message = AgentUiText.Bi($"開始傳送 {fileInfo.Name}。", $"Started sending {fileInfo.Name}.")
             }, cancellationToken);
 
-            await using var stream = fileInfo.OpenRead();
             var buffer = new byte[MaxDownloadChunkBytes];
             var sequenceNumber = 0;
             long bytesTransferred = 0;
@@ -350,14 +352,14 @@ public sealed class FileTransferService
                     FileName = fileInfo.Name,
                     StoredFileName = fileInfo.Name,
                     StoredFilePath = fileInfo.FullName,
-                    FileSize = fileInfo.Length,
+                    FileSize = fileSize,
                     BytesTransferred = bytesTransferred,
                     SequenceNumber = sequenceNumber++,
                     ChunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead),
                     Message = AgentUiText.Bi($"正在傳送 {fileInfo.Name}。", $"Sending {fileInfo.Name}.")
                 }, cancellationToken);
 
-                if (bytesTransferred - lastPublishedBytesTransferred >= ProgressPublishThresholdBytes && bytesTransferred < fileInfo.Length)
+                if (bytesTransferred - lastPublishedBytesTransferred >= ProgressPublishThresholdBytes && bytesTransferred < fileSize)
                 {
                     lastPublishedBytesTransferred = bytesTransferred;
                     await publishStatusAsync(new AgentFileTransferStatusMessage
@@ -368,9 +370,9 @@ public sealed class FileTransferService
                         FileName = fileInfo.Name,
                         StoredFileName = fileInfo.Name,
                         StoredFilePath = fileInfo.FullName,
-                        FileSize = fileInfo.Length,
+                        FileSize = fileSize,
                         BytesTransferred = bytesTransferred,
-                        Message = AgentUiText.Bi($"已傳送 {bytesTransferred} / {fileInfo.Length} 位元組。", $"Sent {bytesTransferred} of {fileInfo.Length} bytes.")
+                        Message = AgentUiText.Bi($"已傳送 {bytesTransferred} / {fileSize} 位元組。", $"Sent {bytesTransferred} of {fileSize} bytes.")
                     }, cancellationToken);
                 }
             }
@@ -383,8 +385,8 @@ public sealed class FileTransferService
                 FileName = fileInfo.Name,
                 StoredFileName = fileInfo.Name,
                 StoredFilePath = fileInfo.FullName,
-                FileSize = fileInfo.Length,
-                BytesTransferred = fileInfo.Length,
+                FileSize = fileSize,
+                BytesTransferred = fileSize,
                 Message = AgentUiText.Bi($"檔案 {fileInfo.Name} 已完成傳送。", $"File {fileInfo.Name} was sent successfully.")
             }, cancellationToken);
         }
@@ -399,6 +401,28 @@ public sealed class FileTransferService
                 publishStatusAsync,
                 cancellationToken,
                 direction: "download");
+        }
+    }
+
+    private static FileStream OpenDownloadReadStream(FileInfo fileInfo)
+    {
+        try
+        {
+            return new FileStream(
+                fileInfo.FullName,
+                FileMode.Open,
+                FileAccess.Read,
+                DownloadReadSharing,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+        }
+        catch (IOException exception)
+        {
+            throw new IOException(
+                AgentUiText.Bi(
+                    "檔案目前被其他程式以獨占方式使用，無法下載。若要下載，請先關閉對方程式或解除檔案鎖定。",
+                    "The file is currently locked exclusively by another process and cannot be downloaded. Close the application holding the file or release the lock first."),
+                exception);
         }
     }
 
