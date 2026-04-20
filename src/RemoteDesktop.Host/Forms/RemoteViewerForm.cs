@@ -699,7 +699,16 @@ public partial class RemoteViewerForm : Form
 
     private void btnDownloadFile_Click(object sender, EventArgs e)
     {
-        _ = HandleDownloadSelectionSafeAsync();
+        LogTransferTrace("host-download-clicked", "Download button was clicked.", new
+        {
+            deviceId = _device?.DeviceId,
+            viewer = _viewer?.UserName
+        });
+
+        BeginInvoke(new Action(async () =>
+        {
+            await HandleDownloadSelectionSafeAsync();
+        }));
     }
 
     private void btnActions_Click(object sender, EventArgs e)
@@ -1813,28 +1822,27 @@ public partial class RemoteViewerForm : Form
 
     protected virtual string? SelectDownloadSavePath(IWin32Window owner, string suggestedFileName)
     {
+        if (Application.MessageLoop && Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            using var dialog = BuildDownloadSaveDialog(suggestedFileName);
+            var result = owner is not null
+                ? dialog.ShowDialog(owner)
+                : dialog.ShowDialog();
+            return result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName)
+                ? dialog.FileName
+                : null;
+        }
+
         string? selectedFilePath = null;
         Exception? selectionException = null;
-        var ownerHandle = ResolveOwnerHandle(owner);
         using var completed = new ManualResetEventSlim(false);
 
         var dialogThread = new Thread(() =>
         {
             try
             {
-                using var dialog = new SaveFileDialog
-                {
-                    Title = HostUiText.Window("選擇下載目的地", "Choose where to save the download"),
-                    FileName = string.IsNullOrWhiteSpace(suggestedFileName) ? "download.bin" : suggestedFileName,
-                    RestoreDirectory = true,
-                    AddExtension = true,
-                    OverwritePrompt = true,
-                    AutoUpgradeEnabled = true
-                };
-
-                var result = ownerHandle != IntPtr.Zero
-                    ? dialog.ShowDialog(new DialogOwnerWindow(ownerHandle))
-                    : dialog.ShowDialog();
+                using var dialog = BuildDownloadSaveDialog(suggestedFileName);
+                var result = dialog.ShowDialog();
                 if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
                 {
                     selectedFilePath = dialog.FileName;
@@ -1865,6 +1873,19 @@ public partial class RemoteViewerForm : Form
         }
 
         return selectedFilePath;
+    }
+
+    private static SaveFileDialog BuildDownloadSaveDialog(string suggestedFileName)
+    {
+        return new SaveFileDialog
+        {
+            Title = HostUiText.Window("選擇下載目的地", "Choose where to save the download"),
+            FileName = string.IsNullOrWhiteSpace(suggestedFileName) ? "download.bin" : suggestedFileName,
+            RestoreDirectory = true,
+            AddExtension = true,
+            OverwritePrompt = true,
+            AutoUpgradeEnabled = true
+        };
     }
 
     private static IntPtr ResolveOwnerHandle(IWin32Window owner)

@@ -7,6 +7,7 @@
 - Host 主控台的「已連線裝置」與「在線紀錄」新增 IP 位址欄位，並保留既有的全欄位排序能力。
 - Host / Server 現在會在 Agent 註冊時擷取遠端 IP，並將 IP 同步保存到 `Memory` repository、`SqlServer` 的 `RemoteDesktopDevices` 與 `RemoteDesktopAgentPresenceLogs`。
 - Host / Server 的資料庫初始化腳本新增 `RemoteIpAddress` 欄位相容升級邏輯，既有資料庫啟動後可直接補欄位，不需要手動重建資料表。
+- 修正 Host Viewer 的下載流程在實機上可能卡住、不再跳出下載目的地視窗的問題；下載按鈕現在會先 dispatch 回 UI 訊息迴圈，`SaveFileDialog` 也改回優先由 UI 執行緒顯示，避免跨執行緒 owner/等待造成整個 Viewer 停住。
 
 ## 2026-04-19
 

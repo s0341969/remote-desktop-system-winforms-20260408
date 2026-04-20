@@ -23,7 +23,7 @@
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面
 - [ ] 繼續強化遠端檢視表單，補上快捷鍵提示與遠端輸入失敗原因的 Host 端可視化回報
 - [ ] 增加 Host 與 Agent 的操作日誌匯出功能
-- [ ] 擴充 UI 自動化測試，納入遠端檢視視窗實際 attach、設定儲存後重新載入驗證、剪貼簿同步流程，以及驗證 Host/Agent build 識別資訊、獨立 STA 選檔流程、縮放下拉互動穩定性、全螢幕、download 流程與長路徑版面顯示的端到端測試
+- [ ] 擴充 UI 自動化測試，納入遠端檢視視窗實際 attach、設定儲存後重新載入驗證、剪貼簿同步流程，以及驗證 Host/Agent build 識別資訊、下載目的地 `SaveFileDialog` 實機顯示、縮放下拉互動穩定性、全螢幕、download 流程與長路徑版面顯示的端到端測試
 - [ ] 為 `tests/RemoteDesktop.LoadTests` 補長時間 burn-in 與 `500+ Agent` 變體，驗證 `SqlServer` 儲存模式下的 CPU、RAM、DB latency 與 dashboard push 穩定性
 - [ ] 將 [CAPACITY_PLAN.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CAPACITY_PLAN.md) 的 `Memory` 模式容量結論擴充到 `SqlServer` 模式，並補正式環境建議值
 - [ ] 為設定檔持久化流程補上獨立的檔案層測試，覆蓋異常 JSON 與缺欄位回復策略
