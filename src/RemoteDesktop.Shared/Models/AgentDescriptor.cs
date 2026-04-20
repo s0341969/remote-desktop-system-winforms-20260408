@@ -8,6 +8,8 @@ public sealed class AgentDescriptor
 
     public string HostName { get; init; } = string.Empty;
 
+    public string RemoteIpAddress { get; init; } = string.Empty;
+
     public string AgentVersion { get; init; } = string.Empty;
 
     public int ScreenWidth { get; init; }

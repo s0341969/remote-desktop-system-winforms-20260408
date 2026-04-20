@@ -49,9 +49,13 @@
 - Host 主畫面現在會直接顯示裝置的硬體摘要、作業系統、Office 與最後更新摘要，方便操作端先做盤點，不必先開 Viewer。
 - Host 主畫面新增「裝置詳細資訊」，可展開查看目前裝置的完整 inventory 與歷史快照，不必再只看摘要欄位。
 - Host 主畫面的「已連線裝置」與「在線紀錄」表格現在支援點擊所有欄位標題排序，並在背景自動更新時保留目前排序、選取列與卷動位置，避免 GridView 在輪詢刷新時一直跳動。
+- Host 主畫面新增「查詢主機名稱 / IP」功能，可直接用電腦名稱、主機名稱、裝置名稱、裝置 ID 或 IP 位址快速篩選裝置與在線紀錄。
+- Host / Server 現在會記錄 Agent 連入時的遠端 IP 位址；主畫面的「已連線裝置」與「在線紀錄」都會顯示 IP 欄位，`Memory` 與 `SqlServer` 模式也都會同步保存。
+- 中央模式主控台收到大量 dashboard push 事件時，現在會先做短時間節流再刷新，並在 Grid 重綁資料時暫停重繪，降低多台 Agent 在線時的整頁閃爍感。
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`。
 - Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；若 CPU、記憶體、磁碟、OS、Office 或最後更新摘要改變，Host / Server 會留下變更歷史。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory`，會保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要；`Memory` 模式也會同步保留最近歷史。
+- `SqlServer` 模式新增 `dbo.RemoteDesktopDevices.RemoteIpAddress` 與 `dbo.RemoteDesktopAgentPresenceLogs.RemoteIpAddress`，用來持久化 Agent 遠端 IP，舊資料庫也會在啟動時自動補欄位。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。
 - Host 預設改為 `Memory` 儲存模式，不再要求先安裝 LocalDB 才能啟動；需要持久化時可在 Host 設定中勾選資料庫模式。
 - Host 主畫面新增設定入口，Agent 主畫面新增設定入口。

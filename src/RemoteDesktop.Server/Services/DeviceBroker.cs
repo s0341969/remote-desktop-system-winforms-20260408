@@ -26,7 +26,7 @@ public sealed class DeviceBroker
         _logger = logger;
     }
 
-    public async Task<AgentRegistrationResult> RegisterAgentAsync(WebSocket socket, AgentHelloMessage message, CancellationToken cancellationToken)
+    public async Task<AgentRegistrationResult> RegisterAgentAsync(WebSocket socket, AgentHelloMessage message, string remoteIpAddress, CancellationToken cancellationToken)
     {
         if (!FixedTimeEquals(message.AccessKey, _options.SharedAccessKey))
         {
@@ -38,6 +38,7 @@ public sealed class DeviceBroker
             DeviceId = message.DeviceId?.Trim() ?? string.Empty,
             DeviceName = message.DeviceName?.Trim() ?? string.Empty,
             HostName = message.HostName?.Trim() ?? string.Empty,
+            RemoteIpAddress = remoteIpAddress?.Trim() ?? string.Empty,
             AgentVersion = message.AgentVersion?.Trim() ?? string.Empty,
             ScreenWidth = message.ScreenWidth,
             ScreenHeight = message.ScreenHeight,

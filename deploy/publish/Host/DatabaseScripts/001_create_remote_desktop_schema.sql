@@ -5,6 +5,7 @@ BEGIN
         DeviceId NVARCHAR(64) NOT NULL CONSTRAINT PK_RemoteDesktopDevices PRIMARY KEY,
         DeviceName NVARCHAR(128) NOT NULL,
         HostName NVARCHAR(128) NOT NULL,
+        RemoteIpAddress NVARCHAR(64) NULL,
         AgentVersion NVARCHAR(32) NOT NULL,
         ScreenWidth INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenWidth DEFAULT (0),
         ScreenHeight INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenHeight DEFAULT (0),
@@ -32,6 +33,12 @@ IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'InventoryCollectedAt') IS NULL
 BEGIN
     ALTER TABLE dbo.RemoteDesktopDevices
     ADD InventoryCollectedAt DATETIMEOFFSET(0) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'RemoteIpAddress') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ADD RemoteIpAddress NVARCHAR(64) NULL;
 END;
 
 IF OBJECT_ID(N'dbo.RemoteDesktopInventoryHistory', N'U') IS NULL
@@ -98,12 +105,19 @@ BEGIN
         DeviceId NVARCHAR(64) NOT NULL,
         DeviceName NVARCHAR(128) NOT NULL,
         HostName NVARCHAR(128) NOT NULL,
+        RemoteIpAddress NVARCHAR(64) NULL,
         AgentVersion NVARCHAR(32) NOT NULL,
         ConnectedAt DATETIMEOFFSET(0) NOT NULL,
         LastSeenAt DATETIMEOFFSET(0) NOT NULL,
         DisconnectedAt DATETIMEOFFSET(0) NULL,
         DisconnectReason NVARCHAR(64) NULL
     );
+END;
+
+IF COL_LENGTH(N'dbo.RemoteDesktopAgentPresenceLogs', N'RemoteIpAddress') IS NULL
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopAgentPresenceLogs
+    ADD RemoteIpAddress NVARCHAR(64) NULL;
 END;
 
 IF NOT EXISTS

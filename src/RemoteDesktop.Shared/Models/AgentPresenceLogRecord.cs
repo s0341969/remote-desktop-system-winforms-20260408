@@ -10,6 +10,8 @@ public sealed class AgentPresenceLogRecord
 
     public string HostName { get; init; } = string.Empty;
 
+    public string RemoteIpAddress { get; init; } = string.Empty;
+
     public string AgentVersion { get; init; } = string.Empty;
 
     public DateTimeOffset ConnectedAt { get; init; }

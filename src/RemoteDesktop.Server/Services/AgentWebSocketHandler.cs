@@ -46,7 +46,7 @@ public sealed class AgentWebSocketHandler
                 return;
             }
 
-            var registration = await _broker.RegisterAgentAsync(socket, hello, context.RequestAborted);
+            var registration = await _broker.RegisterAgentAsync(socket, hello, ResolveRemoteIpAddress(context), context.RequestAborted);
             if (registration.Unauthorized)
             {
                 await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Unauthorized agent.", context.RequestAborted);
@@ -143,5 +143,18 @@ public sealed class AgentWebSocketHandler
     {
         return exception.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely
             || exception.Message.Contains("closed the WebSocket connection without completing the close handshake", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveRemoteIpAddress(HttpContext context)
+    {
+        var address = context.Connection.RemoteIpAddress;
+        if (address is null)
+        {
+            return string.Empty;
+        }
+
+        return address.IsIPv4MappedToIPv6
+            ? address.MapToIPv4().ToString()
+            : address.ToString();
     }
 }

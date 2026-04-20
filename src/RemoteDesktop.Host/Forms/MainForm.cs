@@ -4,14 +4,21 @@ using RemoteDesktop.Host.Forms.Users;
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
+using System.Runtime.InteropServices;
 
 namespace RemoteDesktop.Host.Forms;
 
 public partial class MainForm : Form
 {
+    private const int DashboardTakeLimit = 500;
     private readonly System.Windows.Forms.Timer _refreshTimer;
+    private readonly System.Windows.Forms.Timer _dashboardRefreshDebounceTimer;
     private readonly BindingSource _deviceBindingSource = new();
     private readonly BindingSource _logBindingSource = new();
+    private readonly TextBox _txtSearch = new();
+    private readonly Button _btnApplySearch = new();
+    private readonly Button _btnClearSearch = new();
+    private readonly Label _lblSearch = new();
     private IMainDashboardDataSource? _dashboardDataSource;
     private ControlServerOptions? _options;
     private RemoteViewerFormFactory? _remoteViewerFormFactory;
@@ -23,23 +30,35 @@ public partial class MainForm : Form
     private bool _refreshing;
     private string? _lastRefreshErrorMessage;
     private bool _dashboardUpdateSubscriptionAttached;
+    private List<DeviceGridItem> _allDeviceGridItems = [];
     private List<DeviceGridItem> _deviceGridItems = [];
+    private List<PresenceLogGridItem> _allLogGridItems = [];
     private List<PresenceLogGridItem> _logGridItems = [];
     private string? _deviceGridSnapshot;
     private string? _logGridSnapshot;
     private GridSortState? _deviceGridSortState = new(nameof(DeviceGridItem.DeviceId), SortOrder.Ascending);
     private GridSortState? _logGridSortState = new(nameof(PresenceLogGridItem.ConnectedAt), SortOrder.Descending);
+    private string _searchKeyword = string.Empty;
+    private bool _dashboardRefreshRequested;
 
     public MainForm()
     {
         InitializeComponent();
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        UpdateStyles();
         InitializeUiText();
+        InitializeSearchUi();
         InitializeGridBehavior();
         _refreshTimer = new System.Windows.Forms.Timer
         {
             Interval = 5000
         };
         _refreshTimer.Tick += async (_, _) => await RefreshDashboardAsync();
+        _dashboardRefreshDebounceTimer = new System.Windows.Forms.Timer
+        {
+            Interval = 800
+        };
+        _dashboardRefreshDebounceTimer.Tick += DashboardRefreshDebounceTimer_Tick;
     }
 
     public void Bind(
@@ -95,7 +114,7 @@ public partial class MainForm : Form
             await _dashboardDataSource.StartAsync(CancellationToken.None);
         }
 
-        await RefreshDashboardAsync(showErrorDialog: true);
+        await RefreshDashboardAsync(showErrorDialog: true, isUserInitiated: true);
         _refreshTimer.Start();
     }
 
@@ -103,6 +122,8 @@ public partial class MainForm : Form
     {
         _refreshTimer.Stop();
         _refreshTimer.Dispose();
+        _dashboardRefreshDebounceTimer.Stop();
+        _dashboardRefreshDebounceTimer.Dispose();
         if (_dashboardDataSource is not null && _dashboardUpdateSubscriptionAttached)
         {
             _dashboardDataSource.DashboardUpdated -= DashboardDataSource_DashboardUpdated;
@@ -115,7 +136,7 @@ public partial class MainForm : Form
 
     private async void btnRefresh_Click(object sender, EventArgs e)
     {
-        await RefreshDashboardAsync(showErrorDialog: true);
+        await RefreshDashboardAsync(showErrorDialog: true, isUserInitiated: true);
     }
 
     private void btnOpenViewer_Click(object sender, EventArgs e)
@@ -191,7 +212,7 @@ public partial class MainForm : Form
         UpdateSelectedDeviceActions();
     }
 
-    private async Task RefreshDashboardAsync(bool showErrorDialog = false)
+    private async Task RefreshDashboardAsync(bool showErrorDialog = false, bool isUserInitiated = false)
     {
         if (_dashboardDataSource is null || _refreshing)
         {
@@ -201,19 +222,22 @@ public partial class MainForm : Form
         try
         {
             _refreshing = true;
-            btnRefresh.Enabled = false;
-            btnOpenViewer.Enabled = false;
-            btnDeviceDetails.Enabled = false;
-            btnApproveDevice.Enabled = false;
-            btnAudit.Enabled = false;
-            btnSettings.Enabled = false;
-            btnRevokeDevice.Enabled = false;
-            btnUsers.Enabled = false;
-            lblStatusValue.Text = HostUiText.Bi("重新整理中...", "Refreshing...");
+            if (isUserInitiated)
+            {
+                btnRefresh.Enabled = false;
+                btnOpenViewer.Enabled = false;
+                btnDeviceDetails.Enabled = false;
+                btnApproveDevice.Enabled = false;
+                btnAudit.Enabled = false;
+                btnSettings.Enabled = false;
+                btnRevokeDevice.Enabled = false;
+                btnUsers.Enabled = false;
+                lblStatusValue.Text = HostUiText.Bi("重新整理中...", "Refreshing...");
+            }
 
             var selectedDeviceId = GetSelectedDevice()?.Source.DeviceId;
-            var devicesTask = _dashboardDataSource.GetDevicesAsync(100, CancellationToken.None);
-            var logsTask = _dashboardDataSource.GetPresenceLogsAsync(100, CancellationToken.None);
+            var devicesTask = _dashboardDataSource.GetDevicesAsync(DashboardTakeLimit, CancellationToken.None);
+            var logsTask = _dashboardDataSource.GetPresenceLogsAsync(DashboardTakeLimit, CancellationToken.None);
             await Task.WhenAll(devicesTask, logsTask);
 
             var devices = await devicesTask;
@@ -247,12 +271,15 @@ public partial class MainForm : Form
         finally
         {
             _refreshing = false;
-            btnRefresh.Enabled = true;
-            btnAudit.Enabled = _signedInUser?.CanViewAuditLogs == true;
-            btnApproveDevice.Enabled = false;
-            btnSettings.Enabled = _signedInUser?.CanManageSettings == true;
-            btnRevokeDevice.Enabled = false;
-            btnUsers.Enabled = _signedInUser?.CanManageUsers == true;
+            if (isUserInitiated)
+            {
+                btnRefresh.Enabled = true;
+                btnAudit.Enabled = _signedInUser?.CanViewAuditLogs == true;
+                btnApproveDevice.Enabled = false;
+                btnSettings.Enabled = _signedInUser?.CanManageSettings == true;
+                btnRevokeDevice.Enabled = false;
+                btnUsers.Enabled = _signedInUser?.CanManageUsers == true;
+            }
             UpdateSelectedDeviceActions();
         }
     }
@@ -264,7 +291,25 @@ public partial class MainForm : Form
             return;
         }
 
-        BeginInvoke(async () => await RefreshDashboardAsync());
+        _dashboardRefreshRequested = true;
+        if (_dashboardRefreshDebounceTimer.Enabled)
+        {
+            _dashboardRefreshDebounceTimer.Stop();
+        }
+
+        _dashboardRefreshDebounceTimer.Start();
+    }
+
+    private async void DashboardRefreshDebounceTimer_Tick(object? sender, EventArgs e)
+    {
+        _dashboardRefreshDebounceTimer.Stop();
+        if (!_dashboardRefreshRequested || IsDisposed)
+        {
+            return;
+        }
+
+        _dashboardRefreshRequested = false;
+        await RefreshDashboardAsync();
     }
 
     private void BindDeviceGrid(IReadOnlyList<DeviceRecord> devices, string? selectedDeviceId)
@@ -272,13 +317,10 @@ public partial class MainForm : Form
         var snapshot = BuildDeviceSnapshot(devices);
         if (!string.Equals(_deviceGridSnapshot, snapshot, StringComparison.Ordinal))
         {
-            _deviceGridItems = devices.Select(static item => new DeviceGridItem(item)).ToList();
-            ApplySort(_deviceGridItems, _deviceGridSortState, GetDeviceGridSortValue);
-            UpdateBindingSource(gridDevices, _deviceBindingSource, _deviceGridItems);
+            _allDeviceGridItems = devices.Select(static item => new DeviceGridItem(item)).ToList();
+            RebindDeviceGrid(selectedDeviceId);
             _deviceGridSnapshot = snapshot;
         }
-
-        RestoreDeviceSelection(selectedDeviceId);
     }
 
     private void BindLogGrid(IReadOnlyList<AgentPresenceLogRecord> logs)
@@ -289,9 +331,8 @@ public partial class MainForm : Form
             return;
         }
 
-        _logGridItems = logs.Select(static item => new PresenceLogGridItem(item)).ToList();
-        ApplySort(_logGridItems, _logGridSortState, GetPresenceLogGridSortValue);
-        UpdateBindingSource(gridLogs, _logBindingSource, _logGridItems);
+        _allLogGridItems = logs.Select(static item => new PresenceLogGridItem(item)).ToList();
+        RebindLogGrid();
         _logGridSnapshot = snapshot;
     }
 
@@ -440,40 +481,41 @@ public partial class MainForm : Form
         lblLogsTitle.Text = HostUiText.Bi("在線紀錄", "Presence logs");
         lblStatusCaption.Text = HostUiText.Bi("狀態", "Status");
         lblStatusValue.Text = HostUiText.Bi("就緒", "Ready");
+        _lblSearch.Text = HostUiText.Bi("查詢主機名稱 / IP", "Search host / IP");
+        HostUiText.ApplyButton(_btnApplySearch, "查詢", "Search");
+        HostUiText.ApplyButton(_btnClearSearch, "清除", "Clear");
 
-        if (gridDevices.Columns.Count >= 14)
-        {
-            gridDevices.Columns[0].HeaderText = HostUiText.Bi("狀態", "Status");
-            gridDevices.Columns[1].HeaderText = HostUiText.Bi("存取", "Access");
-            gridDevices.Columns[2].HeaderText = HostUiText.Bi("裝置 ID", "Device ID");
-            gridDevices.Columns[3].HeaderText = HostUiText.Bi("裝置名稱", "Device name");
-            gridDevices.Columns[4].HeaderText = HostUiText.Bi("主機名稱", "Host name");
-            gridDevices.Columns[5].HeaderText = HostUiText.Bi("解析度", "Resolution");
-            gridDevices.Columns[6].HeaderText = HostUiText.Bi("Agent 版本", "Agent version");
-            gridDevices.Columns[7].HeaderText = HostUiText.Bi("硬體摘要", "Hardware");
-            gridDevices.Columns[8].HeaderText = HostUiText.Bi("作業系統", "OS");
-            gridDevices.Columns[9].HeaderText = HostUiText.Bi("Office", "Office");
-            gridDevices.Columns[10].HeaderText = HostUiText.Bi("最後更新", "Last update");
-            gridDevices.Columns[11].HeaderText = HostUiText.Bi("最後上線", "Last seen");
-            gridDevices.Columns[12].HeaderText = HostUiText.Bi("最後連線", "Last connected");
-            gridDevices.Columns[13].HeaderText = HostUiText.Bi("最後離線", "Last disconnected");
-        }
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.StatusText), "狀態", "Status");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.AccessText), "存取", "Access");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.DeviceId), "裝置 ID", "Device ID");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.DeviceName), "裝置名稱", "Device name");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.HostName), "主機名稱", "Host name");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.RemoteIpAddress), "IP 位址", "IP address");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.Resolution), "解析度", "Resolution");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.AgentVersion), "Agent 版本", "Agent version");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.HardwareSummary), "硬體摘要", "Hardware");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.OsSummary), "作業系統", "OS");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.OfficeSummary), "Office", "Office");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.LastUpdateSummary), "最後更新", "Last update");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.LastSeenAt), "最後上線", "Last seen");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.LastConnectedAt), "最後連線", "Last connected");
+        SetGridColumnHeader(gridDevices, nameof(DeviceGridItem.LastDisconnectedAt), "最後離線", "Last disconnected");
 
-        if (gridLogs.Columns.Count >= 8)
-        {
-            gridLogs.Columns[0].HeaderText = HostUiText.Bi("裝置 ID", "Device ID");
-            gridLogs.Columns[1].HeaderText = HostUiText.Bi("裝置名稱", "Device name");
-            gridLogs.Columns[2].HeaderText = HostUiText.Bi("主機名稱", "Host name");
-            gridLogs.Columns[3].HeaderText = HostUiText.Bi("連線時間", "Connected at");
-            gridLogs.Columns[4].HeaderText = HostUiText.Bi("最後上線", "Last seen");
-            gridLogs.Columns[5].HeaderText = HostUiText.Bi("離線時間", "Disconnected at");
-            gridLogs.Columns[6].HeaderText = HostUiText.Bi("離線原因", "Disconnect reason");
-            gridLogs.Columns[7].HeaderText = HostUiText.Bi("在線秒數", "Online seconds");
-        }
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.DeviceId), "裝置 ID", "Device ID");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.DeviceName), "裝置名稱", "Device name");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.HostName), "主機名稱", "Host name");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.RemoteIpAddress), "IP 位址", "IP address");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.ConnectedAt), "連線時間", "Connected at");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.LastSeenAt), "最後上線", "Last seen");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.DisconnectedAt), "離線時間", "Disconnected at");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.DisconnectReason), "離線原因", "Disconnect reason");
+        SetGridColumnHeader(gridLogs, nameof(PresenceLogGridItem.OnlineSeconds), "在線秒數", "Online seconds");
     }
 
     private void InitializeGridBehavior()
     {
+        EnsureSearchInputBehavior();
+        EnsureIpColumns();
         ConfigureGridForStableRefresh(gridDevices);
         ConfigureGridForStableRefresh(gridLogs);
 
@@ -486,6 +528,7 @@ public partial class MainForm : Form
 
     private static void ConfigureGridForStableRefresh(DataGridView grid)
     {
+        TryEnableDoubleBuffer(grid);
         grid.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
         grid.AllowUserToResizeRows = false;
 
@@ -504,8 +547,7 @@ public partial class MainForm : Form
 
         var column = gridDevices.Columns[e.ColumnIndex];
         _deviceGridSortState = BuildNextSortState(_deviceGridSortState, column.DataPropertyName);
-        ApplySort(_deviceGridItems, _deviceGridSortState, GetDeviceGridSortValue);
-        UpdateBindingSource(gridDevices, _deviceBindingSource, _deviceGridItems);
+        RebindDeviceGrid(GetSelectedDevice()?.Source.DeviceId);
     }
 
     private void gridLogs_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
@@ -517,8 +559,149 @@ public partial class MainForm : Form
 
         var column = gridLogs.Columns[e.ColumnIndex];
         _logGridSortState = BuildNextSortState(_logGridSortState, column.DataPropertyName);
+        RebindLogGrid();
+    }
+
+    private void InitializeSearchUi()
+    {
+        _lblSearch.AutoSize = true;
+        _lblSearch.Location = new Point(390, 10);
+        _lblSearch.Name = "lblSearch";
+
+        _txtSearch.Location = new Point(390, 35);
+        _txtSearch.Name = "txtSearch";
+        _txtSearch.Size = new Size(145, 23);
+        _txtSearch.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+
+        _btnApplySearch.Location = new Point(542, 22);
+        _btnApplySearch.Name = "btnApplySearch";
+        _btnApplySearch.Size = new Size(48, 36);
+        _btnApplySearch.Click += btnApplySearch_Click;
+
+        _btnClearSearch.Location = new Point(594, 22);
+        _btnClearSearch.Name = "btnClearSearch";
+        _btnClearSearch.Size = new Size(48, 36);
+        _btnClearSearch.Click += btnClearSearch_Click;
+
+        panelHeader.Controls.Add(_lblSearch);
+        panelHeader.Controls.Add(_txtSearch);
+        panelHeader.Controls.Add(_btnApplySearch);
+        panelHeader.Controls.Add(_btnClearSearch);
+    }
+
+    private void EnsureSearchInputBehavior()
+    {
+        _txtSearch.KeyDown += txtSearch_KeyDown;
+    }
+
+    private void EnsureIpColumns()
+    {
+        InsertGridColumnIfMissing(gridDevices, nameof(DeviceGridItem.RemoteIpAddress), 5, "IP", 95F);
+        InsertGridColumnIfMissing(gridLogs, nameof(PresenceLogGridItem.RemoteIpAddress), 3, "IP", 95F);
+    }
+
+    private static void InsertGridColumnIfMissing(DataGridView grid, string dataPropertyName, int index, string headerText, float fillWeight)
+    {
+        if (grid.Columns.Cast<DataGridViewColumn>().Any(column => string.Equals(column.DataPropertyName, dataPropertyName, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var column = new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = dataPropertyName,
+            HeaderText = headerText,
+            FillWeight = fillWeight
+        };
+
+        grid.Columns.Insert(index, column);
+    }
+
+    private static void SetGridColumnHeader(DataGridView grid, string dataPropertyName, string zhTw, string enUs)
+    {
+        var column = grid.Columns.Cast<DataGridViewColumn>()
+            .FirstOrDefault(item => string.Equals(item.DataPropertyName, dataPropertyName, StringComparison.Ordinal));
+        if (column is not null)
+        {
+            column.HeaderText = HostUiText.Bi(zhTw, enUs);
+        }
+    }
+
+    private static void TryEnableDoubleBuffer(DataGridView grid)
+    {
+        typeof(DataGridView).InvokeMember(
+            "DoubleBuffered",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
+            null,
+            grid,
+            [true]);
+    }
+
+    private void btnApplySearch_Click(object? sender, EventArgs e)
+    {
+        ApplySearchFromInput();
+    }
+
+    private void btnClearSearch_Click(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_txtSearch.Text) && string.IsNullOrWhiteSpace(_searchKeyword))
+        {
+            return;
+        }
+
+        _txtSearch.Text = string.Empty;
+        ApplySearchFromInput();
+    }
+
+    private void txtSearch_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.Enter)
+        {
+            return;
+        }
+
+        ApplySearchFromInput();
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+    }
+
+    private void ApplySearchFromInput()
+    {
+        var nextKeyword = _txtSearch.Text.Trim();
+        if (string.Equals(_searchKeyword, nextKeyword, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _searchKeyword = nextKeyword;
+        _btnClearSearch.Enabled = !string.IsNullOrWhiteSpace(_searchKeyword);
+        RebindDeviceGrid(GetSelectedDevice()?.Source.DeviceId);
+        RebindLogGrid();
+    }
+
+    private void RebindDeviceGrid(string? selectedDeviceId)
+    {
+        _deviceGridItems = ApplySearch(_allDeviceGridItems, static (item, keyword) => item.MatchesSearch(keyword));
+        ApplySort(_deviceGridItems, _deviceGridSortState, GetDeviceGridSortValue);
+        UpdateBindingSource(gridDevices, _deviceBindingSource, _deviceGridItems);
+        RestoreDeviceSelection(selectedDeviceId);
+    }
+
+    private void RebindLogGrid()
+    {
+        _logGridItems = ApplySearch(_allLogGridItems, static (item, keyword) => item.MatchesSearch(keyword));
         ApplySort(_logGridItems, _logGridSortState, GetPresenceLogGridSortValue);
         UpdateBindingSource(gridLogs, _logBindingSource, _logGridItems);
+    }
+
+    private List<TItem> ApplySearch<TItem>(IReadOnlyList<TItem> items, Func<TItem, string, bool> matches)
+    {
+        if (string.IsNullOrWhiteSpace(_searchKeyword))
+        {
+            return items.ToList();
+        }
+
+        return items.Where(item => matches(item, _searchKeyword)).ToList();
     }
 
     private void RestoreDeviceSelection(string? selectedDeviceId)
@@ -546,12 +729,14 @@ public partial class MainForm : Form
         var selectedKey = GetSelectedKey(grid);
         var firstDisplayedRowIndex = GetFirstDisplayedRowIndex(grid);
 
-        bindingSource.DataSource = null;
+        using var redrawScope = new RedrawScope(grid);
+        grid.SuspendLayout();
         bindingSource.DataSource = items;
 
         RestoreSelectedRow(grid, selectedKey);
         RestoreFirstDisplayedRow(grid, firstDisplayedRowIndex);
         ApplySortGlyphs(grid, grid == gridDevices ? _deviceGridSortState : _logGridSortState);
+        grid.ResumeLayout();
     }
 
     private static string? GetSelectedKey(DataGridView grid)
@@ -701,6 +886,7 @@ public partial class MainForm : Form
                     item.DeviceId,
                     item.DeviceName,
                     item.HostName,
+                    item.RemoteIpAddress,
                     item.IsOnline,
                     item.IsAuthorized,
                     item.ScreenWidth,
@@ -731,6 +917,7 @@ public partial class MainForm : Form
                     item.DeviceId,
                     item.DeviceName,
                     item.HostName,
+                    item.RemoteIpAddress,
                     item.ConnectedAt.UtcDateTime.Ticks,
                     item.LastSeenAt.UtcDateTime.Ticks,
                     item.DisconnectedAt?.UtcDateTime.Ticks ?? 0,
@@ -747,6 +934,7 @@ public partial class MainForm : Form
             nameof(DeviceGridItem.DeviceId) => item.DeviceId,
             nameof(DeviceGridItem.DeviceName) => item.DeviceName,
             nameof(DeviceGridItem.HostName) => item.HostName,
+            nameof(DeviceGridItem.RemoteIpAddress) => item.RemoteIpAddress,
             nameof(DeviceGridItem.Resolution) => item.Source.ScreenWidth * 100000 + item.Source.ScreenHeight,
             nameof(DeviceGridItem.AgentVersion) => item.AgentVersion,
             nameof(DeviceGridItem.HardwareSummary) => item.HardwareSummary,
@@ -767,6 +955,7 @@ public partial class MainForm : Form
             nameof(PresenceLogGridItem.DeviceId) => item.DeviceId,
             nameof(PresenceLogGridItem.DeviceName) => item.DeviceName,
             nameof(PresenceLogGridItem.HostName) => item.HostName,
+            nameof(PresenceLogGridItem.RemoteIpAddress) => item.RemoteIpAddress,
             nameof(PresenceLogGridItem.ConnectedAt) => item.Source.ConnectedAt.UtcDateTime,
             nameof(PresenceLogGridItem.LastSeenAt) => item.Source.LastSeenAt.UtcDateTime,
             nameof(PresenceLogGridItem.DisconnectedAt) => item.Source.DisconnectedAt?.UtcDateTime ?? DateTime.MinValue,
@@ -778,6 +967,36 @@ public partial class MainForm : Form
 
     private sealed record GridSortState(string ColumnName, SortOrder Direction);
 
+    private sealed class RedrawScope : IDisposable
+    {
+        private const int WmSetRedraw = 0x000B;
+        private readonly Control _control;
+
+        public RedrawScope(Control control)
+        {
+            _control = control;
+            if (_control.IsHandleCreated)
+            {
+                SendMessage(_control.Handle, WmSetRedraw, IntPtr.Zero, IntPtr.Zero);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_control.IsHandleCreated)
+            {
+                return;
+            }
+
+            SendMessage(_control.Handle, WmSetRedraw, new IntPtr(1), IntPtr.Zero);
+            _control.Invalidate(true);
+            _control.Update();
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    }
+
     private sealed class DeviceGridItem
     {
         public DeviceGridItem(DeviceRecord source)
@@ -788,6 +1007,7 @@ public partial class MainForm : Form
             DeviceId = source.DeviceId;
             DeviceName = source.DeviceName;
             HostName = source.HostName;
+            RemoteIpAddress = string.IsNullOrWhiteSpace(source.RemoteIpAddress) ? "-" : source.RemoteIpAddress;
             Resolution = $"{source.ScreenWidth} x {source.ScreenHeight}";
             AgentVersion = source.AgentVersion;
             HardwareSummary = BuildHardwareSummary(source.Inventory);
@@ -805,6 +1025,7 @@ public partial class MainForm : Form
         public string DeviceId { get; }
         public string DeviceName { get; }
         public string HostName { get; }
+        public string RemoteIpAddress { get; }
         public string Resolution { get; }
         public string AgentVersion { get; }
         public string HardwareSummary { get; }
@@ -884,6 +1105,14 @@ public partial class MainForm : Form
             var trimmed = value.Trim();
             return trimmed.Length <= maxLength ? trimmed : $"{trimmed[..(maxLength - 3)]}...";
         }
+
+        public bool MatchesSearch(string keyword)
+        {
+            return ContainsSearch(DeviceId, keyword)
+                || ContainsSearch(DeviceName, keyword)
+                || ContainsSearch(HostName, keyword)
+                || ContainsSearch(RemoteIpAddress, keyword);
+        }
     }
 
     private sealed class PresenceLogGridItem
@@ -895,6 +1124,7 @@ public partial class MainForm : Form
             DeviceId = source.DeviceId;
             DeviceName = source.DeviceName;
             HostName = source.HostName;
+            RemoteIpAddress = string.IsNullOrWhiteSpace(source.RemoteIpAddress) ? "-" : source.RemoteIpAddress;
             ConnectedAt = source.ConnectedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
             LastSeenAt = source.LastSeenAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
             DisconnectedAt = source.DisconnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
@@ -907,11 +1137,26 @@ public partial class MainForm : Form
         public string DeviceId { get; }
         public string DeviceName { get; }
         public string HostName { get; }
+        public string RemoteIpAddress { get; }
         public string ConnectedAt { get; }
         public string LastSeenAt { get; }
         public string DisconnectedAt { get; }
         public string DisconnectReason { get; }
         public string OnlineSeconds { get; }
+
+        public bool MatchesSearch(string keyword)
+        {
+            return ContainsSearch(DeviceId, keyword)
+                || ContainsSearch(DeviceName, keyword)
+                || ContainsSearch(HostName, keyword)
+                || ContainsSearch(RemoteIpAddress, keyword);
+        }
+    }
+
+    private static bool ContainsSearch(string? value, string keyword)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FormatDisconnectReason(string reason)

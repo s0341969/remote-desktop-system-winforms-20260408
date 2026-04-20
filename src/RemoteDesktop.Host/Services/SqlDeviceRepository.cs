@@ -49,6 +49,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     @deviceId AS DeviceId,
                     @deviceName AS DeviceName,
                     @hostName AS HostName,
+                    @remoteIpAddress AS RemoteIpAddress,
                     @agentVersion AS AgentVersion,
                     @screenWidth AS ScreenWidth,
                     @screenHeight AS ScreenHeight,
@@ -61,6 +62,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 UPDATE SET
                     DeviceName = source.DeviceName,
                     HostName = source.HostName,
+                    RemoteIpAddress = source.RemoteIpAddress,
                     AgentVersion = source.AgentVersion,
                     ScreenWidth = source.ScreenWidth,
                     ScreenHeight = source.ScreenHeight,
@@ -76,6 +78,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     DeviceId,
                     DeviceName,
                     HostName,
+                    RemoteIpAddress,
                     AgentVersion,
                     ScreenWidth,
                     ScreenHeight,
@@ -95,6 +98,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                     source.DeviceId,
                     source.DeviceName,
                     source.HostName,
+                    source.RemoteIpAddress,
                     source.AgentVersion,
                     source.ScreenWidth,
                     source.ScreenHeight,
@@ -117,6 +121,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
             AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
             AddStringParameter(command, "@hostName", descriptor.HostName, 256);
+            AddNullableStringParameter(command, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
             AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
             command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = descriptor.ScreenWidth;
             command.Parameters.Add("@screenHeight", SqlDbType.Int).Value = descriptor.ScreenHeight;
@@ -138,6 +143,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 DeviceId,
                 DeviceName,
                 HostName,
+                RemoteIpAddress,
                 AgentVersion,
                 ConnectedAt,
                 LastSeenAt,
@@ -150,6 +156,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 @deviceId,
                 @deviceName,
                 @hostName,
+                @remoteIpAddress,
                 @agentVersion,
                 @connectedAt,
                 @lastSeenAt,
@@ -164,6 +171,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
             AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
             AddStringParameter(command, "@hostName", descriptor.HostName, 256);
+            AddNullableStringParameter(command, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
             AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
             command.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = now;
             command.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
@@ -257,6 +265,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 DeviceId,
                 DeviceName,
                 HostName,
+                RemoteIpAddress,
                 AgentVersion,
                 ScreenWidth,
                 ScreenHeight,
@@ -296,6 +305,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 DeviceId,
                 DeviceName,
                 HostName,
+                RemoteIpAddress,
                 AgentVersion,
                 ScreenWidth,
                 ScreenHeight,
@@ -330,6 +340,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 DeviceId,
                 DeviceName,
                 HostName,
+                RemoteIpAddress,
                 AgentVersion,
                 ConnectedAt,
                 LastSeenAt,
@@ -355,12 +366,13 @@ public sealed class SqlDeviceRepository : IDeviceRepository
                 DeviceId = reader.GetString(1),
                 DeviceName = reader.GetString(2),
                 HostName = reader.GetString(3),
-                AgentVersion = reader.GetString(4),
-                ConnectedAt = reader.GetFieldValue<DateTimeOffset>(5),
-                LastSeenAt = reader.GetFieldValue<DateTimeOffset>(6),
-                DisconnectedAt = reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
-                DisconnectReason = reader.IsDBNull(8) ? null : reader.GetString(8),
-                OnlineSeconds = reader.GetInt32(9)
+                RemoteIpAddress = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                AgentVersion = reader.GetString(5),
+                ConnectedAt = reader.GetFieldValue<DateTimeOffset>(6),
+                LastSeenAt = reader.GetFieldValue<DateTimeOffset>(7),
+                DisconnectedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+                DisconnectReason = reader.IsDBNull(9) ? null : reader.GetString(9),
+                OnlineSeconds = reader.GetInt32(10)
             });
         }
 
@@ -597,18 +609,19 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             DeviceId = reader.GetString(0),
             DeviceName = reader.GetString(1),
             HostName = reader.GetString(2),
-            AgentVersion = reader.GetString(3),
-            ScreenWidth = reader.GetInt32(4),
-            ScreenHeight = reader.GetInt32(5),
-            Inventory = DeserializeInventory(reader, 6),
-            IsOnline = reader.GetBoolean(8),
-            IsAuthorized = reader.GetBoolean(9),
-            AuthorizedAt = reader.IsDBNull(10) ? null : reader.GetFieldValue<DateTimeOffset>(10),
-            AuthorizedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
-            CreatedAt = reader.GetFieldValue<DateTimeOffset>(12),
-            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(13),
-            LastConnectedAt = reader.IsDBNull(14) ? null : reader.GetFieldValue<DateTimeOffset>(14),
-            LastDisconnectedAt = reader.IsDBNull(15) ? null : reader.GetFieldValue<DateTimeOffset>(15)
+            RemoteIpAddress = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+            AgentVersion = reader.GetString(4),
+            ScreenWidth = reader.GetInt32(5),
+            ScreenHeight = reader.GetInt32(6),
+            Inventory = DeserializeInventory(reader, 7),
+            IsOnline = reader.GetBoolean(9),
+            IsAuthorized = reader.GetBoolean(10),
+            AuthorizedAt = reader.IsDBNull(11) ? null : reader.GetFieldValue<DateTimeOffset>(11),
+            AuthorizedBy = reader.IsDBNull(12) ? null : reader.GetString(12),
+            CreatedAt = reader.GetFieldValue<DateTimeOffset>(13),
+            LastSeenAt = reader.GetFieldValue<DateTimeOffset>(14),
+            LastConnectedAt = reader.IsDBNull(15) ? null : reader.GetFieldValue<DateTimeOffset>(15),
+            LastDisconnectedAt = reader.IsDBNull(16) ? null : reader.GetFieldValue<DateTimeOffset>(16)
         };
     }
 }

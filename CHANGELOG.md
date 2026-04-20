@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-04-20
+
+- 修正 Host 主控台在中央模式下可能因大量 dashboard push 事件而持續刷新、造成整頁閃爍的問題；現在會先做短時間事件節流，Grid 重綁時也會暫停重繪，降低畫面閃爍感。
+- Host 主控台新增「查詢主機名稱 / IP」輸入框，可依裝置 ID、裝置名稱、主機名稱與 IP 位址即時篩選「已連線裝置」與「在線紀錄」。
+- Host 主控台的「已連線裝置」與「在線紀錄」新增 IP 位址欄位，並保留既有的全欄位排序能力。
+- Host / Server 現在會在 Agent 註冊時擷取遠端 IP，並將 IP 同步保存到 `Memory` repository、`SqlServer` 的 `RemoteDesktopDevices` 與 `RemoteDesktopAgentPresenceLogs`。
+- Host / Server 的資料庫初始化腳本新增 `RemoteIpAddress` 欄位相容升級邏輯，既有資料庫啟動後可直接補欄位，不需要手動重建資料表。
+
 ## 2026-04-19
 
 - 修正 Host 主控台 `MainForm` 的裝置清單與在線紀錄 GridView 刷新行為：背景輪詢或 dashboard push 更新時，現在會保留目前排序、選取列與卷動位置，避免整個表格反覆跳動。
