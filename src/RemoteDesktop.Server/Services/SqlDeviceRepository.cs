@@ -117,7 +117,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
         await ExecuteAsync(sql, command =>
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
             AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
             AddStringParameter(command, "@hostName", descriptor.HostName, 256);
@@ -134,7 +134,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
     public async Task<Guid> StartPresenceAsync(AgentDescriptor descriptor, CancellationToken cancellationToken)
     {
         var presenceId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.Now;
 
         const string sql = """
             INSERT INTO dbo.RemoteDesktopAgentPresenceLogs
@@ -199,7 +199,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
         return ExecuteAsync(sql, command =>
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
             AddStringParameter(command, "@deviceId", deviceId, 128);
             command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = screenWidth;
@@ -228,7 +228,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
         return ExecuteAsync(sql, command =>
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
             AddStringParameter(command, "@deviceId", deviceId, 128);
             AddStringParameter(command, "@reason", reason, 128);
@@ -250,7 +250,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
         return ExecuteAsync(sql, command =>
         {
-            var changedAt = DateTimeOffset.UtcNow;
+            var changedAt = DateTimeOffset.Now;
             AddStringParameter(command, "@deviceId", deviceId, 128);
             command.Parameters.Add("@isAuthorized", SqlDbType.Bit).Value = isAuthorized;
             command.Parameters.Add("@changedAt", SqlDbType.DateTimeOffset).Value = changedAt;
@@ -404,7 +404,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(updateCommand, "@deviceId", deviceId, 128);
             AddNullableStringParameter(updateCommand, "@inventoryJson", serializedInventory, -1);
             updateCommand.Parameters.Add("@inventoryCollectedAt", SqlDbType.DateTimeOffset).Value = inventory.CollectedAt;
-            updateCommand.Parameters.Add("@updatedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.UtcNow;
+            updateCommand.Parameters.Add("@updatedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.Now;
             await updateCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -442,7 +442,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         AddStringParameter(insertCommand, "@inventoryFingerprint", fingerprint, 64);
         AddNullableStringParameter(insertCommand, "@inventoryJson", serializedInventory, -1);
         insertCommand.Parameters.Add("@collectedAt", SqlDbType.DateTimeOffset).Value = inventory.CollectedAt;
-        insertCommand.Parameters.Add("@recordedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.UtcNow;
+        insertCommand.Parameters.Add("@recordedAt", SqlDbType.DateTimeOffset).Value = DateTimeOffset.Now;
         AddStringParameter(insertCommand, "@changeSummary", changeSummary, 512);
         await insertCommand.ExecuteNonQueryAsync(cancellationToken);
     }

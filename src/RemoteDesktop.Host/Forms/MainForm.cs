@@ -11,6 +11,7 @@ namespace RemoteDesktop.Host.Forms;
 public partial class MainForm : Form
 {
     private const int DashboardTakeLimit = 500;
+    private const string DisplayTimestampFormat = "yyyy-MM-dd HH:mm:ss zzz";
     private readonly System.Windows.Forms.Timer _refreshTimer;
     private readonly System.Windows.Forms.Timer _dashboardRefreshDebounceTimer;
     private readonly BindingSource _deviceBindingSource = new();
@@ -49,6 +50,7 @@ public partial class MainForm : Form
         InitializeUiText();
         InitializeSearchUi();
         InitializeGridBehavior();
+        InitializeResponsiveLayout();
         _refreshTimer = new System.Windows.Forms.Timer
         {
             Interval = 5000
@@ -59,6 +61,7 @@ public partial class MainForm : Form
             Interval = 800
         };
         _dashboardRefreshDebounceTimer.Tick += DashboardRefreshDebounceTimer_Tick;
+        Resize += MainForm_Resize;
     }
 
     public void Bind(
@@ -397,11 +400,6 @@ public partial class MainForm : Form
 
     private DeviceGridItem? GetSelectedDevice()
     {
-        if (gridDevices.SelectedRows.Count > 0)
-        {
-            return gridDevices.SelectedRows[0].DataBoundItem as DeviceGridItem;
-        }
-
         return gridDevices.CurrentRow?.DataBoundItem as DeviceGridItem;
     }
 
@@ -526,11 +524,36 @@ public partial class MainForm : Form
         gridLogs.ColumnHeaderMouseClick += gridLogs_ColumnHeaderMouseClick;
     }
 
+    private void InitializeResponsiveLayout()
+    {
+        layoutRoot.RowStyles[0].Height = 126F;
+        layoutRoot.RowStyles[1].Height = 176F;
+
+        ConfigureSummaryLabel(lblConsoleNameCaption, isValue: false);
+        ConfigureSummaryLabel(lblConsoleNameValue, isValue: true);
+        ConfigureSummaryLabel(lblServerUrlCaption, isValue: false);
+        ConfigureSummaryLabel(lblServerUrlValue, isValue: true);
+        ConfigureSummaryLabel(lblHealthUrlCaption, isValue: false);
+        ConfigureSummaryLabel(lblHealthUrlValue, isValue: true);
+        ConfigureSummaryLabel(lblSignedInUserCaption, isValue: false);
+        ConfigureSummaryLabel(lblSignedInUserValue, isValue: true);
+        ConfigureSummaryLabel(lblOnlineCountCaption, isValue: false);
+        ConfigureSummaryLabel(lblOnlineCountValue, isValue: true);
+        ConfigureSummaryLabel(lblTotalCountCaption, isValue: false);
+        ConfigureSummaryLabel(lblTotalCountValue, isValue: true);
+        ConfigureSummaryLabel(lblLastRefreshCaption, isValue: false);
+        ConfigureSummaryLabel(lblLastRefreshValue, isValue: true);
+
+        RefreshResponsiveLayout();
+    }
+
     private static void ConfigureGridForStableRefresh(DataGridView grid)
     {
         TryEnableDoubleBuffer(grid);
         grid.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
         grid.AllowUserToResizeRows = false;
+        grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
+        grid.MultiSelect = false;
 
         foreach (DataGridViewColumn column in grid.Columns)
         {
@@ -565,22 +588,22 @@ public partial class MainForm : Form
     private void InitializeSearchUi()
     {
         _lblSearch.AutoSize = true;
-        _lblSearch.Location = new Point(390, 10);
+        _lblSearch.Location = new Point(18, 70);
         _lblSearch.Name = "lblSearch";
 
-        _txtSearch.Location = new Point(390, 35);
+        _txtSearch.Location = new Point(18, 91);
         _txtSearch.Name = "txtSearch";
-        _txtSearch.Size = new Size(145, 23);
+        _txtSearch.Size = new Size(240, 23);
         _txtSearch.Anchor = AnchorStyles.Top | AnchorStyles.Left;
 
-        _btnApplySearch.Location = new Point(542, 22);
+        _btnApplySearch.Location = new Point(266, 89);
         _btnApplySearch.Name = "btnApplySearch";
-        _btnApplySearch.Size = new Size(48, 36);
+        _btnApplySearch.Size = new Size(62, 28);
         _btnApplySearch.Click += btnApplySearch_Click;
 
-        _btnClearSearch.Location = new Point(594, 22);
+        _btnClearSearch.Location = new Point(334, 89);
         _btnClearSearch.Name = "btnClearSearch";
-        _btnClearSearch.Size = new Size(48, 36);
+        _btnClearSearch.Size = new Size(62, 28);
         _btnClearSearch.Click += btnClearSearch_Click;
 
         panelHeader.Controls.Add(_lblSearch);
@@ -718,7 +741,6 @@ public partial class MainForm : Form
                 continue;
             }
 
-            row.Selected = true;
             gridDevices.CurrentCell = row.Cells[0];
             return;
         }
@@ -727,13 +749,14 @@ public partial class MainForm : Form
     private void UpdateBindingSource<TItem>(DataGridView grid, BindingSource bindingSource, List<TItem> items)
     {
         var selectedKey = GetSelectedKey(grid);
+        var currentColumnIndex = GetCurrentColumnIndex(grid);
         var firstDisplayedRowIndex = GetFirstDisplayedRowIndex(grid);
 
         using var redrawScope = new RedrawScope(grid);
         grid.SuspendLayout();
         bindingSource.DataSource = items;
 
-        RestoreSelectedRow(grid, selectedKey);
+        RestoreSelectedRow(grid, selectedKey, currentColumnIndex);
         RestoreFirstDisplayedRow(grid, firstDisplayedRowIndex);
         ApplySortGlyphs(grid, grid == gridDevices ? _deviceGridSortState : _logGridSortState);
         grid.ResumeLayout();
@@ -741,9 +764,7 @@ public partial class MainForm : Form
 
     private static string? GetSelectedKey(DataGridView grid)
     {
-        var item = grid.SelectedRows.Count > 0
-            ? grid.SelectedRows[0].DataBoundItem
-            : grid.CurrentRow?.DataBoundItem;
+        var item = grid.CurrentRow?.DataBoundItem;
 
         return item switch
         {
@@ -751,6 +772,16 @@ public partial class MainForm : Form
             PresenceLogGridItem logItem => logItem.RowKey,
             _ => null
         };
+    }
+
+    private static int GetCurrentColumnIndex(DataGridView grid)
+    {
+        if (grid.CurrentCell is null)
+        {
+            return 0;
+        }
+
+        return grid.CurrentCell.ColumnIndex >= 0 ? grid.CurrentCell.ColumnIndex : 0;
     }
 
     private static int? GetFirstDisplayedRowIndex(DataGridView grid)
@@ -766,7 +797,7 @@ public partial class MainForm : Form
         }
     }
 
-    private static void RestoreSelectedRow(DataGridView grid, string? selectedKey)
+    private static void RestoreSelectedRow(DataGridView grid, string? selectedKey, int currentColumnIndex)
     {
         if (string.IsNullOrWhiteSpace(selectedKey))
         {
@@ -787,10 +818,10 @@ public partial class MainForm : Form
                 continue;
             }
 
-            row.Selected = true;
             if (row.Cells.Count > 0)
             {
-                grid.CurrentCell = row.Cells[0];
+                var targetColumnIndex = Math.Clamp(currentColumnIndex, 0, row.Cells.Count - 1);
+                grid.CurrentCell = row.Cells[targetColumnIndex];
             }
 
             return;
@@ -873,6 +904,39 @@ public partial class MainForm : Form
             column.HeaderCell.SortGlyphDirection = sortState.Direction;
             return;
         }
+    }
+
+    private void MainForm_Resize(object? sender, EventArgs e)
+    {
+        RefreshResponsiveLayout();
+    }
+
+    private void RefreshResponsiveLayout()
+    {
+        var maxTitleWidth = Math.Max(320, btnAudit.Left - lblTitle.Left - 24);
+        var measuredTitleSize = TextRenderer.MeasureText(
+            lblTitle.Text,
+            lblTitle.Font,
+            new Size(maxTitleWidth, int.MaxValue),
+            TextFormatFlags.WordBreak);
+
+        lblTitle.AutoSize = false;
+        lblTitle.Location = new Point(16, 12);
+        lblTitle.Size = new Size(maxTitleWidth, measuredTitleSize.Height);
+
+        _lblSearch.Location = new Point(18, lblTitle.Bottom + 8);
+        _txtSearch.Location = new Point(18, _lblSearch.Bottom + 4);
+        _btnApplySearch.Location = new Point(_txtSearch.Right + 8, _txtSearch.Top - 1);
+        _btnClearSearch.Location = new Point(_btnApplySearch.Right + 6, _txtSearch.Top - 1);
+    }
+
+    private static void ConfigureSummaryLabel(Label label, bool isValue)
+    {
+        label.AutoSize = false;
+        label.Dock = DockStyle.Fill;
+        label.AutoEllipsis = true;
+        label.Margin = isValue ? new Padding(6, 0, 12, 0) : new Padding(12, 0, 6, 0);
+        label.TextAlign = ContentAlignment.MiddleLeft;
     }
 
     private static string BuildDeviceSnapshot(IReadOnlyList<DeviceRecord> devices)
@@ -1014,9 +1078,9 @@ public partial class MainForm : Form
             OsSummary = BuildOsSummary(source.Inventory);
             OfficeSummary = BuildOfficeSummary(source.Inventory);
             LastUpdateSummary = BuildLastUpdateSummary(source.Inventory);
-            LastSeenAt = source.LastSeenAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-            LastConnectedAt = source.LastConnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-            LastDisconnectedAt = source.LastDisconnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+            LastSeenAt = FormatDisplayTimestamp(source.LastSeenAt);
+            LastConnectedAt = source.LastConnectedAt.HasValue ? FormatDisplayTimestamp(source.LastConnectedAt.Value) : "-";
+            LastDisconnectedAt = source.LastDisconnectedAt.HasValue ? FormatDisplayTimestamp(source.LastDisconnectedAt.Value) : "-";
         }
 
         public DeviceRecord Source { get; }
@@ -1077,7 +1141,7 @@ public partial class MainForm : Form
             var title = string.IsNullOrWhiteSpace(inventory.LastWindowsUpdateTitle)
                 ? "未知更新"
                 : TrimForGrid(inventory.LastWindowsUpdateTitle, 30);
-            var date = inventory.LastWindowsUpdateInstalledAt?.LocalDateTime.ToString("yyyy-MM-dd") ?? "未知日期";
+            var date = inventory.LastWindowsUpdateInstalledAt?.ToString("yyyy-MM-dd") ?? "未知日期";
             return $"{title} / {date}";
         }
 
@@ -1125,9 +1189,9 @@ public partial class MainForm : Form
             DeviceName = source.DeviceName;
             HostName = source.HostName;
             RemoteIpAddress = string.IsNullOrWhiteSpace(source.RemoteIpAddress) ? "-" : source.RemoteIpAddress;
-            ConnectedAt = source.ConnectedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-            LastSeenAt = source.LastSeenAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-            DisconnectedAt = source.DisconnectedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+            ConnectedAt = FormatDisplayTimestamp(source.ConnectedAt);
+            LastSeenAt = FormatDisplayTimestamp(source.LastSeenAt);
+            DisconnectedAt = source.DisconnectedAt.HasValue ? FormatDisplayTimestamp(source.DisconnectedAt.Value) : "-";
             DisconnectReason = string.IsNullOrWhiteSpace(source.DisconnectReason) ? "-" : FormatDisconnectReason(source.DisconnectReason);
             OnlineSeconds = source.OnlineSeconds.ToString();
         }
@@ -1157,6 +1221,11 @@ public partial class MainForm : Form
     {
         return !string.IsNullOrWhiteSpace(value)
             && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatDisplayTimestamp(DateTimeOffset value)
+    {
+        return value.ToString(DisplayTimestampFormat);
     }
 
     private static string FormatDisconnectReason(string reason)

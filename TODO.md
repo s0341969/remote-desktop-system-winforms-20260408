@@ -17,6 +17,7 @@
 - [ ] 盤點單檔 self-contained 發佈後的啟動時間、記憶體占用與防毒掃描行為，確認現場部署不會因單檔解壓或安全軟體誤判造成額外延遲
 - [ ] 為中央儀表板推播補更完整的批次合併與離線重連後狀態快照策略；目前已先補主控台事件節流，但大量 Agent 變動時仍可再進一步減少 API 讀取量
 - [ ] 盤點 Host 主控台表格排序偏好是否要持久化，讓每台 Console Client 重開後可沿用使用者上次選定的欄位與方向
+- [ ] 盤點 Host 主控台時間欄位是否要再提供「本地時間 / UTC / 原始 offset」切換，避免跨時區主機混用時只有單一顯示模式
 - [ ] 盤點 Host 主控台的查詢條件是否要持久化，並評估是否要補 IP 搜尋高亮、清單筆數統計與更進階篩選
 - [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
 - [ ] 為 Host / Server 的 Agent socket 關閉流程再補 `ObjectDisposedException` / aborted close 自動化測試，確認不會把預期關閉誤記成 timeout warning

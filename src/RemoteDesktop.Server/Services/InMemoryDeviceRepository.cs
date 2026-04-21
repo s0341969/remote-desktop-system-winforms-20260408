@@ -15,7 +15,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
     {
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             var createdAt = _devices.TryGetValue(descriptor.DeviceId, out var existing)
                 ? existing.CreatedAt
                 : now;
@@ -51,7 +51,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
         var id = Guid.NewGuid();
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             _presenceLogs[id] = new AgentPresenceLogRecord
             {
                 PresenceId = id,
@@ -73,7 +73,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
     {
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             if (_devices.TryGetValue(deviceId, out var device))
             {
                 _devices[deviceId] = new DeviceRecord
@@ -123,7 +123,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
     {
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             if (_devices.TryGetValue(deviceId, out var device))
             {
                 _devices[deviceId] = new DeviceRecord
@@ -178,7 +178,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                 return Task.CompletedTask;
             }
 
-            var authorizedAt = isAuthorized ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+            var authorizedAt = isAuthorized ? DateTimeOffset.Now : (DateTimeOffset?)null;
             _devices[deviceId] = new DeviceRecord
             {
                 DeviceId = device.DeviceId,
@@ -315,7 +315,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
             InventoryFingerprint = fingerprint,
             ChangeSummary = BuildChangeSummary(previousInventory, currentInventory),
             CollectedAt = currentInventory.CollectedAt,
-            RecordedAt = DateTimeOffset.UtcNow,
+            RecordedAt = DateTimeOffset.Now,
             Inventory = currentInventory
         });
     }

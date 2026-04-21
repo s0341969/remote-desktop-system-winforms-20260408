@@ -107,8 +107,8 @@ partial class MainForm
         layoutRoot.Location = new Point(0, 0);
         layoutRoot.Name = "layoutRoot";
         layoutRoot.RowCount = 4;
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));
-        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 168F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 126F));
+        layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 176F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
         layoutRoot.Size = new Size(1500, 861);
@@ -125,10 +125,10 @@ partial class MainForm
         panelHeader.Dock = DockStyle.Fill;
         panelHeader.Location = new Point(3, 3);
         panelHeader.Name = "panelHeader";
-        panelHeader.Size = new Size(1494, 86);
+        panelHeader.Size = new Size(1494, 120);
         // btnAudit
         btnAudit.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnAudit.Location = new Point(651, 18);
+        btnAudit.Location = new Point(651, 20);
         btnAudit.Name = "btnAudit";
         btnAudit.Size = new Size(96, 46);
         btnAudit.TabIndex = 0;
@@ -137,7 +137,7 @@ partial class MainForm
         btnAudit.Click += btnAudit_Click;
         // btnUsers
         btnUsers.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnUsers.Location = new Point(753, 18);
+        btnUsers.Location = new Point(753, 20);
         btnUsers.Name = "btnUsers";
         btnUsers.Size = new Size(96, 46);
         btnUsers.TabIndex = 1;
@@ -146,7 +146,7 @@ partial class MainForm
         btnUsers.Click += btnUsers_Click;
         // btnSettings
         btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnSettings.Location = new Point(855, 18);
+        btnSettings.Location = new Point(855, 20);
         btnSettings.Name = "btnSettings";
         btnSettings.Size = new Size(96, 46);
         btnSettings.TabIndex = 2;
@@ -155,7 +155,7 @@ partial class MainForm
         btnSettings.Click += btnSettings_Click;
         // btnDeviceDetails
         btnDeviceDetails.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnDeviceDetails.Location = new Point(945, 18);
+        btnDeviceDetails.Location = new Point(945, 20);
         btnDeviceDetails.Name = "btnDeviceDetails";
         btnDeviceDetails.Size = new Size(116, 46);
         btnDeviceDetails.TabIndex = 3;
@@ -164,7 +164,7 @@ partial class MainForm
         btnDeviceDetails.Click += btnDeviceDetails_Click;
         // btnRevokeDevice
         btnRevokeDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnRevokeDevice.Location = new Point(1061, 18);
+        btnRevokeDevice.Location = new Point(1061, 20);
         btnRevokeDevice.Name = "btnRevokeDevice";
         btnRevokeDevice.Size = new Size(96, 46);
         btnRevokeDevice.TabIndex = 4;
@@ -173,7 +173,7 @@ partial class MainForm
         btnRevokeDevice.Click += btnRevokeDevice_Click;
         // btnApproveDevice
         btnApproveDevice.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnApproveDevice.Location = new Point(1157, 18);
+        btnApproveDevice.Location = new Point(1157, 20);
         btnApproveDevice.Name = "btnApproveDevice";
         btnApproveDevice.Size = new Size(96, 46);
         btnApproveDevice.TabIndex = 5;
@@ -183,7 +183,7 @@ partial class MainForm
         // btnOpenViewer
         btnOpenViewer.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnOpenViewer.Enabled = false;
-        btnOpenViewer.Location = new Point(1253, 18);
+        btnOpenViewer.Location = new Point(1253, 20);
         btnOpenViewer.Name = "btnOpenViewer";
         btnOpenViewer.Size = new Size(110, 46);
         btnOpenViewer.TabIndex = 6;
@@ -192,7 +192,7 @@ partial class MainForm
         btnOpenViewer.Click += btnOpenViewer_Click;
         // btnRefresh
         btnRefresh.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnRefresh.Location = new Point(1369, 18);
+        btnRefresh.Location = new Point(1369, 20);
         btnRefresh.Name = "btnRefresh";
         btnRefresh.Size = new Size(104, 46);
         btnRefresh.TabIndex = 7;
@@ -202,7 +202,7 @@ partial class MainForm
         // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 18F, FontStyle.Bold, GraphicsUnit.Point);
-        lblTitle.Location = new Point(16, 18);
+        lblTitle.Location = new Point(16, 12);
         lblTitle.Name = "lblTitle";
         lblTitle.Size = new Size(362, 60);
         lblTitle.TabIndex = 7;
@@ -228,14 +228,14 @@ partial class MainForm
         layoutSummary.Controls.Add(lblLastRefreshCaption, 0, 3);
         layoutSummary.Controls.Add(lblLastRefreshValue, 1, 3);
         layoutSummary.Dock = DockStyle.Fill;
-        layoutSummary.Location = new Point(3, 95);
+        layoutSummary.Location = new Point(3, 129);
         layoutSummary.Name = "layoutSummary";
         layoutSummary.RowCount = 4;
         layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         layoutSummary.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        layoutSummary.Size = new Size(1378, 160);
+        layoutSummary.Size = new Size(1494, 170);
         // lblConsoleNameCaption
         lblConsoleNameCaption.AutoSize = true;
         lblConsoleNameCaption.Name = "lblConsoleNameCaption";
@@ -359,7 +359,7 @@ partial class MainForm
         gridDevices.MultiSelect = false;
         gridDevices.Name = "gridDevices";
         gridDevices.ReadOnly = true;
-        gridDevices.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        gridDevices.SelectionMode = DataGridViewSelectionMode.CellSelect;
         gridDevices.Size = new Size(1359, 266);
         gridDevices.TabIndex = 1;
         gridDevices.CellDoubleClick += gridDevices_CellDoubleClick;
@@ -383,7 +383,7 @@ partial class MainForm
         gridLogs.MultiSelect = false;
         gridLogs.Name = "gridLogs";
         gridLogs.ReadOnly = true;
-        gridLogs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        gridLogs.SelectionMode = DataGridViewSelectionMode.CellSelect;
         gridLogs.Size = new Size(1359, 263);
         gridLogs.TabIndex = 1;
         // lblDevicesTitle
