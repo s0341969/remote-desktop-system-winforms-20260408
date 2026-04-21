@@ -55,6 +55,7 @@
 - Host / Server 現在會記錄 Agent 連入時的遠端 IP 位址；主畫面的「已連線裝置」與「在線紀錄」都會顯示 IP 欄位，`Memory` 與 `SqlServer` 模式也都會同步保存。
 - 中央模式主控台收到大量 dashboard push 事件時，現在會先做短時間節流再刷新，並在 Grid 重綁資料時暫停重繪，降低多台 Agent 在線時的整頁閃爍感。
 - Host 主畫面的 header 與摘要資訊區已重新整理版面，長標題、build 資訊、Server URL 與健康檢查位址改為可自動換行或省略，不再互相遮蓋；兩個 Grid 也改為單格選取，避免每次點欄位都整列反白。
+- Host 主畫面的單台裝置查詢列已改回固定顯示在「已連線裝置」上方，不再掛在主標題區，因此不會因 header 重排或長 build 字串而看起來像消失。
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`。
 - Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；若 CPU、記憶體、磁碟、OS、Office 或最後更新摘要改變，Host / Server 會留下變更歷史。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory`，會保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要；`Memory` 模式也會同步保留最近歷史。

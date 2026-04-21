@@ -588,28 +588,28 @@ public partial class MainForm : Form
     private void InitializeSearchUi()
     {
         _lblSearch.AutoSize = true;
-        _lblSearch.Location = new Point(18, 70);
         _lblSearch.Name = "lblSearch";
 
-        _txtSearch.Location = new Point(18, 91);
         _txtSearch.Name = "txtSearch";
         _txtSearch.Size = new Size(240, 23);
-        _txtSearch.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _txtSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
-        _btnApplySearch.Location = new Point(266, 89);
         _btnApplySearch.Name = "btnApplySearch";
         _btnApplySearch.Size = new Size(62, 28);
+        _btnApplySearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _btnApplySearch.Click += btnApplySearch_Click;
 
-        _btnClearSearch.Location = new Point(334, 89);
         _btnClearSearch.Name = "btnClearSearch";
         _btnClearSearch.Size = new Size(62, 28);
+        _btnClearSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _btnClearSearch.Click += btnClearSearch_Click;
 
-        panelHeader.Controls.Add(_lblSearch);
-        panelHeader.Controls.Add(_txtSearch);
-        panelHeader.Controls.Add(_btnApplySearch);
-        panelHeader.Controls.Add(_btnClearSearch);
+        splitMain.Panel1.Controls.Add(_lblSearch);
+        splitMain.Panel1.Controls.Add(_txtSearch);
+        splitMain.Panel1.Controls.Add(_btnApplySearch);
+        splitMain.Panel1.Controls.Add(_btnClearSearch);
+        splitMain.Panel1.Resize += (_, _) => RefreshSearchLayout();
+        RefreshSearchLayout();
     }
 
     private void EnsureSearchInputBehavior()
@@ -923,11 +923,33 @@ public partial class MainForm : Form
         lblTitle.AutoSize = false;
         lblTitle.Location = new Point(16, 12);
         lblTitle.Size = new Size(maxTitleWidth, measuredTitleSize.Height);
+    }
 
-        _lblSearch.Location = new Point(18, lblTitle.Bottom + 8);
-        _txtSearch.Location = new Point(18, _lblSearch.Bottom + 4);
-        _btnApplySearch.Location = new Point(_txtSearch.Right + 8, _txtSearch.Top - 1);
-        _btnClearSearch.Location = new Point(_btnApplySearch.Right + 6, _txtSearch.Top - 1);
+    private void RefreshSearchLayout()
+    {
+        if (!splitMain.Panel1.IsHandleCreated && splitMain.Panel1.ClientSize.Width <= 0)
+        {
+            return;
+        }
+
+        const int top = 8;
+        const int rightPadding = 10;
+        const int gap = 6;
+        const int buttonWidth = 62;
+        const int minTextWidth = 200;
+        const int maxTextWidth = 280;
+
+        _lblSearch.Location = new Point(220, 12);
+
+        var clearX = splitMain.Panel1.ClientSize.Width - rightPadding - buttonWidth;
+        var applyX = clearX - gap - buttonWidth;
+        var textWidth = Math.Clamp(applyX - gap - (_lblSearch.Right + gap), minTextWidth, maxTextWidth);
+        var textX = applyX - gap - textWidth;
+
+        _txtSearch.Location = new Point(textX, top);
+        _txtSearch.Size = new Size(textWidth, 23);
+        _btnApplySearch.Location = new Point(applyX, top - 1);
+        _btnClearSearch.Location = new Point(clearX, top - 1);
     }
 
     private static void ConfigureSummaryLabel(Label label, bool isValue)

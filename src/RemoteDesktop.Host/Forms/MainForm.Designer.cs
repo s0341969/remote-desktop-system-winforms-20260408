@@ -355,12 +355,12 @@ partial class MainForm
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastSeenAt", HeaderText = "Last seen", FillWeight = 110F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastConnectedAt", HeaderText = "Last connected", FillWeight = 110F });
         gridDevices.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastDisconnectedAt", HeaderText = "Last disconnected", FillWeight = 110F });
-        gridDevices.Location = new Point(10, 37);
+        gridDevices.Location = new Point(10, 45);
         gridDevices.MultiSelect = false;
         gridDevices.Name = "gridDevices";
         gridDevices.ReadOnly = true;
         gridDevices.SelectionMode = DataGridViewSelectionMode.CellSelect;
-        gridDevices.Size = new Size(1359, 266);
+        gridDevices.Size = new Size(1359, 258);
         gridDevices.TabIndex = 1;
         gridDevices.CellDoubleClick += gridDevices_CellDoubleClick;
         gridDevices.SelectionChanged += gridDevices_SelectionChanged;
@@ -389,7 +389,7 @@ partial class MainForm
         // lblDevicesTitle
         lblDevicesTitle.AutoSize = true;
         lblDevicesTitle.Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold, GraphicsUnit.Point);
-        lblDevicesTitle.Location = new Point(10, 9);
+        lblDevicesTitle.Location = new Point(10, 12);
         lblDevicesTitle.Name = "lblDevicesTitle";
         lblDevicesTitle.Size = new Size(135, 19);
         lblDevicesTitle.TabIndex = 0;
