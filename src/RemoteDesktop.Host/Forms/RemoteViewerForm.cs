@@ -68,6 +68,7 @@ public partial class RemoteViewerForm : Form
     private long _lastMoveAt;
     private bool _commandFailed;
     private bool _observeOnlyNoticeShown;
+    private bool _fileTransferNoticeShown;
     private string? _activeUploadId;
     private string? _activeDownloadId;
     private string? _lastUploadedFilePath;
@@ -128,8 +129,8 @@ public partial class RemoteViewerForm : Form
         lblResolutionValue.Text = $"{device.ScreenWidth} x {device.ScreenHeight}";
         btnSendClipboard.Enabled = _sessionCanControl;
         btnGetClipboard.Enabled = _sessionCanControl;
-        btnUploadFile.Enabled = _sessionCanControl;
-        btnDownloadFile.Enabled = _sessionCanControl;
+        btnUploadFile.Enabled = CanUseFileTransferFeatures();
+        btnDownloadFile.Enabled = CanUseFileTransferFeatures();
         btnOpenTransferFolder.Enabled = false;
         SyncActionMenuState();
         LogTransferTrace("host-viewer-bound", "Remote viewer form bound to device.", new
@@ -321,15 +322,17 @@ public partial class RemoteViewerForm : Form
 
         btnSendClipboard.Enabled = _sessionCanControl;
         btnGetClipboard.Enabled = _sessionCanControl;
-        btnUploadFile.Enabled = _sessionCanControl;
-        btnDownloadFile.Enabled = _sessionCanControl;
+        btnUploadFile.Enabled = CanUseFileTransferFeatures();
+        btnDownloadFile.Enabled = CanUseFileTransferFeatures();
 
         lblStatusValue.Text = _sessionCanControl
             ? HostUiText.Bi("已連線（可控制）", "Connected (control)")
             : HostUiText.Bi("已連線（僅觀看）", "Connected (observe only)");
-        lblTransferValue.Text = _sessionCanControl
-            ? HostUiText.Bi("可開始上傳或下載檔案。", "Ready to upload or download files.")
-            : HostUiText.Bi("僅觀看模式無法傳送檔案。", "Observe-only mode cannot transfer files.");
+        lblTransferValue.Text = !_sessionCanControl
+            ? HostUiText.Bi("僅觀看模式無法傳送檔案。", "Observe-only mode cannot transfer files.")
+            : _viewer?.CanTransferFiles == true
+                ? HostUiText.Bi("可開始上傳或下載檔案。", "Ready to upload or download files.")
+                : HostUiText.Bi("此帳號可控制遠端，但沒有上傳或下載檔案的權限。", "This account can control the remote device but cannot upload or download files.");
         lblClipboardValue.Text = _sessionCanControl
             ? HostUiText.Bi("剪貼簿同步已就緒。", "Clipboard sync is ready.")
             : HostUiText.Bi("僅觀看模式無法同步剪貼簿。", "Observe-only mode cannot sync clipboard.");
@@ -435,8 +438,8 @@ public partial class RemoteViewerForm : Form
             case "completed":
                 _uploadCompletionSignal?.TrySetResult(status);
                 UpdateTransferProgress(status.FileSize, status.FileSize);
-                btnUploadFile.Enabled = _sessionCanControl;
-                btnDownloadFile.Enabled = _sessionCanControl;
+                btnUploadFile.Enabled = CanUseFileTransferFeatures();
+                btnDownloadFile.Enabled = CanUseFileTransferFeatures();
                 _lastUploadedFilePath = string.IsNullOrWhiteSpace(status.StoredFilePath) ? null : status.StoredFilePath;
                 btnOpenTransferFolder.Enabled = !string.IsNullOrWhiteSpace(_lastUploadedFilePath);
                 lblTransferValue.Text = status.Message;
@@ -451,8 +454,8 @@ public partial class RemoteViewerForm : Form
                 progressFileTransfer.Value = 0;
                 lblTransferValue.Text = status.Message;
                 lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
-                btnUploadFile.Enabled = _sessionCanControl;
-                btnDownloadFile.Enabled = _sessionCanControl;
+                btnUploadFile.Enabled = CanUseFileTransferFeatures();
+                btnDownloadFile.Enabled = CanUseFileTransferFeatures();
                 _lastUploadedFilePath = null;
                 btnOpenTransferFolder.Enabled = false;
                 _activeUploadId = null;
@@ -601,13 +604,12 @@ public partial class RemoteViewerForm : Form
             {
                 deviceId = _device?.DeviceId,
                 viewer = _viewer?.UserName,
-                canControlRemote = _sessionCanControl
+                canControlRemote = _sessionCanControl,
+                canTransferFiles = _viewer?.CanTransferFiles == true
             });
 
-            if (!_sessionCanControl)
+            if (!EnsureFileTransferPermission(HostUiText.Bi("此帳號沒有上傳檔案的權限。", "This account does not have permission to upload files.")))
             {
-                lblStatusValue.Text = HostUiText.Bi("僅觀看工作階段", "Observe-only session");
-                lblTransferValue.Text = HostUiText.Bi("此帳號沒有傳送檔案的權限。", "This account does not have permission to transfer files.");
                 LogTransferTrace("host-upload-blocked", "Upload request was blocked by permission check.", new
                 {
                     deviceId = _device?.DeviceId,
@@ -685,7 +687,8 @@ public partial class RemoteViewerForm : Form
         }
         catch (Exception exception)
         {
-            btnUploadFile.Enabled = _sessionCanControl;
+            btnUploadFile.Enabled = CanUseFileTransferFeatures();
+            btnDownloadFile.Enabled = CanUseFileTransferFeatures();
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
@@ -766,7 +769,7 @@ public partial class RemoteViewerForm : Form
 
     protected virtual async Task HandleDownloadSelectionAsync()
     {
-        if (!EnsureInteractivePermission(HostUiText.Bi("此帳號沒有下載檔案的權限。", "This account does not have permission to download files.")))
+        if (!EnsureFileTransferPermission(HostUiText.Bi("此帳號沒有下載檔案的權限。", "This account does not have permission to download files.")))
         {
             return;
         }
@@ -995,8 +998,8 @@ public partial class RemoteViewerForm : Form
             var shouldShowDialog = !string.IsNullOrWhiteSpace(_activeUploadId);
             await TryAbortUploadAsync(uploadId);
             _activeUploadId = null;
-            btnUploadFile.Enabled = _sessionCanControl;
-            btnDownloadFile.Enabled = _sessionCanControl;
+            btnUploadFile.Enabled = CanUseFileTransferFeatures();
+            btnDownloadFile.Enabled = CanUseFileTransferFeatures();
             progressFileTransfer.Value = 0;
             lblTransferValue.Text = HostUiText.Bi($"上傳失敗：{exception.Message}", $"Upload failed: {exception.Message}");
             lblTransferPathValue.Text = HostUiText.Bi("目的地：未建立。", "Destination: not created.");
@@ -1456,8 +1459,8 @@ public partial class RemoteViewerForm : Form
             _lastDownloadFilePath = resolvedTargetPath;
             _downloadTargetPath = resolvedTargetPath;
             _activeDownloadId = null;
-            btnUploadFile.Enabled = _sessionCanControl;
-            btnDownloadFile.Enabled = _sessionCanControl;
+            btnUploadFile.Enabled = CanUseFileTransferFeatures();
+            btnDownloadFile.Enabled = CanUseFileTransferFeatures();
             btnOpenTransferFolder.Enabled = true;
             UpdateTransferProgress(status.FileSize, status.FileSize);
             lblTransferValue.Text = status.Message;
@@ -1485,8 +1488,8 @@ public partial class RemoteViewerForm : Form
         _downloadTargetPath = null;
         _activeDownloadId = null;
         _lastDownloadFilePath = null;
-        btnUploadFile.Enabled = _sessionCanControl;
-        btnDownloadFile.Enabled = _sessionCanControl;
+        btnUploadFile.Enabled = CanUseFileTransferFeatures();
+        btnDownloadFile.Enabled = CanUseFileTransferFeatures();
         btnOpenTransferFolder.Enabled = false;
         progressFileTransfer.Value = 0;
         SetTransferPanelVisible(true);
@@ -1752,6 +1755,11 @@ public partial class RemoteViewerForm : Form
         if (!_attached || _viewerSessionBroker is null || _device is null)
         {
             throw new InvalidOperationException(HostUiText.Bi("Viewer 尚未連線到遠端裝置。", "The viewer is not connected to a remote device."));
+        }
+
+        if (IsFileTransferCommand(command.Type) && !CanUseFileTransferFeatures())
+        {
+            throw new InvalidOperationException(HostUiText.Bi("此帳號沒有上傳或下載檔案的權限。", "This account does not have permission to upload or download files."));
         }
 
         return _viewerSessionBroker.ForwardViewerCommandAsync(_device.DeviceId, command, cancellationToken);
@@ -2281,6 +2289,34 @@ public partial class RemoteViewerForm : Form
         return false;
     }
 
+    private bool EnsureFileTransferPermission(string message)
+    {
+        if (!EnsureInteractivePermission(message))
+        {
+            return false;
+        }
+
+        if (CanUseFileTransferFeatures())
+        {
+            return true;
+        }
+
+        lblTransferValue.Text = HostUiText.Bi("此帳號可控制遠端，但沒有上傳或下載檔案的權限。", "This account can control the remote device but cannot upload or download files.");
+        if (_fileTransferNoticeShown)
+        {
+            return false;
+        }
+
+        _fileTransferNoticeShown = true;
+        MessageBox.Show(message, HostUiText.Window("權限限制", "Permission"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return false;
+    }
+
+    private bool CanUseFileTransferFeatures()
+    {
+        return _sessionCanControl && _viewer?.CanTransferFiles == true;
+    }
+
     private void UpdateTransferProgress(long bytesTransferred, long fileSize)
     {
         if (fileSize <= 0)
@@ -2342,6 +2378,15 @@ public partial class RemoteViewerForm : Form
         }
 
         return $"{display:0.##} {units[unitIndex]}";
+    }
+
+    private static bool IsFileTransferCommand(string? commandType)
+    {
+        return commandType is "file-upload-start"
+            or "file-upload-chunk"
+            or "file-upload-complete"
+            or "file-upload-abort"
+            or "file-download-start";
     }
 
     private static string TranslateMouseButton(MouseButtons button)

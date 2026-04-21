@@ -68,7 +68,7 @@ public sealed class ConsoleSessionTokenService
 
     public bool CanControlRemote(ConsoleSession session)
     {
-        return session.Role is "Administrator";
+        return session.Role is "Administrator" or "Operator";
     }
 
     private static bool TryReadBearerToken(HttpRequest request, out string token)

@@ -20,7 +20,9 @@ public sealed class AuthenticatedUserSession
 
     public bool CanManageDeviceAuthorization => Role == UserRole.Administrator;
 
-    public bool CanControlRemote => Role == UserRole.Administrator;
+    public bool CanControlRemote => Role is UserRole.Administrator or UserRole.Operator;
+
+    public bool CanTransferFiles => Role == UserRole.Administrator;
 
     public string RoleDisplayName => Role.ToString();
 }
