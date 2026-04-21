@@ -19,6 +19,7 @@
 - [ ] 盤點 Host 主控台表格排序偏好是否要持久化，讓每台 Console Client 重開後可沿用使用者上次選定的欄位與方向
 - [ ] 盤點 Host 主控台時間欄位是否要再提供「本地時間 / UTC / 原始 offset」切換，避免跨時區主機混用時只有單一顯示模式
 - [ ] 補一份正式的角色權限對照表與 UI 說明，明確列出管理員、操作員、檢視者各自可見按鈕、Viewer 能力與中央模式 API 權限
+- [ ] 盤點 `Operator` 與 `Viewer` 後續是否還要保留更細的差異化能力，例如允許操作員下載但禁止輸入，或允許查看檔案總管但禁止修改
 - [ ] 盤點 Host 主控台的查詢條件是否要持久化，並評估是否要補 IP 搜尋高亮、清單筆數統計與更進階篩選
 - [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
 - [ ] 為 Host / Server 的 Agent socket 關閉流程再補 `ObjectDisposedException` / aborted close 自動化測試，確認不會把預期關閉誤記成 timeout warning
