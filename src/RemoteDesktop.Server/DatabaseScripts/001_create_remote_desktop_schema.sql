@@ -120,6 +120,32 @@ BEGIN
     ADD RemoteIpAddress NVARCHAR(64) NULL;
 END;
 
+IF OBJECT_ID(N'dbo.RemoteDesktopAuditLogs', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RemoteDesktopAuditLogs
+    (
+        Id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RemoteDesktopAuditLogs PRIMARY KEY,
+        OccurredAt DATETIMEOFFSET(0) NOT NULL,
+        ActorUserName NVARCHAR(128) NOT NULL,
+        ActorDisplayName NVARCHAR(256) NOT NULL,
+        Action NVARCHAR(128) NOT NULL,
+        TargetType NVARCHAR(128) NOT NULL,
+        TargetId NVARCHAR(256) NOT NULL,
+        Succeeded BIT NOT NULL,
+        Details NVARCHAR(MAX) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.RemoteDesktopServerSettings', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RemoteDesktopServerSettings
+    (
+        SettingKey NVARCHAR(128) NOT NULL CONSTRAINT PK_RemoteDesktopServerSettings PRIMARY KEY,
+        SettingJson NVARCHAR(MAX) NOT NULL,
+        UpdatedAt DATETIMEOFFSET(0) NOT NULL
+    );
+END;
+
 IF NOT EXISTS
 (
     SELECT 1
@@ -142,6 +168,18 @@ IF NOT EXISTS
 BEGIN
     CREATE INDEX IX_RemoteDesktopAgentPresenceLogs_DeviceId
         ON dbo.RemoteDesktopAgentPresenceLogs (DeviceId, ConnectedAt DESC);
+END;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_RemoteDesktopAuditLogs_OccurredAt'
+      AND object_id = OBJECT_ID(N'dbo.RemoteDesktopAuditLogs')
+)
+BEGIN
+    CREATE INDEX IX_RemoteDesktopAuditLogs_OccurredAt
+        ON dbo.RemoteDesktopAuditLogs (OccurredAt DESC, Id DESC);
 END;
 
 UPDATE dbo.RemoteDesktopDevices

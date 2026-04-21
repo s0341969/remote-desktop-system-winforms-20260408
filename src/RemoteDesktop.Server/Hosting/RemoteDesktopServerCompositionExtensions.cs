@@ -25,9 +25,22 @@ public static class RemoteDesktopServerCompositionExtensions
         services.AddSingleton<DeviceBroker>();
         services.AddSingleton<AgentWebSocketHandler>();
         services.AddSingleton<ViewerWebSocketHandler>();
-        services.AddSingleton<IAuditLogStore, JsonAuditLogStore>();
+        services.AddSingleton<IAuditLogStore>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<SqlAuditLogStore>(serviceProvider)
+                : ActivatorUtilities.CreateInstance<JsonAuditLogStore>(serviceProvider);
+        });
         services.AddSingleton<AuditService>();
-        services.AddSingleton<IServerHostSettingsStore, ServerHostSettingsStore>();
+        services.AddSingleton<ServerHostSettingsStore>();
+        services.AddSingleton<IServerHostSettingsStore>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<SqlServerHostSettingsStore>(serviceProvider)
+                : serviceProvider.GetRequiredService<ServerHostSettingsStore>();
+        });
         services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
         services.AddSingleton<UserAccountService>();
         services.AddSingleton<ConsoleSessionTokenService>();

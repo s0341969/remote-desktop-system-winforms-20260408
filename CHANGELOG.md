@@ -2,6 +2,7 @@
 
 ## 2026-04-20
 
+- 中央 Server 新增 MSSQL 型 `Host 設定` 與 `稽核紀錄` 儲存；當 `PersistenceMode = SqlServer` 時，`/api/settings/host` 會改讀寫 `dbo.RemoteDesktopServerSettings`，稽核內容會改寫 `dbo.RemoteDesktopAuditLogs`，不再只留在 `appsettings.json` 與 `audit-log.ndjson`。
 - 調整角色權限：`Operator` 不再擁有遠端控制、剪貼簿同步、上傳下載與遠端檔案總管操作權；現在只有 `Administrator` 可完整控制 Viewer，`Operator` 與 `Viewer` 都是觀看模式。
 - 調整 Host 主控台的時間顯示與時間寫入策略：`已連線裝置`、`在線紀錄` 現在會直接顯示 `yyyy-MM-dd HH:mm:ss zzz`，新的 `Memory` / `SqlServer` 紀錄改以主機本地 `DateTimeOffset.Now` 寫入，避免資料庫與畫面因 UTC 轉本地時間而看起來不一致。
 - 修正 Host 主控台 header / summary 版面在長 build 字串、查詢列與長 URL 下的文字遮蓋問題；標題、查詢區與摘要欄位現在會依視窗寬度自動重新排版與省略。

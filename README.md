@@ -106,6 +106,7 @@
 - Host / Server 的 Agent WebSocket 關閉路徑現在會容忍對端未完成 close handshake 的直接斷線；裝置重連取代舊連線或網路中斷時，會改記錄為可預期的 warning/資訊並持續完成 presence cleanup，不再把正常重連噴成 `Agent WebSocket processing failed`。
 - Agent socket 關閉時若底層已經先被對端或 framework dispose/abort，現在也會視為可預期結束而非 timeout 警告，避免日誌反覆出現 `Closing agent socket timed out ... ObjectDisposedException` 的假警報。
 - 第八階段補上中央 Host 設定 API `/api/settings/host`，中央模式下的 Host 設定表單會改走 Server 儲存；只有 `CentralServerUrl` 仍保留在每台 Console Client 本機，作為該主控台要連哪一台中央 Server 的入口。
+- 中央 Server 在 `PersistenceMode = SqlServer` 時，現在不只裝置與在線紀錄會進資料庫，`Host 設定` 與 `稽核紀錄` 也會寫入 MSSQL；其中 Host 設定會以資料庫為主，並同步鏡像回 `appsettings.json` 供下次重啟載入。
 - 補上 `tests/RemoteDesktop.LoadTests`，可直接壓測中央 `RemoteDesktop.Server` 在 `300 Agent / 5 Viewer` 情境下的 CPU、RAM、網路、WebSocket 穩定性、heartbeat timeout 與 dashboard latency。
 - Server heartbeat timeout 路徑已重構：
   - Agent monitor 掃描頻率改為依 `AgentHeartbeatTimeoutSeconds` 動態調整，區間 `1-10` 秒。
