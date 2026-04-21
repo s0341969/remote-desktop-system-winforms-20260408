@@ -48,10 +48,35 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
 
     public Task<Guid> StartPresenceAsync(AgentDescriptor descriptor, CancellationToken cancellationToken)
     {
-        var id = Guid.NewGuid();
         lock (_sync)
         {
             var now = DateTimeOffset.Now;
+            var existingLog = _presenceLogs.Values
+                .Where(item => string.Equals(item.DeviceId, descriptor.DeviceId, StringComparison.OrdinalIgnoreCase) && item.DisconnectedAt is null)
+                .OrderByDescending(static item => item.ConnectedAt)
+                .FirstOrDefault();
+
+            if (existingLog is not null)
+            {
+                _presenceLogs[existingLog.PresenceId] = new AgentPresenceLogRecord
+                {
+                    PresenceId = existingLog.PresenceId,
+                    DeviceId = descriptor.DeviceId,
+                    DeviceName = descriptor.DeviceName,
+                    HostName = descriptor.HostName,
+                    RemoteIpAddress = descriptor.RemoteIpAddress,
+                    AgentVersion = descriptor.AgentVersion,
+                    ConnectedAt = existingLog.ConnectedAt,
+                    LastSeenAt = now,
+                    DisconnectedAt = null,
+                    DisconnectReason = null,
+                    OnlineSeconds = (long)Math.Max(0, (now - existingLog.ConnectedAt).TotalSeconds)
+                };
+
+                return Task.FromResult(existingLog.PresenceId);
+            }
+
+            var id = Guid.NewGuid();
             _presenceLogs[id] = new AgentPresenceLogRecord
             {
                 PresenceId = id,
@@ -64,9 +89,9 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                 LastSeenAt = now,
                 OnlineSeconds = 0
             };
-        }
 
-        return Task.FromResult(id);
+            return Task.FromResult(id);
+        }
     }
 
     public Task TouchPresenceAsync(Guid presenceId, string deviceId, int screenWidth, int screenHeight, CancellationToken cancellationToken)

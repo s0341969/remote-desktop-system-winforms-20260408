@@ -133,10 +133,47 @@ public sealed class SqlDeviceRepository : IDeviceRepository
 
     public async Task<Guid> StartPresenceAsync(AgentDescriptor descriptor, CancellationToken cancellationToken)
     {
-        var presenceId = Guid.NewGuid();
         var now = DateTimeOffset.Now;
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
 
-        const string sql = """
+        const string findOpenSql = """
+            SELECT TOP (1) PresenceId
+            FROM dbo.RemoteDesktopAgentPresenceLogs
+            WHERE DeviceId = @deviceId AND DisconnectedAt IS NULL
+            ORDER BY ConnectedAt DESC;
+            """;
+
+        await using var findCommand = new SqlCommand(findOpenSql, connection);
+        AddStringParameter(findCommand, "@deviceId", descriptor.DeviceId, 128);
+        var existingPresenceId = await findCommand.ExecuteScalarAsync(cancellationToken);
+        if (existingPresenceId is Guid currentPresenceId)
+        {
+            const string updateOpenSql = """
+                UPDATE dbo.RemoteDesktopAgentPresenceLogs
+                SET
+                    DeviceName = @deviceName,
+                    HostName = @hostName,
+                    RemoteIpAddress = @remoteIpAddress,
+                    AgentVersion = @agentVersion,
+                    LastSeenAt = @lastSeenAt,
+                    DisconnectReason = NULL
+                WHERE PresenceId = @presenceId;
+                """;
+
+            await using var updateCommand = new SqlCommand(updateOpenSql, connection);
+            updateCommand.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = currentPresenceId;
+            AddStringParameter(updateCommand, "@deviceName", descriptor.DeviceName, 256);
+            AddStringParameter(updateCommand, "@hostName", descriptor.HostName, 256);
+            AddNullableStringParameter(updateCommand, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
+            AddStringParameter(updateCommand, "@agentVersion", descriptor.AgentVersion, 64);
+            updateCommand.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
+            await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+            return currentPresenceId;
+        }
+
+        var presenceId = Guid.NewGuid();
+        const string insertSql = """
             INSERT INTO dbo.RemoteDesktopAgentPresenceLogs
             (
                 PresenceId,
@@ -165,17 +202,16 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             );
             """;
 
-        await ExecuteAsync(sql, command =>
-        {
-            command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
-            AddStringParameter(command, "@deviceId", descriptor.DeviceId, 128);
-            AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
-            AddStringParameter(command, "@hostName", descriptor.HostName, 256);
-            AddNullableStringParameter(command, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
-            AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
-            command.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = now;
-            command.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
-        }, cancellationToken);
+        await using var insertCommand = new SqlCommand(insertSql, connection);
+        insertCommand.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+        AddStringParameter(insertCommand, "@deviceId", descriptor.DeviceId, 128);
+        AddStringParameter(insertCommand, "@deviceName", descriptor.DeviceName, 256);
+        AddStringParameter(insertCommand, "@hostName", descriptor.HostName, 256);
+        AddNullableStringParameter(insertCommand, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
+        AddStringParameter(insertCommand, "@agentVersion", descriptor.AgentVersion, 64);
+        insertCommand.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = now;
+        insertCommand.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
+        await insertCommand.ExecuteNonQueryAsync(cancellationToken);
 
         return presenceId;
     }
