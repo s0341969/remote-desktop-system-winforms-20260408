@@ -32,7 +32,7 @@
 - [ ] 為下載流程再補本機落地檔案衝突測試，覆蓋同名目標檔被占用、殘留 `.downloading` 檔與自動遞補檔名三種情境
 - [ ] 為 `tests/RemoteDesktop.LoadTests` 補長時間 burn-in 與 `500+ Agent` 變體，驗證 `SqlServer` 儲存模式下的 CPU、RAM、DB latency 與 dashboard push 穩定性
 - [ ] 將 [CAPACITY_PLAN.md](G:\codex_pg\遠端桌面\remote-desktop-system-winforms-20260408\CAPACITY_PLAN.md) 的 `Memory` 模式容量結論擴充到 `SqlServer` 模式，並補正式環境建議值
-- [ ] 盤點中央 `Host 設定` / `稽核紀錄` 寫入 MSSQL 後，是否還要把 `UserAccount` 也一起搬進資料庫，避免使用者帳號仍留在 JSON 檔
+- [ ] 盤點中央 `UserAccount` 改寫 MSSQL 後，是否要再提供一次性 migration / 驗證工具，主動比對 `users.json` 與 `dbo.RemoteDesktopUserAccounts` 差異，避免人工混用期間出現雙邊不一致
 - [ ] 為設定檔持久化流程補上獨立的檔案層測試，覆蓋異常 JSON 與缺欄位回復策略
 - [ ] 補齊兩台以上 Console Client 的正式手動驗收紀錄，將實機中央模式操作流程固定寫入手冊與交付 checklist
 - [ ] 為 Host 儲存模式切換補上更多自動化測試，覆蓋 `Memory` 與 `SqlServer` 兩種啟動路徑

@@ -146,6 +146,24 @@ BEGIN
     );
 END;
 
+IF OBJECT_ID(N'dbo.RemoteDesktopUserAccounts', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RemoteDesktopUserAccounts
+    (
+        Id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RemoteDesktopUserAccounts PRIMARY KEY,
+        UserName NVARCHAR(128) NOT NULL,
+        DisplayName NVARCHAR(256) NOT NULL,
+        Role NVARCHAR(64) NOT NULL,
+        IsEnabled BIT NOT NULL,
+        PasswordHash NVARCHAR(256) NOT NULL,
+        PasswordSalt NVARCHAR(256) NOT NULL,
+        PasswordIterations INT NOT NULL,
+        CreatedAt DATETIMEOFFSET(0) NOT NULL,
+        UpdatedAt DATETIMEOFFSET(0) NOT NULL,
+        LastLoginAt DATETIMEOFFSET(0) NULL
+    );
+END;
+
 IF NOT EXISTS
 (
     SELECT 1
@@ -180,6 +198,18 @@ IF NOT EXISTS
 BEGIN
     CREATE INDEX IX_RemoteDesktopAuditLogs_OccurredAt
         ON dbo.RemoteDesktopAuditLogs (OccurredAt DESC, Id DESC);
+END;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UX_RemoteDesktopUserAccounts_UserName'
+      AND object_id = OBJECT_ID(N'dbo.RemoteDesktopUserAccounts')
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_RemoteDesktopUserAccounts_UserName
+        ON dbo.RemoteDesktopUserAccounts (UserName);
 END;
 
 UPDATE dbo.RemoteDesktopDevices

@@ -41,7 +41,13 @@ public static class RemoteDesktopServerCompositionExtensions
                 ? ActivatorUtilities.CreateInstance<SqlServerHostSettingsStore>(serviceProvider)
                 : serviceProvider.GetRequiredService<ServerHostSettingsStore>();
         });
-        services.AddSingleton<IUserAccountStore, JsonUserAccountStore>();
+        services.AddSingleton<IUserAccountStore>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ControlServerOptions>>().Value;
+            return string.Equals(options.PersistenceMode, ControlServerOptions.PersistenceModeSqlServer, StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<SqlUserAccountStore>(serviceProvider)
+                : ActivatorUtilities.CreateInstance<JsonUserAccountStore>(serviceProvider);
+        });
         services.AddSingleton<UserAccountService>();
         services.AddSingleton<ConsoleSessionTokenService>();
         services.AddHostedService<AgentMonitorService>();
