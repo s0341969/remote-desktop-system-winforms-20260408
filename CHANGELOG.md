@@ -2,6 +2,7 @@
 
 ## 2026-04-20
 
+- 修正 Host 主控台 GridView 複製欄位值時偶發的 `Current thread must be set to STA` 例外；現在 `已連線裝置` 與 `在線紀錄` 會改用自訂的 STA 剪貼簿寫入流程處理 `Ctrl + C`，只複製目前選中的單格內容。
 - 調整 `RemoteDesktopAgentPresenceLogs` 寫入策略：同一台裝置只會在真正從離線轉為上線時新增一筆 presence log；若仍屬同一次在線期間內的重連或重新註冊，現在會沿用未關閉的既有紀錄並更新 `LastSeenAt`、IP、版本與主機資訊，不再反覆新增多筆「在線中」紀錄。
 - 再調整角色權限：`Operator` 現在可開啟 Viewer 並控制遠端電腦，中央 Server 也會核發控制權；但 `Operator` 的上傳/下載檔案功能已關閉，只有 `Administrator` 可使用檔案傳輸。
 - 中央 Server 的 `UserAccount` store 也已改支援 MSSQL；當 `PersistenceMode = SqlServer` 時，使用者帳號會改讀寫 `dbo.RemoteDesktopUserAccounts`，若資料庫目前沒有帳號，會先自動匯入既有 `users.json`，沒有 JSON 時則建立 bootstrap 管理員。

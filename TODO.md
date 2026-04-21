@@ -21,6 +21,7 @@
 - [ ] 補一份正式的角色權限對照表與 UI 說明，明確列出管理員、操作員、檢視者各自可見按鈕、Viewer 能力與中央模式 API 權限，特別是 `Operator` 可控制遠端但不可上傳/下載的差異
 - [ ] 盤點 `Operator` 與 `Viewer` 後續是否還要保留更細的差異化能力，例如允許操作員下載但禁止輸入，或允許查看檔案總管但禁止修改
 - [ ] 盤點 Host 主控台的查詢條件是否要持久化，並評估是否要補 IP 搜尋高亮、清單筆數統計與更進階篩選
+- [ ] 盤點 Host 主控台 GridView 後續是否要再補右鍵選單、欄位值複製提示與多格/整列匯出，避免目前只先補 `Ctrl + C` 單格複製
 - [ ] 評估 `RemoteDesktopAgentPresenceLogs` 後續是否要再補 retention / archive 策略，避免改成同一在線期間只保留單筆後，長期累積仍讓資料表過大
 - [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
 - [ ] 為 Host / Server 的 Agent socket 關閉流程再補 `ObjectDisposedException` / aborted close 自動化測試，確認不會把預期關閉誤記成 timeout warning

@@ -5,6 +5,7 @@ using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Options;
 using RemoteDesktop.Host.Services;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -522,6 +523,8 @@ public partial class MainForm : Form
 
         gridDevices.ColumnHeaderMouseClick += gridDevices_ColumnHeaderMouseClick;
         gridLogs.ColumnHeaderMouseClick += gridLogs_ColumnHeaderMouseClick;
+        gridDevices.KeyDown += Grid_KeyDown;
+        gridLogs.KeyDown += Grid_KeyDown;
     }
 
     private void InitializeResponsiveLayout()
@@ -660,6 +663,101 @@ public partial class MainForm : Form
             [true]);
     }
 
+    private bool TryCopyCurrentGridCellValue(DataGridView grid)
+    {
+        var cell = grid.CurrentCell;
+        if (cell is null)
+        {
+            return false;
+        }
+
+        var value = ConvertGridCellToClipboardText(cell);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            WriteClipboardText(value);
+            lblStatusValue.Text = HostUiText.Bi("已複製欄位值到剪貼簿。", "Copied the cell value to the clipboard.");
+            return true;
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                HostUiText.Bi($"複製欄位值失敗：{exception.Message}", $"Failed to copy the cell value: {exception.Message}"),
+                HostUiText.Window("剪貼簿", "Clipboard"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return false;
+        }
+    }
+
+    private static string ConvertGridCellToClipboardText(DataGridViewCell cell)
+    {
+        var edited = cell.EditedFormattedValue?.ToString();
+        if (!string.IsNullOrWhiteSpace(edited))
+        {
+            return edited;
+        }
+
+        var formatted = cell.FormattedValue?.ToString();
+        if (!string.IsNullOrWhiteSpace(formatted))
+        {
+            return formatted;
+        }
+
+        return cell.Value?.ToString() ?? string.Empty;
+    }
+
+    private static void WriteClipboardText(string text)
+    {
+        RunStaClipboard(() =>
+        {
+            Clipboard.SetText(text);
+            return 0;
+        });
+    }
+
+    private static T RunStaClipboard<T>(Func<T> action)
+    {
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            return action();
+        }
+
+        T? result = default;
+        Exception? captured = null;
+        using var completed = new ManualResetEventSlim(false);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                result = action();
+            }
+            catch (Exception exception)
+            {
+                captured = exception;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        completed.Wait();
+
+        if (captured is not null)
+        {
+            throw captured;
+        }
+
+        return result!;
+    }
+
     private void btnApplySearch_Click(object? sender, EventArgs e)
     {
         ApplySearchFromInput();
@@ -684,6 +782,22 @@ public partial class MainForm : Form
         }
 
         ApplySearchFromInput();
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+    }
+
+    private void Grid_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!e.Control || e.KeyCode != Keys.C || sender is not DataGridView grid)
+        {
+            return;
+        }
+
+        if (!TryCopyCurrentGridCellValue(grid))
+        {
+            return;
+        }
+
         e.Handled = true;
         e.SuppressKeyPress = true;
     }
