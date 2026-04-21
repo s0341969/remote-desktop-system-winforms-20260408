@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Management;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using RemoteDesktop.Agent.Models;
@@ -59,6 +60,18 @@ public sealed class AgentInventoryService
             _logger.LogWarning(exception, "Collecting CPU name failed.");
         }
 
+        var registryCpuName = TryCollectCpuNameFromRegistry();
+        if (!string.IsNullOrWhiteSpace(registryCpuName))
+        {
+            return registryCpuName;
+        }
+
+        var fallbackCpuName = Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER")?.Trim();
+        if (!string.IsNullOrWhiteSpace(fallbackCpuName))
+        {
+            return fallbackCpuName;
+        }
+
         return "未知 CPU";
     }
 
@@ -79,6 +92,11 @@ public sealed class AgentInventoryService
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Collecting installed memory failed.");
+        }
+
+        if (TryCollectInstalledMemoryBytesFromKernel(out var totalBytes))
+        {
+            return totalBytes;
         }
 
         return 0;
@@ -130,7 +148,7 @@ public sealed class AgentInventoryService
             _logger.LogWarning(exception, "Collecting operating system information failed.");
         }
 
-        return ("未知作業系統", "未知版本", "未知組建");
+        return TryCollectOperatingSystemFromRegistry();
     }
 
     private string TryCollectOfficeVersion()
@@ -247,5 +265,124 @@ public sealed class AgentInventoryService
         }
 
         return $"{value:0.##} {units[unitIndex]}";
+    }
+
+    private static string? TryCollectCpuNameFromRegistry()
+    {
+        foreach (var registryView in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, registryView);
+                using var cpuKey = baseKey.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                var processorName = cpuKey?.GetValue("ProcessorNameString")?.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(processorName))
+                {
+                    return processorName;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryCollectInstalledMemoryBytesFromKernel(out long bytes)
+    {
+        bytes = 0;
+        try
+        {
+            var status = new MemoryStatusEx();
+            if (GlobalMemoryStatusEx(status) && status.TotalPhys > 0 && status.TotalPhys <= long.MaxValue)
+            {
+                bytes = (long)status.TotalPhys;
+                return true;
+            }
+        }
+        catch
+        {
+        }
+
+        return false;
+    }
+
+    private static (string OsName, string OsVersion, string OsBuildNumber) TryCollectOperatingSystemFromRegistry()
+    {
+        foreach (var registryView in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, registryView);
+                using var currentVersionKey = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+                if (currentVersionKey is null)
+                {
+                    continue;
+                }
+
+                var productName = currentVersionKey.GetValue("ProductName")?.ToString()?.Trim();
+                var displayVersion = currentVersionKey.GetValue("DisplayVersion")?.ToString()?.Trim();
+                var releaseId = currentVersionKey.GetValue("ReleaseId")?.ToString()?.Trim();
+                var currentVersion = currentVersionKey.GetValue("CurrentVersion")?.ToString()?.Trim();
+                var currentBuild = currentVersionKey.GetValue("CurrentBuildNumber")?.ToString()?.Trim();
+                var ubr = currentVersionKey.GetValue("UBR")?.ToString()?.Trim();
+
+                var version = FirstNonEmpty(displayVersion, releaseId, currentVersion, Environment.OSVersion.Version.ToString());
+                var build = string.IsNullOrWhiteSpace(currentBuild)
+                    ? "未知組建"
+                    : string.IsNullOrWhiteSpace(ubr)
+                        ? currentBuild
+                        : $"{currentBuild}.{ubr}";
+
+                return
+                (
+                    string.IsNullOrWhiteSpace(productName) ? "未知作業系統" : productName,
+                    string.IsNullOrWhiteSpace(version) ? "未知版本" : version,
+                    build
+                );
+            }
+            catch
+            {
+            }
+        }
+
+        var osVersion = Environment.OSVersion.Version;
+        return
+        (
+            RuntimeInformation.OSDescription.Trim(),
+            osVersion.ToString(),
+            osVersion.Build >= 0 ? osVersion.Build.ToString(CultureInfo.InvariantCulture) : "未知組建"
+        );
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx buffer);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private sealed class MemoryStatusEx
+    {
+        public uint Length = (uint)Marshal.SizeOf<MemoryStatusEx>();
+        public uint MemoryLoad;
+        public ulong TotalPhys;
+        public ulong AvailPhys;
+        public ulong TotalPageFile;
+        public ulong AvailPageFile;
+        public ulong TotalVirtual;
+        public ulong AvailVirtual;
+        public ulong AvailExtendedVirtual;
     }
 }

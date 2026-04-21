@@ -44,6 +44,7 @@
 
 - 補齊 Host 與 Agent 的完整設定表單，改由 UI 編輯 `appsettings.json`。
 - Agent 啟動時現在會主動收集並上報軟硬體盤點，包含 CPU、總記憶體、固定磁碟摘要、Windows 版本與組建、Office 版本，以及最近一次 Windows 更新名稱與日期。
+- Agent 的硬體摘要與作業系統版本盤點現在已補多層 fallback；若部分電腦上的 WMI `Win32_Processor`、`Win32_ComputerSystem` 或 `Win32_OperatingSystem` 查詢失敗，會改用 registry、`Environment.OSVersion`、`RuntimeInformation.OSDescription` 與 `GlobalMemoryStatusEx` 補抓，避免主控台出現空白或整欄未知。
 - Agent 現在會強制將 `DeviceId` 與 `DeviceName` 正規化為本機 `Environment.MachineName`，避免現場手動輸入造成重複或命名不一致。
 - 裝置盤點會沿著 Agent `hello` 註冊流程一路帶進 Host / Server，並可同時儲存在記憶體模式與 `SqlServer` 模式；資料庫模式會寫入 `dbo.RemoteDesktopDevices.InventoryJson` 與 `InventoryCollectedAt`。
 - Host 主畫面現在會直接顯示裝置的硬體摘要、作業系統、Office 與最後更新摘要，方便操作端先做盤點，不必先開 Viewer。

@@ -10,6 +10,7 @@
 - 修正 Host Viewer 的下載流程在實機上可能卡住、不再跳出下載目的地視窗的問題；下載按鈕現在會先 dispatch 回 UI 訊息迴圈，`SaveFileDialog` 也改回優先由 UI 執行緒顯示，避免跨執行緒 owner/等待造成整個 Viewer 停住。
 - 修正 Agent 下載遠端檔案時的開檔分享模式；現在會用允許 `ReadWrite/Delete` 的共享讀取方式開啟檔案，改善遠端檔案仍被應用程式開啟時無法下載的問題，只有真正的獨占鎖才會繼續拒絕。
 - 修正 Host 本機下載落地路徑：下載暫存檔改為每次使用唯一檔名，完成時若原本指定的本機目的檔被占用，會自動改存成 `檔名 (1)`、`檔名 (2)` 等可用名稱，避免同名檔或殘留暫存檔把下載誤判成失敗。
+- 修正 Agent 盤點在部分電腦上抓不到作業系統版本與硬體摘要的問題；現在 WMI 失敗時會再改用 registry、`RuntimeInformation`、`Environment.OSVersion` 與 `GlobalMemoryStatusEx` 補抓 CPU、記憶體與 Windows 版本資訊。
 
 ## 2026-04-19
 

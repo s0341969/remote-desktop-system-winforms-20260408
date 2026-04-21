@@ -6,6 +6,7 @@
 - [ ] 若 Agent 採 `StartHidden = true` 且 `ShowTrayIcon = false`，評估是否要補遠端或命令列喚回/重設設定的維運機制，避免現場無 UI 可操作
 - [ ] 若後續需要跨網域或同名主機環境，盤點 Agent 身分規則是否要從單純 `MachineName` 升級為 `MachineName + SID/UUID`，避免極端情況下仍重複
 - [ ] 為 inventory 詳細視窗補更多欄位，包含主機板、序號、網卡、IP、已安裝軟體與多磁碟明細，避免目前仍以摘要字串呈現
+- [ ] 為 Agent inventory 補更多非 WMI fallback，特別是主機板、BIOS、序號與網卡資訊，避免部分關閉 WMI 或 repository 受損的 Windows 機器仍有欄位空白
 - [ ] 為 inventory 匯出補真正的 `.xlsx` 格式驗證與欄位模板鎖定，確認 Excel 匯出在不同版本 Office 下都能穩定開啟
 - [ ] 為 inventory 重新盤點補手動立即重抓入口與中央 Server 端排程策略，避免只能等 Agent 週期性回報
 - [ ] 為 inventory 變更追蹤補差異比對視圖與通知策略，讓 Office 更新、Windows Patch 與硬體變更不只留歷史，也能主動提醒
