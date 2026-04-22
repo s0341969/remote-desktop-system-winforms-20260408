@@ -407,7 +407,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
     public async Task UpdateInventoryAsync(string deviceId, AgentInventoryProfile inventory, CancellationToken cancellationToken)
     {
         var serializedInventory = SerializeInventory(inventory) ?? throw new InvalidOperationException("Inventory payload could not be serialized.");
-        var fingerprint = CalculateFingerprint(serializedInventory);
+        var fingerprint = CalculateFingerprint(inventory);
 
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -713,7 +713,8 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             return null;
         }
 
-        return (CalculateFingerprint(inventoryJson), JsonSerializer.Deserialize<AgentInventoryProfile>(inventoryJson, JsonOptions));
+        var inventory = JsonSerializer.Deserialize<AgentInventoryProfile>(inventoryJson, JsonOptions);
+        return inventory is null ? null : (CalculateFingerprint(inventory), inventory);
     }
 
     private static string? SerializeInventory(AgentInventoryProfile? inventory)
@@ -721,9 +722,22 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         return inventory is null ? null : JsonSerializer.Serialize(inventory, JsonOptions);
     }
 
-    private static string CalculateFingerprint(string serializedInventory)
+    private static string CalculateFingerprint(AgentInventoryProfile inventory)
     {
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedInventory)));
+        var payload = string.Join("|", new[]
+        {
+            inventory.CpuName,
+            inventory.InstalledMemoryBytes.ToString(),
+            inventory.StorageSummary,
+            inventory.OsName,
+            inventory.OsVersion,
+            inventory.OsBuildNumber,
+            inventory.OfficeVersion,
+            inventory.LastWindowsUpdateTitle,
+            inventory.LastWindowsUpdateInstalledAt?.UtcDateTime.ToString("O") ?? string.Empty
+        });
+
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
     }
 
     private static string BuildChangeSummary(AgentInventoryProfile? previousInventory, AgentInventoryProfile currentInventory)

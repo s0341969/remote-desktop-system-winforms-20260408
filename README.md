@@ -60,7 +60,7 @@
 - Host 主畫面的單台裝置查詢列已改回固定顯示在「已連線裝置」上方，不再掛在主標題區，因此不會因 header 重排或長 build 字串而看起來像消失。
 - 角色權限已調整為：`Administrator` 可開啟並完整控制 Viewer，且可使用上傳/下載；`Operator` 也可開啟並控制 Viewer、可同步剪貼簿與執行既有遠端控制操作，但不可使用上傳/下載檔案；`Viewer` 仍維持只能開啟 Viewer 觀看；只有 `Administrator` 可管理使用者、設定、稽核與裝置授權。
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`。
-- Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；若 CPU、記憶體、磁碟、OS、Office 或最後更新摘要改變，Host / Server 會留下變更歷史。
+- Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；只有 CPU、記憶體、磁碟、OS、Office 或最後更新摘要真的改變時，Host / Server 才會留下變更歷史，單純盤點時間 `CollectedAt` 更新不再新增歷史。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory`，會保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要；`Memory` 模式也會同步保留最近歷史。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopDevices.RemoteIpAddress` 與 `dbo.RemoteDesktopAgentPresenceLogs.RemoteIpAddress`，用來持久化 Agent 遠端 IP，舊資料庫也會在啟動時自動補欄位。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。

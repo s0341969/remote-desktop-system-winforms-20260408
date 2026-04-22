@@ -10,6 +10,7 @@
 - [ ] 為 inventory 匯出補真正的 `.xlsx` 格式驗證與欄位模板鎖定，確認 Excel 匯出在不同版本 Office 下都能穩定開啟
 - [ ] 為 inventory 重新盤點補手動立即重抓入口與中央 Server 端排程策略，避免只能等 Agent 週期性回報
 - [ ] 為 inventory 變更追蹤補差異比對視圖與通知策略，讓 Office 更新、Windows Patch 與硬體變更不只留歷史，也能主動提醒
+- [ ] 評估 inventory 歷史是否要區分「內容變更」與「僅重新盤點」，目前已改成只有內容變更才記錄歷史；若未來需要追查盤點頻率，可能要另補輕量心跳/盤點審計欄位
 - [ ] 完成 `RemoteDesktop.Host` 剩餘的中央 Server 切換，補上中央模式的完整 publish 驗證與跨多台 Console Client 的手動冒煙驗證
 - [ ] 為 Host / Agent / Server 的設定表單補更明確的輸入驗證訊息與範例 placeholder，避免現場輸入不完整 URL 時只能看到一般性錯誤
 - [ ] 盤點 Host 其餘 modal 視窗是否還有被 Viewer 蓋住的風險，特別是未來新增的檔案管理、設定與匯出流程
