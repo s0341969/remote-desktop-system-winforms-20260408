@@ -103,6 +103,7 @@
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
 - 版本號現在改為 repo 級別集中管理，Host / Agent / Server 每次 build / publish 都會自動產生新的四段版號 `主版.次版.yyDDD.HHmm`；Agent 上報給主控台的 `Agent 版本` 也改用同一個 build 版號來源，方便直接在主控台辨識目前實際部署版本。
 - Agent / Host 的版本字串解析現在也做成 fail-safe；即使正式版 EXE 的版本資源或單檔環境讀取失敗，仍會退回組件版本，不會因取得 `AgentVersion` 失敗而阻斷 Agent `hello` 註冊或主控台啟動。
+- 現場若中央 `Server` 仍使用舊資料庫結構，`RemoteDesktopDevices.AgentVersion` / `RemoteDesktopAgentPresenceLogs.AgentVersion` 與 `DeviceName` / `HostName` 欄位現在會在啟動時自動升級到與程式一致的長度（`AgentVersion NVARCHAR(128)`、`DeviceName/HostName NVARCHAR(256)`），避免新版 Agent 版本字串或較長主機名稱寫入 SQL 時被截斷，導致 Agent 顯示離線。
 - Agent 主畫面的操作入口已改成右上角 `功能` 下拉按鍵，集中提供設定、複製裝置 ID、複製 Server 位址與立即重新整理。
 - Agent 現在支援系統匣常駐模式，預設啟動時會直接在背景執行，不先顯示主視窗，也不顯示系統通知；可依 `Agent:ShowTrayIcon` 決定是否顯示系統匣圖示。
 - `Agent:StartHidden` 預設為 `true`，若需要現場顯示主視窗，可在 `appsettings.json` 改成 `false`。

@@ -3,10 +3,10 @@ BEGIN
     CREATE TABLE dbo.RemoteDesktopDevices
     (
         DeviceId NVARCHAR(64) NOT NULL CONSTRAINT PK_RemoteDesktopDevices PRIMARY KEY,
-        DeviceName NVARCHAR(128) NOT NULL,
-        HostName NVARCHAR(128) NOT NULL,
+        DeviceName NVARCHAR(256) NOT NULL,
+        HostName NVARCHAR(256) NOT NULL,
         RemoteIpAddress NVARCHAR(64) NULL,
-        AgentVersion NVARCHAR(32) NOT NULL,
+        AgentVersion NVARCHAR(128) NOT NULL,
         ScreenWidth INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenWidth DEFAULT (0),
         ScreenHeight INT NOT NULL CONSTRAINT DF_RemoteDesktopDevices_ScreenHeight DEFAULT (0),
         InventoryJson NVARCHAR(MAX) NULL,
@@ -39,6 +39,45 @@ IF COL_LENGTH(N'dbo.RemoteDesktopDevices', N'RemoteIpAddress') IS NULL
 BEGIN
     ALTER TABLE dbo.RemoteDesktopDevices
     ADD RemoteIpAddress NVARCHAR(64) NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopDevices')
+      AND name = N'DeviceName'
+      AND max_length < 512
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ALTER COLUMN DeviceName NVARCHAR(256) NOT NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopDevices')
+      AND name = N'HostName'
+      AND max_length < 512
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ALTER COLUMN HostName NVARCHAR(256) NOT NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopDevices')
+      AND name = N'AgentVersion'
+      AND max_length < 256
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopDevices
+    ALTER COLUMN AgentVersion NVARCHAR(128) NOT NULL;
 END;
 
 IF OBJECT_ID(N'dbo.RemoteDesktopInventoryHistory', N'U') IS NULL
@@ -103,10 +142,10 @@ BEGIN
     (
         PresenceId UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RemoteDesktopAgentPresenceLogs PRIMARY KEY,
         DeviceId NVARCHAR(64) NOT NULL,
-        DeviceName NVARCHAR(128) NOT NULL,
-        HostName NVARCHAR(128) NOT NULL,
+        DeviceName NVARCHAR(256) NOT NULL,
+        HostName NVARCHAR(256) NOT NULL,
         RemoteIpAddress NVARCHAR(64) NULL,
-        AgentVersion NVARCHAR(32) NOT NULL,
+        AgentVersion NVARCHAR(128) NOT NULL,
         ConnectedAt DATETIMEOFFSET(0) NOT NULL,
         LastSeenAt DATETIMEOFFSET(0) NOT NULL,
         DisconnectedAt DATETIMEOFFSET(0) NULL,
@@ -118,6 +157,45 @@ IF COL_LENGTH(N'dbo.RemoteDesktopAgentPresenceLogs', N'RemoteIpAddress') IS NULL
 BEGIN
     ALTER TABLE dbo.RemoteDesktopAgentPresenceLogs
     ADD RemoteIpAddress NVARCHAR(64) NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopAgentPresenceLogs')
+      AND name = N'DeviceName'
+      AND max_length < 512
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopAgentPresenceLogs
+    ALTER COLUMN DeviceName NVARCHAR(256) NOT NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopAgentPresenceLogs')
+      AND name = N'HostName'
+      AND max_length < 512
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopAgentPresenceLogs
+    ALTER COLUMN HostName NVARCHAR(256) NOT NULL;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.RemoteDesktopAgentPresenceLogs')
+      AND name = N'AgentVersion'
+      AND max_length < 256
+)
+BEGIN
+    ALTER TABLE dbo.RemoteDesktopAgentPresenceLogs
+    ALTER COLUMN AgentVersion NVARCHAR(128) NOT NULL;
 END;
 
 IF OBJECT_ID(N'dbo.RemoteDesktopAuditLogs', N'U') IS NULL

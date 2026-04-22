@@ -30,6 +30,7 @@
 - 再補 Windows Server 的 session 自動恢復：Agent 新增 `Agent:AutoRecoverInteractiveSessionOnWindowsServer`，預設會在 RDP 關閉後桌面不可擷取時嘗試執行 `tscon <目前 session> /dest:console`，將互動桌面切回 console，改善只有 mstsc 開著時 Viewer 才有畫面的情況。
 - 新增 repo 級別的集中 build 版本規則；Host / Agent / Server 現在每次 build / publish 都會自動產生新的四段版號 `主版.次版.yyDDD.HHmm`，且 Agent `hello` 上報與主控台 `Agent 版本` 欄位改為直接使用同一個 build 版本來源，方便控管現場版本。
 - 補強 Agent / Host 的版本字串讀取容錯；若單檔 publish EXE 的版本資源讀取異常，現在會自動退回組件版本，不再讓 `AgentVersion` 解析失敗影響 Agent 註冊或主控台顯示。
+- 修正中央 `SqlServer` 模式下新版 Agent 可能顯示離線的回歸：關閉 SDK 對 `InformationalVersion` 自動附加 source revision，並在 Host / Server 的 schema 初始化時自動擴充 `RemoteDesktopDevices` 與 `RemoteDesktopAgentPresenceLogs` 的 `AgentVersion`、`DeviceName`、`HostName` 欄位長度，避免 SQL `字串或二進位資料會被截斷` 導致 Agent 註冊後立刻被 Server 關閉。
 
 ## 2026-04-19
 

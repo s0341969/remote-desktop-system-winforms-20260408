@@ -122,7 +122,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(command, "@deviceName", descriptor.DeviceName, 256);
             AddStringParameter(command, "@hostName", descriptor.HostName, 256);
             AddNullableStringParameter(command, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
-            AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 64);
+            AddStringParameter(command, "@agentVersion", descriptor.AgentVersion, 128);
             command.Parameters.Add("@screenWidth", SqlDbType.Int).Value = descriptor.ScreenWidth;
             command.Parameters.Add("@screenHeight", SqlDbType.Int).Value = descriptor.ScreenHeight;
             AddNullableStringParameter(command, "@inventoryJson", SerializeInventory(descriptor.Inventory), -1);
@@ -166,7 +166,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
             AddStringParameter(updateCommand, "@deviceName", descriptor.DeviceName, 256);
             AddStringParameter(updateCommand, "@hostName", descriptor.HostName, 256);
             AddNullableStringParameter(updateCommand, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
-            AddStringParameter(updateCommand, "@agentVersion", descriptor.AgentVersion, 64);
+            AddStringParameter(updateCommand, "@agentVersion", descriptor.AgentVersion, 128);
             updateCommand.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
             await updateCommand.ExecuteNonQueryAsync(cancellationToken);
             return currentPresenceId;
@@ -208,7 +208,7 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         AddStringParameter(insertCommand, "@deviceName", descriptor.DeviceName, 256);
         AddStringParameter(insertCommand, "@hostName", descriptor.HostName, 256);
         AddNullableStringParameter(insertCommand, "@remoteIpAddress", descriptor.RemoteIpAddress, 64);
-        AddStringParameter(insertCommand, "@agentVersion", descriptor.AgentVersion, 64);
+        AddStringParameter(insertCommand, "@agentVersion", descriptor.AgentVersion, 128);
         insertCommand.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = now;
         insertCommand.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = now;
         await insertCommand.ExecuteNonQueryAsync(cancellationToken);
