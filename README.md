@@ -53,7 +53,7 @@
 - Host 主畫面的時間欄位現在直接顯示 `yyyy-MM-dd HH:mm:ss zzz`，保留資料本身的 offset；`Memory` 與 `SqlServer` 模式的新寫入時間也改用主機本地 `DateTimeOffset.Now`，避免資料庫與畫面一邊是 `+00:00`、另一邊是本機時間造成混淆。
 - Host 主畫面新增「查詢主機名稱 / IP」功能，可直接用電腦名稱、主機名稱、裝置名稱、裝置 ID 或 IP 位址快速篩選裝置與在線紀錄。
 - Host / Server 現在會記錄 Agent 連入時的遠端 IP 位址；主畫面的「已連線裝置」與「在線紀錄」都會顯示 IP 欄位，`Memory` 與 `SqlServer` 模式也都會同步保存。
-- `RemoteDesktopAgentPresenceLogs` 的寫入規則已調整為只有狀態真的從離線轉為上線時才新增一筆；若同一台裝置仍在在線期間內只是重連或重新註冊，系統會沿用尚未關閉的同一筆紀錄，改為更新 `LastSeenAt`、IP、版本與主機資訊，避免在線期間反覆切出多筆紀錄。
+- `RemoteDesktopAgentPresenceLogs` 的寫入規則已調整為兩段式抑制：只有狀態真的從離線轉為上線時才新增一筆；若同一台裝置仍在在線期間內只是重連或重新註冊，系統會沿用尚未關閉的同一筆紀錄，改為更新 `LastSeenAt`、IP、版本與主機資訊。當 Agent 後續離線時，若 `DisconnectReason` 與同裝置上一筆已關閉紀錄相同，系統會覆寫既有紀錄並移除本次新筆數；只有離線原因改變時才會保留新一筆在線紀錄。
 - 中央模式主控台收到大量 dashboard push 事件時，現在會先做短時間節流再刷新，並在 Grid 重綁資料時暫停重繪，降低多台 Agent 在線時的整頁閃爍感。
 - Host 主畫面的 header 與摘要資訊區已重新整理版面，長標題、build 資訊、Server URL 與健康檢查位址改為可自動換行或省略，不再互相遮蓋；兩個 Grid 也改為單格選取，避免每次點欄位都整列反白。
 - Host 主畫面的 `已連線裝置` 與 `在線紀錄` GridView 現在會自行處理 `Ctrl + C` 單格複製，直接將目前欄位值寫入剪貼簿，不再走 DataGridView 內建 OLE 複製路徑，因此不會再跳出 `Current thread must be set to STA` 的例外。

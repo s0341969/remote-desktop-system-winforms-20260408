@@ -244,32 +244,21 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         }, cancellationToken);
     }
 
-    public Task ClosePresenceAsync(Guid presenceId, string deviceId, string reason, CancellationToken cancellationToken)
+    public async Task ClosePresenceAsync(Guid presenceId, string deviceId, string reason, CancellationToken cancellationToken)
     {
-        const string sql = """
-            UPDATE dbo.RemoteDesktopDevices
-            SET
-                IsOnline = 0,
-                LastDisconnectedAt = @now,
-                UpdatedAt = @now
-            WHERE DeviceId = @deviceId;
+        var now = DateTimeOffset.Now;
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
 
-            UPDATE dbo.RemoteDesktopAgentPresenceLogs
-            SET
-                DisconnectedAt = COALESCE(DisconnectedAt, @now),
-                DisconnectReason = COALESCE(DisconnectReason, @reason),
-                LastSeenAt = @now
-            WHERE PresenceId = @presenceId;
-            """;
-
-        return ExecuteAsync(sql, command =>
+        await UpdateDeviceOfflineAsync(connection, transaction, deviceId, now, cancellationToken);
+        var currentLog = await ClosePresenceLogAsync(connection, transaction, presenceId, deviceId, reason, now, cancellationToken);
+        if (currentLog is not null)
         {
-            var now = DateTimeOffset.Now;
-            command.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
-            AddStringParameter(command, "@deviceId", deviceId, 128);
-            AddStringParameter(command, "@reason", reason, 128);
-            command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
-        }, cancellationToken);
+            await MergePresenceLogIfReasonUnchangedAsync(connection, transaction, currentLog, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public Task SetDeviceAuthorizationAsync(string deviceId, bool isAuthorized, string changedByUserName, CancellationToken cancellationToken)
@@ -537,6 +526,165 @@ public sealed class SqlDeviceRepository : IDeviceRepository
         await using var command = new SqlCommand(sql, connection);
         parameterize(command);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task UpdateDeviceOfflineAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string deviceId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.RemoteDesktopDevices
+            SET
+                IsOnline = 0,
+                LastDisconnectedAt = @now,
+                UpdatedAt = @now
+            WHERE DeviceId = @deviceId;
+            """;
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        AddStringParameter(command, "@deviceId", deviceId, 128);
+        command.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<AgentPresenceLogRecord?> ClosePresenceLogAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        Guid presenceId,
+        string deviceId,
+        string reason,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        const string closeSql = """
+            UPDATE dbo.RemoteDesktopAgentPresenceLogs
+            SET
+                DisconnectedAt = COALESCE(DisconnectedAt, @now),
+                DisconnectReason = COALESCE(DisconnectReason, @reason),
+                LastSeenAt = @now
+            WHERE PresenceId = @presenceId;
+            """;
+
+        await using (var closeCommand = new SqlCommand(closeSql, connection, transaction))
+        {
+            closeCommand.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+            AddStringParameter(closeCommand, "@reason", reason, 128);
+            closeCommand.Parameters.Add("@now", SqlDbType.DateTimeOffset).Value = now;
+            await closeCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string readSql = """
+            SELECT
+                PresenceId,
+                DeviceId,
+                DeviceName,
+                HostName,
+                RemoteIpAddress,
+                AgentVersion,
+                ConnectedAt,
+                LastSeenAt,
+                DisconnectedAt,
+                DisconnectReason
+            FROM dbo.RemoteDesktopAgentPresenceLogs
+            WHERE PresenceId = @presenceId AND DeviceId = @deviceId;
+            """;
+
+        await using var readCommand = new SqlCommand(readSql, connection, transaction);
+        readCommand.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = presenceId;
+        AddStringParameter(readCommand, "@deviceId", deviceId, 128);
+        await using var reader = await readCommand.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var connectedAt = reader.GetFieldValue<DateTimeOffset>(6);
+        var lastSeenAt = reader.GetFieldValue<DateTimeOffset>(7);
+        DateTimeOffset? disconnectedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8);
+        return new AgentPresenceLogRecord
+        {
+            PresenceId = reader.GetGuid(0),
+            DeviceId = reader.GetString(1),
+            DeviceName = reader.GetString(2),
+            HostName = reader.GetString(3),
+            RemoteIpAddress = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+            AgentVersion = reader.GetString(5),
+            ConnectedAt = connectedAt,
+            LastSeenAt = lastSeenAt,
+            DisconnectedAt = disconnectedAt,
+            DisconnectReason = reader.IsDBNull(9) ? null : reader.GetString(9),
+            OnlineSeconds = (long)Math.Max(0, ((disconnectedAt ?? now) - connectedAt).TotalSeconds)
+        };
+    }
+
+    private static async Task MergePresenceLogIfReasonUnchangedAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        AgentPresenceLogRecord currentLog,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(currentLog.DisconnectReason))
+        {
+            return;
+        }
+
+        const string findPreviousSql = """
+            SELECT TOP (1) PresenceId
+            FROM dbo.RemoteDesktopAgentPresenceLogs
+            WHERE DeviceId = @deviceId
+              AND PresenceId <> @presenceId
+              AND DisconnectReason = @reason
+              AND DisconnectedAt IS NOT NULL
+            ORDER BY DisconnectedAt DESC, ConnectedAt DESC;
+            """;
+
+        Guid? previousPresenceId;
+        await using (var findCommand = new SqlCommand(findPreviousSql, connection, transaction))
+        {
+            AddStringParameter(findCommand, "@deviceId", currentLog.DeviceId, 128);
+            findCommand.Parameters.Add("@presenceId", SqlDbType.UniqueIdentifier).Value = currentLog.PresenceId;
+            AddStringParameter(findCommand, "@reason", currentLog.DisconnectReason, 128);
+            var previousResult = await findCommand.ExecuteScalarAsync(cancellationToken);
+            previousPresenceId = previousResult is Guid guid ? guid : null;
+        }
+
+        if (previousPresenceId is null)
+        {
+            return;
+        }
+
+        const string mergeSql = """
+            UPDATE dbo.RemoteDesktopAgentPresenceLogs
+            SET
+                DeviceName = @deviceName,
+                HostName = @hostName,
+                RemoteIpAddress = @remoteIpAddress,
+                AgentVersion = @agentVersion,
+                ConnectedAt = @connectedAt,
+                LastSeenAt = @lastSeenAt,
+                DisconnectedAt = @disconnectedAt,
+                DisconnectReason = @disconnectReason
+            WHERE PresenceId = @targetPresenceId;
+
+            DELETE FROM dbo.RemoteDesktopAgentPresenceLogs
+            WHERE PresenceId = @sourcePresenceId;
+            """;
+
+        await using var mergeCommand = new SqlCommand(mergeSql, connection, transaction);
+        mergeCommand.Parameters.Add("@targetPresenceId", SqlDbType.UniqueIdentifier).Value = previousPresenceId.Value;
+        mergeCommand.Parameters.Add("@sourcePresenceId", SqlDbType.UniqueIdentifier).Value = currentLog.PresenceId;
+        AddStringParameter(mergeCommand, "@deviceName", currentLog.DeviceName, 256);
+        AddStringParameter(mergeCommand, "@hostName", currentLog.HostName, 256);
+        AddNullableStringParameter(mergeCommand, "@remoteIpAddress", currentLog.RemoteIpAddress, 64);
+        AddStringParameter(mergeCommand, "@agentVersion", currentLog.AgentVersion, 64);
+        mergeCommand.Parameters.Add("@connectedAt", SqlDbType.DateTimeOffset).Value = currentLog.ConnectedAt;
+        mergeCommand.Parameters.Add("@lastSeenAt", SqlDbType.DateTimeOffset).Value = currentLog.LastSeenAt;
+        mergeCommand.Parameters.Add("@disconnectedAt", SqlDbType.DateTimeOffset).Value = (object?)currentLog.DisconnectedAt ?? DBNull.Value;
+        AddStringParameter(mergeCommand, "@disconnectReason", currentLog.DisconnectReason, 128);
+        await mergeCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static void AddStringParameter(SqlCommand command, string name, string? value, int length)

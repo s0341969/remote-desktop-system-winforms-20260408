@@ -124,7 +124,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
 
             if (_presenceLogs.TryGetValue(presenceId, out var log))
             {
-                _presenceLogs[presenceId] = new AgentPresenceLogRecord
+                var closedLog = new AgentPresenceLogRecord
                 {
                     PresenceId = log.PresenceId,
                     DeviceId = log.DeviceId,
@@ -174,7 +174,7 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
 
             if (_presenceLogs.TryGetValue(presenceId, out var log))
             {
-                _presenceLogs[presenceId] = new AgentPresenceLogRecord
+                var closedLog = new AgentPresenceLogRecord
                 {
                     PresenceId = log.PresenceId,
                     DeviceId = log.DeviceId,
@@ -188,6 +188,40 @@ public sealed class InMemoryDeviceRepository : IDeviceRepository
                     DisconnectReason = reason,
                     OnlineSeconds = (long)Math.Max(0, (now - log.ConnectedAt).TotalSeconds)
                 };
+
+                var previousLog = _presenceLogs.Values
+                    .Where(item =>
+                        item.PresenceId != closedLog.PresenceId &&
+                        item.DisconnectedAt is not null &&
+                        string.Equals(item.DeviceId, closedLog.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(item.DisconnectReason, closedLog.DisconnectReason, StringComparison.Ordinal))
+                    .OrderByDescending(static item => item.DisconnectedAt)
+                    .ThenByDescending(static item => item.ConnectedAt)
+                    .FirstOrDefault();
+
+                if (previousLog is null)
+                {
+                    _presenceLogs[presenceId] = closedLog;
+                }
+                else
+                {
+                    _presenceLogs[previousLog.PresenceId] = new AgentPresenceLogRecord
+                    {
+                        PresenceId = previousLog.PresenceId,
+                        DeviceId = closedLog.DeviceId,
+                        DeviceName = closedLog.DeviceName,
+                        HostName = closedLog.HostName,
+                        RemoteIpAddress = closedLog.RemoteIpAddress,
+                        AgentVersion = closedLog.AgentVersion,
+                        ConnectedAt = closedLog.ConnectedAt,
+                        LastSeenAt = closedLog.LastSeenAt,
+                        DisconnectedAt = closedLog.DisconnectedAt,
+                        DisconnectReason = closedLog.DisconnectReason,
+                        OnlineSeconds = closedLog.OnlineSeconds
+                    };
+
+                    _presenceLogs.Remove(presenceId);
+                }
             }
         }
 
