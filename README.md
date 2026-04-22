@@ -101,6 +101,7 @@
 - Viewer 新增遠端檔案總管，可直接瀏覽 Agent 端資料夾、移動遠端項目，並從總管內選取檔案下載到 Host。
 - Host Viewer 右上角的 Agent 操作已改成 `功能` 下拉按鍵，集中收納開啟資料夾、剪貼簿同步、upload/download、全螢幕、聚焦 Viewer 與中斷連線。
 - Host 的登入窗、主控台、Viewer，以及 Agent 主畫面現在都會顯示 build 版本與 EXE 建置時間，方便直接確認目前執行中的是否為最新發佈版。
+- 版本號現在改為 repo 級別集中管理，Host / Agent / Server 每次 build / publish 都會自動產生新的四段版號 `主版.次版.yyDDD.HHmm`；Agent 上報給主控台的 `Agent 版本` 也改用同一個 build 版號來源，方便直接在主控台辨識目前實際部署版本。
 - Agent 主畫面的操作入口已改成右上角 `功能` 下拉按鍵，集中提供設定、複製裝置 ID、複製 Server 位址與立即重新整理。
 - Agent 現在支援系統匣常駐模式，預設啟動時會直接在背景執行，不先顯示主視窗，也不顯示系統通知；可依 `Agent:ShowTrayIcon` 決定是否顯示系統匣圖示。
 - `Agent:StartHidden` 預設為 `true`，若需要現場顯示主視窗，可在 `appsettings.json` 改成 `false`。

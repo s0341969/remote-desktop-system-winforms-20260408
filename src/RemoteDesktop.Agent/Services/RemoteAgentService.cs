@@ -364,7 +364,7 @@ public sealed class RemoteAgentService : BackgroundService
 
     private string CreateHelloPayload(int screenWidth, int screenHeight, AgentInventoryProfile inventory)
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        var version = AppBuildInfo.Version;
         var machineIdentity = AgentIdentity.GetMachineIdentity();
         return JsonSerializer.Serialize(new AgentHelloMessage
         {

@@ -1,10 +1,14 @@
 using System.Reflection;
+using System.Diagnostics;
 
 namespace RemoteDesktop.Agent;
 
 internal static class AppBuildInfo
 {
+    private static readonly Lazy<string> VersionValue = new(CreateVersion);
     private static readonly Lazy<string> DisplayValue = new(CreateDisplay);
+
+    public static string Version => VersionValue.Value;
 
     public static string Display => DisplayValue.Value;
 
@@ -20,13 +24,33 @@ internal static class AppBuildInfo
 
     private static string CreateDisplay()
     {
-        var assembly = Assembly.GetEntryAssembly() ?? typeof(AppBuildInfo).Assembly;
-        var version = assembly.GetName().Version?.ToString(3) ?? "1.0.0";
         var processPath = Environment.ProcessPath;
         var builtAt = !string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath)
             ? File.GetLastWriteTime(processPath)
             : DateTime.Now;
 
-        return $"Build {version} {builtAt:yyyy-MM-dd HH:mm:ss}";
+        return $"Build {Version} {builtAt:yyyy-MM-dd HH:mm:ss}";
+    }
+
+    private static string CreateVersion()
+    {
+        var assembly = Assembly.GetEntryAssembly() ?? typeof(AppBuildInfo).Assembly;
+        var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            return informationalVersion;
+        }
+
+        var processPath = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath))
+        {
+            var productVersion = FileVersionInfo.GetVersionInfo(processPath).ProductVersion;
+            if (!string.IsNullOrWhiteSpace(productVersion))
+            {
+                return productVersion;
+            }
+        }
+
+        return assembly.GetName().Version?.ToString() ?? "1.0.0";
     }
 }

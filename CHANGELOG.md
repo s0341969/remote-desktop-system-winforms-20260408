@@ -28,6 +28,7 @@
 - 修正 Agent 在 Windows Server / 微軟遠端桌面 session 切換後可能因桌面擷取失敗而整條 WebSocket 反覆重連的問題；現在畫面擷取失敗只會記 warning 並持續重試，Agent 連線本身不會因此一下在線一下離線。
 - 再修正 Windows Server / RDP session 切換後的 Viewer 黑畫面：Agent 現在不會再把幾乎全黑的 frame 當成正常畫面送出；Viewer 若持續收不到有效 frame，會直接顯示桌面目前不可擷取的狀態訊息。
 - 再補 Windows Server 的 session 自動恢復：Agent 新增 `Agent:AutoRecoverInteractiveSessionOnWindowsServer`，預設會在 RDP 關閉後桌面不可擷取時嘗試執行 `tscon <目前 session> /dest:console`，將互動桌面切回 console，改善只有 mstsc 開著時 Viewer 才有畫面的情況。
+- 新增 repo 級別的集中 build 版本規則；Host / Agent / Server 現在每次 build / publish 都會自動產生新的四段版號 `主版.次版.yyDDD.HHmm`，且 Agent `hello` 上報與主控台 `Agent 版本` 欄位改為直接使用同一個 build 版本來源，方便控管現場版本。
 
 ## 2026-04-19
 

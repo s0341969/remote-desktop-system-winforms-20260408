@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <VersionMajor>1</VersionMajor>
+    <VersionMinor>0</VersionMinor>
+    <VersionPatch>0</VersionPatch>
+    <BuildVersionStamp>$([System.DateTime]::Now.ToString('yy'))$([System.DateTime]::Now.DayOfYear.ToString('000'))</BuildVersionStamp>
+    <BuildRevisionStamp>$([System.DateTime]::Now.ToString('HHmm'))</BuildRevisionStamp>
+    <Version>$(VersionMajor).$(VersionMinor).$(BuildVersionStamp).$(BuildRevisionStamp)</Version>
+    <AssemblyVersion>$(VersionMajor).$(VersionMinor).0.0</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+  </PropertyGroup>
+</Project>
