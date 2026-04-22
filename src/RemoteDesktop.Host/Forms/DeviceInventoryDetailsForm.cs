@@ -1,5 +1,6 @@
 using RemoteDesktop.Host.Models;
 using RemoteDesktop.Host.Services;
+using System.Threading;
 
 namespace RemoteDesktop.Host.Forms;
 
@@ -44,20 +45,22 @@ public partial class DeviceInventoryDetailsForm : Form
             return;
         }
 
-        using var dialog = new SaveFileDialog
-        {
-            Filter = "CSV 檔案 (*.csv)|*.csv",
-            FileName = $"{_device.DeviceId}_inventory_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
-            Title = HostUiText.Window("匯出盤點 CSV", "Export inventory CSV")
-        };
-
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        var path = SelectExportSavePath(
+            this,
+            "CSV 檔案 (*.csv)|*.csv",
+            $"{_device.DeviceId}_inventory_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+            HostUiText.Window("匯出盤點 CSV", "Export inventory CSV"));
+        if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
-        await _inventoryExportService.ExportCsvAsync(dialog.FileName, _device, _history, CancellationToken.None);
-        lblStatusValue.Text = HostUiText.Bi($"CSV 已匯出：{dialog.FileName}", $"CSV exported: {dialog.FileName}");
+        await ExportInventoryAsync(
+            path,
+            HostUiText.Bi("正在匯出 CSV...", "Exporting CSV..."),
+            () => _inventoryExportService.ExportCsvAsync(path, _device, _history, CancellationToken.None),
+            HostUiText.Bi($"CSV 已匯出：{path}", $"CSV exported: {path}"),
+            HostUiText.Bi("匯出 CSV 失敗", "CSV export failed"));
     }
 
     private async void btnExportExcel_Click(object sender, EventArgs e)
@@ -67,20 +70,22 @@ public partial class DeviceInventoryDetailsForm : Form
             return;
         }
 
-        using var dialog = new SaveFileDialog
-        {
-            Filter = "Excel 活頁簿 (*.xlsx)|*.xlsx",
-            FileName = $"{_device.DeviceId}_inventory_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
-            Title = HostUiText.Window("匯出盤點 Excel", "Export inventory Excel")
-        };
-
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        var path = SelectExportSavePath(
+            this,
+            "Excel 活頁簿 (*.xlsx)|*.xlsx",
+            $"{_device.DeviceId}_inventory_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+            HostUiText.Window("匯出盤點 Excel", "Export inventory Excel"));
+        if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
-        await _inventoryExportService.ExportExcelAsync(dialog.FileName, _device, _history, CancellationToken.None);
-        lblStatusValue.Text = HostUiText.Bi($"Excel 已匯出：{dialog.FileName}", $"Excel exported: {dialog.FileName}");
+        await ExportInventoryAsync(
+            path,
+            HostUiText.Bi("正在匯出 Excel...", "Exporting Excel..."),
+            () => _inventoryExportService.ExportExcelAsync(path, _device, _history, CancellationToken.None),
+            HostUiText.Bi($"Excel 已匯出：{path}", $"Excel exported: {path}"),
+            HostUiText.Bi("匯出 Excel 失敗", "Excel export failed"));
     }
 
     private void gridHistory_SelectionChanged(object sender, EventArgs e)
@@ -247,6 +252,109 @@ public partial class DeviceInventoryDetailsForm : Form
             gridSnapshotDetails.Columns[0].HeaderText = HostUiText.Bi("欄位", "Field");
             gridSnapshotDetails.Columns[1].HeaderText = HostUiText.Bi("值", "Value");
         }
+    }
+
+    private async Task ExportInventoryAsync(string path, string workingStatus, Func<Task> exportAsync, string successStatus, string failureTitle)
+    {
+        try
+        {
+            btnRefresh.Enabled = false;
+            btnExportCsv.Enabled = false;
+            btnExportExcel.Enabled = false;
+            lblStatusValue.Text = workingStatus;
+
+            await exportAsync();
+            lblStatusValue.Text = successStatus;
+        }
+        catch (Exception exception)
+        {
+            lblStatusValue.Text = HostUiText.Bi($"匯出失敗：{exception.Message}", $"Export failed: {exception.Message}");
+            MessageBox.Show(
+                HostUiText.Bi($"寫入檔案失敗：{exception.Message}\n目標：{path}", $"Failed to write the export file: {exception.Message}\nTarget: {path}"),
+                failureTitle,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnRefresh.Enabled = true;
+            btnExportCsv.Enabled = _device is not null;
+            btnExportExcel.Enabled = _device is not null;
+        }
+    }
+
+    private static string? SelectExportSavePath(IWin32Window owner, string filter, string fileName, string title)
+    {
+        string? selectedFilePath = null;
+        Exception? selectionException = null;
+        var ownerHandle = ResolveOwnerHandle(owner);
+        using var completed = new ManualResetEventSlim(false);
+
+        var dialogThread = new Thread(() =>
+        {
+            try
+            {
+                using var dialog = new SaveFileDialog
+                {
+                    Filter = filter,
+                    FileName = fileName,
+                    Title = title,
+                    RestoreDirectory = true,
+                    AddExtension = true,
+                    OverwritePrompt = true,
+                    AutoUpgradeEnabled = true
+                };
+
+                var result = ownerHandle != IntPtr.Zero
+                    ? dialog.ShowDialog(new DialogOwnerWindow(ownerHandle))
+                    : dialog.ShowDialog();
+                if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.FileName))
+                {
+                    selectedFilePath = dialog.FileName;
+                }
+            }
+            catch (Exception exception)
+            {
+                selectionException = exception;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "DeviceInventoryExportSaveDialog"
+        };
+
+        dialogThread.SetApartmentState(ApartmentState.STA);
+        dialogThread.Start();
+        completed.Wait();
+        dialogThread.Join();
+
+        if (selectionException is not null)
+        {
+            throw new InvalidOperationException(
+                HostUiText.Bi($"開啟匯出目的地選擇器失敗：{selectionException.Message}", $"Failed to open the export save dialog: {selectionException.Message}"),
+                selectionException);
+        }
+
+        return selectedFilePath;
+    }
+
+    private static IntPtr ResolveOwnerHandle(IWin32Window? owner)
+    {
+        return owner?.Handle ?? IntPtr.Zero;
+    }
+
+    private sealed class DialogOwnerWindow : IWin32Window
+    {
+        public DialogOwnerWindow(IntPtr handle)
+        {
+            Handle = handle;
+        }
+
+        public IntPtr Handle { get; }
     }
 
     private sealed record InventoryDetailRow(string Field, string Value);

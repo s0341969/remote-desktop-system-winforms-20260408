@@ -55,6 +55,15 @@ public sealed class InventoryExportService
         IReadOnlyList<InventoryHistoryRecord> history,
         CancellationToken cancellationToken)
     {
+        return Task.Run(() => ExportExcelCore(path, device, history, cancellationToken), cancellationToken);
+    }
+
+    private static void ExportExcelCore(
+        string path,
+        DeviceRecord device,
+        IReadOnlyList<InventoryHistoryRecord> history,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         using var fileStream = File.Create(path);
         using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create, leaveOpen: false);
@@ -149,7 +158,6 @@ public sealed class InventoryExportService
             WriteWorksheet(writer, BuildHistoryWorksheetRows(history));
         });
 
-        return Task.CompletedTask;
     }
 
     private static IEnumerable<string[]> BuildCurrentWorksheetRows(DeviceRecord device)

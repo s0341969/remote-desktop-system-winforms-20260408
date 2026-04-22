@@ -23,6 +23,7 @@
 - 修正 Host 本機下載落地路徑：下載暫存檔改為每次使用唯一檔名，完成時若原本指定的本機目的檔被占用，會自動改存成 `檔名 (1)`、`檔名 (2)` 等可用名稱，避免同名檔或殘留暫存檔把下載誤判成失敗。
 - 修正 Agent 盤點在部分電腦上抓不到作業系統版本與硬體摘要的問題；現在 WMI 失敗時會再改用 registry、`RuntimeInformation`、`Environment.OSVersion` 與 `GlobalMemoryStatusEx` 補抓 CPU、記憶體與 Windows 版本資訊。
 - 修正 `SqlServer` 模式的 inventory 歷史判定：現在不再把 `CollectedAt` 視為內容變更，只有 CPU、記憶體、磁碟、OS、Office 或最後更新等實際盤點內容改變時才新增 `RemoteDesktopInventoryHistory` 紀錄。
+- 修正「裝置詳細資訊」匯出 CSV / Excel 時可能卡住的問題；匯出目的地 `SaveFileDialog` 現在改用獨立 STA 執行緒顯示，實際寫檔也改成非阻塞背景工作，不再讓詳細資訊視窗在匯出期間假死。
 
 ## 2026-04-19
 
