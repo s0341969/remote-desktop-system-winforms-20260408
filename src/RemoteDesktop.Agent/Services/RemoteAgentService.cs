@@ -285,9 +285,34 @@ public sealed class RemoteAgentService : BackgroundService
     private async Task CaptureLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
     {
         var delayMs = Math.Clamp(1000 / Math.Max(_options.CaptureFramesPerSecond, 1), 40, 1000);
+        var captureUnavailable = false;
         while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
-            var frame = _captureService.Capture();
+            DesktopFrame frame;
+            try
+            {
+                frame = _captureService.Capture();
+                if (captureUnavailable)
+                {
+                    captureUnavailable = false;
+                    _runtimeState.MarkInfo(AgentUiText.Bi("互動桌面擷取已恢復。", "Interactive desktop capture recovered."));
+                }
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                if (!captureUnavailable)
+                {
+                    captureUnavailable = true;
+                    _runtimeState.MarkWarning(AgentUiText.Bi(
+                        $"目前無法擷取互動桌面，Agent 會維持在線並持續重試：{exception.Message}",
+                        $"The interactive desktop is currently unavailable. The Agent will stay connected and keep retrying: {exception.Message}"));
+                    _logger.LogWarning(exception, "Desktop capture failed. Agent will stay connected and retry.");
+                }
+
+                await Task.Delay(Math.Max(delayMs, 1000), cancellationToken);
+                continue;
+            }
+
             _lastScreenWidth = frame.Width;
             _lastScreenHeight = frame.Height;
             await sendLock.WaitAsync(cancellationToken);

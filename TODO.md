@@ -19,6 +19,7 @@
 - [ ] 盤點單檔 self-contained 發佈後的啟動時間、記憶體占用與防毒掃描行為，確認現場部署不會因單檔解壓或安全軟體誤判造成額外延遲
 - [ ] 為中央儀表板推播補更完整的批次合併與離線重連後狀態快照策略；目前已先補主控台事件節流，但大量 Agent 變動時仍可再進一步減少 API 讀取量
 - [ ] 盤點 Host 主控台表格排序偏好是否要持久化，讓每台 Console Client 重開後可沿用使用者上次選定的欄位與方向
+- [ ] 為 Host 主控台的裝置選取與 Viewer 開啟流程補 UI 自動化測試，覆蓋 `CellSelect`、排序、搜尋與背景 refresh 同時發生時的選取正確性
 - [ ] 盤點 Host 主控台時間欄位是否要再提供「本地時間 / UTC / 原始 offset」切換，避免跨時區主機混用時只有單一顯示模式
 - [ ] 補一份正式的角色權限對照表與 UI 說明，明確列出管理員、操作員、檢視者各自可見按鈕、Viewer 能力與中央模式 API 權限，特別是 `Operator` 可控制遠端但不可上傳/下載的差異
 - [ ] 盤點 `Operator` 與 `Viewer` 後續是否還要保留更細的差異化能力，例如允許操作員下載但禁止輸入，或允許查看檔案總管但禁止修改
@@ -26,6 +27,7 @@
 - [ ] 盤點 Host 主控台 GridView 後續是否要再補右鍵選單、欄位值複製提示與多格/整列匯出，避免目前只先補 `Ctrl + C` 單格複製
 - [ ] 評估 `RemoteDesktopAgentPresenceLogs` 後續是否要再補 retention / archive 策略；目前已壓到同一在線期間共用單筆、相同 `DisconnectReason` 也會覆寫，但長期歷史仍可能持續累積
 - [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
+- [ ] 為 Windows Server / RDP session 切換補自動化或手動驗證案例，確認 Agent 在互動桌面暫時不可擷取時會維持在線、持續 heartbeat，且恢復後能正常續傳畫面
 - [ ] 為 Host / Server 的 Agent socket 關閉流程再補 `ObjectDisposedException` / aborted close 自動化測試，確認不會把預期關閉誤記成 timeout warning
 - [ ] 為中央 Viewer Session Lock 補更多策略，包含排隊、控制逾時、自動回收與管理員強制踢除
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面

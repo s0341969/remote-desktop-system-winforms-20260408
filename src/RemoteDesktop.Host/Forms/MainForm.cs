@@ -143,9 +143,9 @@ public partial class MainForm : Form
         await RefreshDashboardAsync(showErrorDialog: true, isUserInitiated: true);
     }
 
-    private void btnOpenViewer_Click(object sender, EventArgs e)
+    private async void btnOpenViewer_Click(object sender, EventArgs e)
     {
-        OpenSelectedViewer();
+        await OpenSelectedViewerAsync();
     }
 
     private void btnDeviceDetails_Click(object sender, EventArgs e)
@@ -203,11 +203,11 @@ public partial class MainForm : Form
         auditForm.ShowDialog(this);
     }
 
-    private void gridDevices_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+    private async void gridDevices_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex >= 0)
         {
-            OpenSelectedViewer();
+            await OpenSelectedViewerAsync();
         }
     }
 
@@ -340,9 +340,9 @@ public partial class MainForm : Form
         _logGridSnapshot = snapshot;
     }
 
-    private void OpenSelectedViewer()
+    private async Task OpenSelectedViewerAsync()
     {
-        if (_remoteViewerFormFactory is null)
+        if (_remoteViewerFormFactory is null || _dashboardDataSource is null)
         {
             return;
         }
@@ -353,7 +353,10 @@ public partial class MainForm : Form
             return;
         }
 
-        if (!selected.Source.IsOnline)
+        var currentDevice = await _dashboardDataSource.GetDeviceAsync(selected.Source.DeviceId, CancellationToken.None)
+            ?? selected.Source;
+
+        if (!currentDevice.IsOnline)
         {
             MessageBox.Show(
                 HostUiText.Bi("所選裝置目前離線，無法開啟 Viewer 工作階段。", "The selected device is currently offline and cannot open a viewer session."),
@@ -363,7 +366,7 @@ public partial class MainForm : Form
             return;
         }
 
-        if (!selected.Source.IsAuthorized)
+        if (!currentDevice.IsAuthorized)
         {
             MessageBox.Show(
                 HostUiText.Bi("所選裝置仍在等待核准，請先核准無人值守存取後再開啟 Viewer。", "The selected device is waiting for approval. Approve unattended access before opening a viewer session."),
@@ -378,7 +381,7 @@ public partial class MainForm : Form
             return;
         }
 
-        var viewerForm = _remoteViewerFormFactory.Create(selected.Source, _signedInUser);
+        var viewerForm = _remoteViewerFormFactory.Create(currentDevice, _signedInUser);
         viewerForm.Show(this);
     }
 
@@ -401,7 +404,21 @@ public partial class MainForm : Form
 
     private DeviceGridItem? GetSelectedDevice()
     {
-        return gridDevices.CurrentRow?.DataBoundItem as DeviceGridItem;
+        if (gridDevices.CurrentCell?.OwningRow?.DataBoundItem is DeviceGridItem currentCellItem)
+        {
+            return currentCellItem;
+        }
+
+        if (gridDevices.CurrentRow?.DataBoundItem is DeviceGridItem currentRowItem)
+        {
+            return currentRowItem;
+        }
+
+        return gridDevices.SelectedCells
+            .Cast<DataGridViewCell>()
+            .Select(static cell => cell.OwningRow?.DataBoundItem)
+            .OfType<DeviceGridItem>()
+            .FirstOrDefault();
     }
 
     private async Task ChangeSelectedDeviceAuthorizationAsync(bool isAuthorized)

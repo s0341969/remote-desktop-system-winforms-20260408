@@ -24,6 +24,8 @@
 - 修正 Agent 盤點在部分電腦上抓不到作業系統版本與硬體摘要的問題；現在 WMI 失敗時會再改用 registry、`RuntimeInformation`、`Environment.OSVersion` 與 `GlobalMemoryStatusEx` 補抓 CPU、記憶體與 Windows 版本資訊。
 - 修正 `SqlServer` 模式的 inventory 歷史判定：現在不再把 `CollectedAt` 視為內容變更，只有 CPU、記憶體、磁碟、OS、Office 或最後更新等實際盤點內容改變時才新增 `RemoteDesktopInventoryHistory` 紀錄。
 - 修正「裝置詳細資訊」匯出 CSV / Excel 時可能卡住的問題；匯出目的地 `SaveFileDialog` 現在改用獨立 STA 執行緒顯示，實際寫檔也改成非阻塞背景工作，不再讓詳細資訊視窗在匯出期間假死。
+- 修正 Host 主控台在 `CellSelect` 模式下可能出現「清單顯示在線，但開啟 Viewer 卻跳成離線」的問題；開啟 Viewer 前現在會先依目前儲存格列抓取裝置，再向資料來源重新確認一次最新狀態。
+- 修正 Agent 在 Windows Server / 微軟遠端桌面 session 切換後可能因桌面擷取失敗而整條 WebSocket 反覆重連的問題；現在畫面擷取失敗只會記 warning 並持續重試，Agent 連線本身不會因此一下在線一下離線。
 
 ## 2026-04-19
 
