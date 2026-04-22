@@ -63,6 +63,8 @@
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`；匯出目的地視窗現在改走獨立 STA 對話框執行緒，實際寫檔也會在背景執行，避免「裝置詳細資訊」視窗在匯出時整個卡住。
 - Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；只有 CPU、記憶體、磁碟、OS、Office 或最後更新摘要真的改變時，Host / Server 才會留下變更歷史，單純盤點時間 `CollectedAt` 更新不再新增歷史。
 - Agent 的畫面擷取現在若遇到 Windows Server / RDP session 切換造成的互動桌面暫時不可用，會保留 WebSocket 連線並持續重試，不再因 `CopyFromScreen` 類型的擷取例外讓 Agent 整條連線中斷、主控台反覆在線/離線跳動。
+- Agent 現在也會把「整張幾乎全黑的 frame」視為互動桌面不可用，而不是照常送到 Viewer；Viewer 若持續收不到有效畫面，會改顯示桌面不可擷取的明確狀態，不再只剩一整片黑畫面。
+- Agent 新增 `Agent:AutoRecoverInteractiveSessionOnWindowsServer`，預設為 `true`；當 Windows Server 的微軟遠端桌面關閉後導致互動桌面不可擷取時，Agent 會嘗試使用 `tscon` 將目前 session 切回 console，讓 Viewer 有機會自動恢復畫面，不必一直保持 mstsc 視窗開啟。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopInventoryHistory`，會保存 inventory 指紋、完整 JSON、盤點時間、記錄時間與變更摘要；`Memory` 模式也會同步保留最近歷史。
 - `SqlServer` 模式新增 `dbo.RemoteDesktopDevices.RemoteIpAddress` 與 `dbo.RemoteDesktopAgentPresenceLogs.RemoteIpAddress`，用來持久化 Agent 遠端 IP，舊資料庫也會在啟動時自動補欄位。
 - 新增 `HostSettingsStore` 與 `AgentSettingsStore`，集中設定檔讀寫與驗證。

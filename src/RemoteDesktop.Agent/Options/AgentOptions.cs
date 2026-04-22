@@ -39,6 +39,8 @@ public sealed class AgentOptions
     [Range(5, 1440)]
     public int InventoryRefreshMinutes { get; init; } = 360;
 
+    public bool AutoRecoverInteractiveSessionOnWindowsServer { get; init; } = true;
+
     public bool StartHidden { get; init; } = true;
 
     public bool ShowTrayIcon { get; init; } = true;

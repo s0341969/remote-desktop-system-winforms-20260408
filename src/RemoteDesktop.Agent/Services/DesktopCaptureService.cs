@@ -36,6 +36,11 @@ public sealed class DesktopCaptureService
             ? new Bitmap(source)
             : ResizeBitmap(source, outputSize.Width, outputSize.Height);
 
+        if (IsEffectivelyBlackFrame(resized))
+        {
+            throw new InvalidOperationException("The interactive desktop is currently returning a black frame.");
+        }
+
         return new DesktopFrame(EncodeJpeg(resized, _options.JpegQuality), bounds.Width, bounds.Height);
     }
 
@@ -77,5 +82,34 @@ public sealed class DesktopCaptureService
         using var stream = new MemoryStream();
         image.Save(stream, JpegCodec, encoderParameters);
         return stream.ToArray();
+    }
+
+    private static bool IsEffectivelyBlackFrame(Bitmap bitmap)
+    {
+        const int sampleSteps = 12;
+        const int brightnessThreshold = 8;
+        const int requiredVisibleSamples = 3;
+
+        var widthStep = Math.Max(bitmap.Width / sampleSteps, 1);
+        var heightStep = Math.Max(bitmap.Height / sampleSteps, 1);
+        var visibleSamples = 0;
+
+        for (var y = 0; y < bitmap.Height; y += heightStep)
+        {
+            for (var x = 0; x < bitmap.Width; x += widthStep)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.R > brightnessThreshold || pixel.G > brightnessThreshold || pixel.B > brightnessThreshold)
+                {
+                    visibleSamples++;
+                    if (visibleSamples >= requiredVisibleSamples)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 }

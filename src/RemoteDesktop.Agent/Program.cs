@@ -27,6 +27,7 @@ internal static class Program
         builder.Services.AddSingleton<AgentRuntimeState>();
         builder.Services.AddSingleton<AgentInventoryService>();
         builder.Services.AddSingleton<DesktopCaptureService>();
+        builder.Services.AddSingleton<InteractiveSessionRecoveryService>();
         builder.Services.AddSingleton<ClipboardSyncService>();
         builder.Services.AddSingleton<InputInjectionService>();
         builder.Services.AddSingleton<FileTransferTraceService>();

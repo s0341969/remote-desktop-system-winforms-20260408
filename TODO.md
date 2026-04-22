@@ -28,6 +28,8 @@
 - [ ] 評估 `RemoteDesktopAgentPresenceLogs` 後續是否要再補 retention / archive 策略；目前已壓到同一在線期間共用單筆、相同 `DisconnectReason` 也會覆寫，但長期歷史仍可能持續累積
 - [ ] 為 Host / Server 的 Agent WebSocket 關閉流程補自動化測試，覆蓋「重複 DeviceId 重連取代舊 session」與「對端未完成 close handshake 直接斷線」情境
 - [ ] 為 Windows Server / RDP session 切換補自動化或手動驗證案例，確認 Agent 在互動桌面暫時不可擷取時會維持在線、持續 heartbeat，且恢復後能正常續傳畫面
+- [ ] 補 Windows Server `tscon` 自動切回 console 的實機驗證與權限矩陣，確認不同 Windows Server 版本、管理員/非管理員權限與 RDP 登出方式下都能穩定恢復畫面
+- [ ] 盤點 Windows Server 上「RDP 關閉後轉黑 frame」的偵測策略是否還要再細分，例如登入畫面、鎖定畫面、螢幕保護程式與真正無互動桌面四種狀態
 - [ ] 為 Host / Server 的 Agent socket 關閉流程再補 `ObjectDisposedException` / aborted close 自動化測試，確認不會把預期關閉誤記成 timeout warning
 - [ ] 為中央 Viewer Session Lock 補更多策略，包含排隊、控制逾時、自動回收與管理員強制踢除
 - [ ] 將 Agent 包裝成可選的 Windows Service 模式，同時保留 WinForms 設定介面

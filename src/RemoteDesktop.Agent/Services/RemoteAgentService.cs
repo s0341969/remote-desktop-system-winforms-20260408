@@ -17,6 +17,7 @@ public sealed class RemoteAgentService : BackgroundService
     private readonly AgentRuntimeState _runtimeState;
     private readonly AgentInventoryService _inventoryService;
     private readonly DesktopCaptureService _captureService;
+    private readonly InteractiveSessionRecoveryService _interactiveSessionRecoveryService;
     private readonly ClipboardSyncService _clipboardSyncService;
     private readonly InputInjectionService _inputInjectionService;
     private readonly FileTransferService _fileTransferService;
@@ -29,6 +30,7 @@ public sealed class RemoteAgentService : BackgroundService
         AgentRuntimeState runtimeState,
         AgentInventoryService inventoryService,
         DesktopCaptureService captureService,
+        InteractiveSessionRecoveryService interactiveSessionRecoveryService,
         ClipboardSyncService clipboardSyncService,
         InputInjectionService inputInjectionService,
         FileTransferService fileTransferService,
@@ -38,6 +40,7 @@ public sealed class RemoteAgentService : BackgroundService
         _runtimeState = runtimeState;
         _inventoryService = inventoryService;
         _captureService = captureService;
+        _interactiveSessionRecoveryService = interactiveSessionRecoveryService;
         _clipboardSyncService = clipboardSyncService;
         _inputInjectionService = inputInjectionService;
         _fileTransferService = fileTransferService;
@@ -307,6 +310,20 @@ public sealed class RemoteAgentService : BackgroundService
                         $"目前無法擷取互動桌面，Agent 會維持在線並持續重試：{exception.Message}",
                         $"The interactive desktop is currently unavailable. The Agent will stay connected and keep retrying: {exception.Message}"));
                     _logger.LogWarning(exception, "Desktop capture failed. Agent will stay connected and retry.");
+                }
+
+                var recovery = await _interactiveSessionRecoveryService.TryRecoverAsync(cancellationToken);
+                if (recovery.Recovered)
+                {
+                    _runtimeState.MarkInfo(AgentUiText.Bi(
+                        "偵測到 Windows Server 的 RDP session 已斷開，已嘗試切回主控台桌面，稍後會自動重試畫面擷取。",
+                        "Detected a disconnected Windows Server RDP session and switched it back to the console. Desktop capture will retry automatically."));
+                }
+                else if (recovery.Attempted)
+                {
+                    _runtimeState.MarkInfo(AgentUiText.Bi(
+                        $"已嘗試恢復 Windows Server 的互動桌面，但尚未成功：{recovery.Message}",
+                        $"Attempted to recover the Windows Server interactive desktop, but it has not recovered yet: {recovery.Message}"));
                 }
 
                 await Task.Delay(Math.Max(delayMs, 1000), cancellationToken);

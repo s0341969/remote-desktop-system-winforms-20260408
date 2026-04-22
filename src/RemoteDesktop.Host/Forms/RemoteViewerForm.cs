@@ -104,12 +104,18 @@ public partial class RemoteViewerForm : Form
     private FormWindowState _restoreWindowState;
     private Rectangle _restoreBounds;
     private bool _restoreTopMost;
+    private readonly System.Windows.Forms.Timer _streamHealthTimer = new();
+    private DateTimeOffset? _lastFrameReceivedAt;
+    private DateTimeOffset? _viewerAttachedAt;
+    private bool _streamUnavailableNoticeActive;
 
     public RemoteViewerForm()
     {
         InitializeComponent();
         InitializeUiText();
         KeyPreview = true;
+        _streamHealthTimer.Interval = 2000;
+        _streamHealthTimer.Tick += StreamHealthTimer_Tick;
     }
 
     public void Bind(DeviceRecord device, AuthenticatedUserSession viewer, IRemoteViewerSessionBroker viewerSessionBroker, FileTransferTraceService? fileTransferTraceService = null)
@@ -174,12 +180,16 @@ public partial class RemoteViewerForm : Form
         }
 
         _attached = true;
+        _viewerAttachedAt = DateTimeOffset.Now;
+        _lastFrameReceivedAt = null;
+        _streamUnavailableNoticeActive = false;
         ApplySessionState(new RemoteViewerSessionState(attached.CanControl, attached.ControllerDisplayName, attached.Message), showNotification: attached.CanControl != _viewer.CanControlRemote);
         SetTransferPanelVisible(false);
         ConfigureZoomOptions();
         SyncActionMenuState();
         ApplyPictureLayout();
         pictureStream.Focus();
+        _streamHealthTimer.Start();
     }
 
     protected override async void OnFormClosing(FormClosingEventArgs e)
@@ -208,6 +218,8 @@ public partial class RemoteViewerForm : Form
             await _viewerSessionBroker.DisposeAsync();
             _viewerSessionBroker = null;
         }
+
+        _streamHealthTimer.Stop();
 
         if (pictureStream.Image is not null)
         {
@@ -362,6 +374,8 @@ public partial class RemoteViewerForm : Form
             var previous = pictureStream.Image;
             pictureStream.Image = bitmap;
             previous?.Dispose();
+            _lastFrameReceivedAt = DateTimeOffset.Now;
+            _streamUnavailableNoticeActive = false;
 
             lblStatusValue.Text = HostUiText.Bi($"串流中 {_frameSize.Width} x {_frameSize.Height}", $"Streaming {_frameSize.Width} x {_frameSize.Height}");
             if (_fitToWindow || frameSizeChanged)
@@ -373,6 +387,31 @@ public partial class RemoteViewerForm : Form
         {
             lblStatusValue.Text = HostUiText.Bi($"畫面解碼失敗：{exception.Message}", $"Frame decode failed: {exception.Message}");
         }
+    }
+
+    private void StreamHealthTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!_attached || IsDisposed)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.Now;
+        var referenceTime = _lastFrameReceivedAt ?? _viewerAttachedAt;
+        if (!referenceTime.HasValue || now - referenceTime.Value < TimeSpan.FromSeconds(5))
+        {
+            return;
+        }
+
+        if (_streamUnavailableNoticeActive)
+        {
+            return;
+        }
+
+        _streamUnavailableNoticeActive = true;
+        lblStatusValue.Text = HostUiText.Bi(
+            "已連線，但目前抓不到可用桌面畫面。若這是 Windows Server，請確認微軟遠端桌面關閉後 session 仍留在可互動桌面。",
+            "Connected, but no usable desktop frame is currently available. On Windows Server, make sure the session stays on an interactive desktop after closing Microsoft Remote Desktop.");
     }
 
     protected void ApplyTransferStatus(AgentFileTransferStatusMessage status)
