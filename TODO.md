@@ -2,6 +2,7 @@
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
 - [ ] 若後續要把版本策略從「每次 build 自動產生新版本」升級成「每次正式發版才遞增」，評估是否要再補正式的 release/version manifest 與 commit tag 對照
+- [ ] 為版本字串解析補 publish EXE 實機測試，覆蓋單檔 self-contained、不同 Windows 版本與缺版本資源 fallback，確認不會再影響 Agent `hello` 註冊
 - [ ] 盤點是否要再提供真正的 SAS/安全注意序列整合方案；若未來要做到標準 `Ctrl + Alt + Del` 而不是登入鎖定替代流程，需要評估 service/UIAccess/系統層整合成本與風險
 - [ ] 盤點 Agent 背景模式要不要加「禁止一般使用者自行結束」、「需管理密碼才能顯示主視窗」，以及 `ShowTrayIcon = false` 時的受控喚回機制
 - [ ] 若 Agent 採 `StartHidden = true` 且 `ShowTrayIcon = false`，評估是否要補遠端或命令列喚回/重設設定的維運機制，避免現場無 UI 可操作

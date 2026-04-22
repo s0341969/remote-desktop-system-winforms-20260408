@@ -35,22 +35,41 @@ internal static class AppBuildInfo
     private static string CreateVersion()
     {
         var assembly = Assembly.GetEntryAssembly() ?? typeof(AppBuildInfo).Assembly;
-        var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        try
         {
-            return informationalVersion;
-        }
-
-        var processPath = Environment.ProcessPath;
-        if (!string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath))
-        {
-            var productVersion = FileVersionInfo.GetVersionInfo(processPath).ProductVersion;
-            if (!string.IsNullOrWhiteSpace(productVersion))
+            var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrWhiteSpace(informationalVersion))
             {
-                return productVersion;
+                return informationalVersion;
             }
         }
+        catch
+        {
+        }
 
-        return assembly.GetName().Version?.ToString() ?? "1.0.0";
+        try
+        {
+            var processPath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath))
+            {
+                var productVersion = FileVersionInfo.GetVersionInfo(processPath).ProductVersion;
+                if (!string.IsNullOrWhiteSpace(productVersion))
+                {
+                    return productVersion;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            return assembly.GetName().Version?.ToString() ?? "1.0.0";
+        }
+        catch
+        {
+            return "1.0.0";
+        }
     }
 }
