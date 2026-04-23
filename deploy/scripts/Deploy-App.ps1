@@ -127,17 +127,8 @@ try {
     }
 
     Invoke-Step -Name "Publish Agent" -Action {
-        & pwsh -File (Join-Path $scriptRoot "Publish-App.ps1") `
-            -ProjectRelativePath "src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj" `
-            -OutputRelativePath "deploy\publish\Agent" `
-            -ExecutableName "RemoteDesktop.Agent.exe" `
-            -Configuration $Configuration `
-            -Framework "net6.0-windows" `
-            -RuntimeIdentifier "win7-x64" `
-            -SelfContained:$true `
-            -PublishSingleFile:$true `
-            -EnableCompressionInSingleFile:$true `
-            -IncludeNativeLibrariesForSelfExtract:$true
+        & pwsh -File (Join-Path $scriptRoot "Publish-Agent-Variants.ps1") `
+            -Configuration $Configuration
 
         if ($LASTEXITCODE -ne 0) {
             throw "Agent publish failed with exit code $LASTEXITCODE"

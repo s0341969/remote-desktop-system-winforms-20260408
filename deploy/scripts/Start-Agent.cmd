@@ -1,9 +1,13 @@
 @echo off
 setlocal
-set "AGENT_EXE=%~dp0..\publish\Agent\RemoteDesktop.Agent.exe"
+if /i "%PROCESSOR_ARCHITECTURE%"=="x86" if not defined PROCESSOR_ARCHITEW6432 (
+  set "AGENT_EXE=%~dp0..\publish\Agent\RemoteDesktop.Agent.x86.exe"
+) else (
+  set "AGENT_EXE=%~dp0..\publish\Agent\RemoteDesktop.Agent.x64.exe"
+)
 
 if not exist "%AGENT_EXE%" (
-  echo Agent publish output not found. Run deploy\scripts\Publish-Agent-Launcher.cmd first.
+  echo Agent publish output not found. Rebuild deploy\publish first.
   exit /b 1
 )
 

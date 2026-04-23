@@ -22,7 +22,9 @@
 - `deploy/publish/Host`
   - Host 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/publish/Agent`
-  - Agent 的單檔 `win7-x64 self-contained` 發佈版。
+  - Agent 的雙版本 self-contained 發佈版。
+  - `RemoteDesktop.Agent.x64.exe` 給 `Win7/Win10/Win11 64-bit`。
+  - `RemoteDesktop.Agent.x86.exe` 給 `Win7/Win10 32-bit`。
 - `deploy/publish/Server`
   - Server 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/scripts`
@@ -109,7 +111,7 @@
 - `Agent:StartHidden` 預設為 `true`，若需要現場顯示主視窗，可在 `appsettings.json` 改成 `false`。
 - `Agent:ShowTrayIcon` 預設為 `true`；若改成 `false`，Agent 會完全背景執行，不會出現在系統匣。
 - 若同時設為 `StartHidden = true` 與 `ShowTrayIcon = false`，Agent 會以完全無 UI 的背景模式執行；本機端不會有主視窗、工作列或系統匣入口。
-- Agent 已回退為 `net6.0-windows` 並改用 `win7-x64 self-contained` 發佈，原因是 `net8.0-windows` 單檔執行檔在 Windows 7 啟動前就會命中 `KERNEL32.dll` 缺少 `LocateXStateFeature`；Host / Server 仍維持 `net8`，只有 Agent 針對 Win7 相容性保留較舊 runtime。
+- Agent 已回退為 `net6.0-windows`，並改成同時輸出 `win7-x64` 與 `win7-x86` 兩個 self-contained 版本，原因是 `net8.0-windows` 單檔執行檔在 Windows 7 啟動前就會命中 `KERNEL32.dll` 缺少 `LocateXStateFeature`；Host / Server 仍維持 `net8`，只有 Agent 針對 Win7 相容性保留較舊 runtime。
 - 第一階段新增 `RemoteDesktop.Server` 與 `RemoteDesktop.Shared`，把中央 Host Server 所需的通訊契約、裝置儲存與 Agent WebSocket 通道獨立出來，為後續多主控台 Console Client 做準備。
 - 第二階段讓 `RemoteDesktop.Host` 可透過 `ControlServer:CentralServerUrl` 切換成中央 Server 儀表板模式；此模式下主畫面會改抓中央 Server 的裝置清單、在線紀錄與授權更新，Viewer、遠端畫面串流與 Viewer 指令轉送也已改由中央 Server websocket 中繼。
 - 第七階段補上中央儀表板 WebSocket 推播 `/ws/dashboard`，中央模式的 Host 主畫面改為「事件推播 + 低頻輪詢回補」；裝置上線、離線與授權異動會即時刷新，多台主控台不再只靠固定 5 秒輪詢。
@@ -138,7 +140,7 @@
 - `Deploy-App.ps1` 現在會在 `deploy/release/current` 產生 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤對應 commit、產生時間與 Host/Agent/Server 封裝大小。
 - `deploy/scripts/Verify-Central-Release.ps1` 可直接驗證 release 套件是否完整，並啟動 publish 版 `RemoteDesktop.Server.exe` 檢查 `/healthz`。
 - 修正 Host 啟動時 `CentralServerUrl` 的驗證邏輯：現在允許空值或空字串，只有真的填了內容時才要求為合法的完整 `http/https/ftp` URL，避免現場未設定中央模式時直接因 DataAnnotation 驗證失敗而無法啟動。
-- `Deploy-App.ps1` 現在會將 Host / Agent / Server 全部發布為單檔 self-contained EXE；其中 Host / Server 為 `win-x64`，Agent 為 `win7-x64`，DLL 與 .NET runtime 會內嵌到主執行檔，保留外部 `appsettings.json` 與資料腳本方便現場設定。
+- `Deploy-App.ps1` 現在會將 Host / Agent / Server 全部發布為單檔 self-contained EXE；其中 Host / Server 為 `win-x64`，Agent 會在同一個 `deploy/publish/Agent` 目錄同時輸出 `RemoteDesktop.Agent.x64.exe` 與 `RemoteDesktop.Agent.x86.exe`，保留外部 `appsettings.json` 與資料腳本方便現場設定。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -169,11 +171,12 @@
 ### Publish 版
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
-- Agent：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
+- Agent x64：`deploy/publish/Agent/RemoteDesktop.Agent.x64.exe`
+- Agent x86：`deploy/publish/Agent/RemoteDesktop.Agent.x86.exe`
 - Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
 - 這些 publish 版現在已是單檔自帶 runtime，不需要另外安裝 `.NET Desktop Runtime`。
-- Agent 的 publish 版目前是為了 Win7 相容性改成 `net6.0-windows / win7-x64`；若現場只跑 Windows 10/11 或 Windows Server，仍可和 `net8` 的 Host / Server 正常互通。
+- Agent 的 publish 版目前是為了 Win7 相容性改成 `net6.0-windows`，並同時提供 `win7-x64` / `win7-x86` 兩支 EXE；若現場只跑 Windows 10/11 或 Windows Server，仍可和 `net8` 的 Host / Server 正常互通。
 - Publish 目錄會在每次重建時完整覆蓋；若有自訂設定，應修改 `src/.../appsettings.json` 或在發佈後另外備份部署設定。
 - 可交付壓縮包與固定部署資料夾會輸出到 `deploy/release`。
 - 若要改回 MSSQL：
@@ -275,16 +278,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT="1"
   -EnableCompressionInSingleFile $true `
   -IncludeNativeLibrariesForSelfExtract $true
 
-& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
-  -ProjectRelativePath 'src\RemoteDesktop.Agent\RemoteDesktop.Agent.csproj' `
-  -OutputRelativePath 'deploy\publish\Agent' `
-  -ExecutableName 'RemoteDesktop.Agent.exe' `
-  -Framework 'net6.0-windows' `
-  -RuntimeIdentifier 'win7-x64' `
-  -SelfContained $true `
-  -PublishSingleFile $true `
-  -EnableCompressionInSingleFile $true `
-  -IncludeNativeLibrariesForSelfExtract $true
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-Agent-Variants.ps1
 
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -File .\deploy\scripts\Publish-App.ps1 `
   -ProjectRelativePath 'src\RemoteDesktop.Server\RemoteDesktop.Server.csproj' `
