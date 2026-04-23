@@ -69,7 +69,7 @@ if (Test-Path -LiteralPath $publishRoot) {
 
 New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
 
-Copy-Item -LiteralPath (Join-Path $x64TempRoot "RemoteDesktop.Agent.exe") -Destination (Join-Path $publishRoot "RemoteDesktop.Agent.x64.exe") -Force
+Copy-Item -LiteralPath (Join-Path $x64TempRoot "RemoteDesktop.Agent.exe") -Destination (Join-Path $publishRoot "RemoteDesktop.Agent.exe") -Force
 Copy-Item -LiteralPath (Join-Path $x86TempRoot "RemoteDesktop.Agent.exe") -Destination (Join-Path $publishRoot "RemoteDesktop.Agent.x86.exe") -Force
 
 if (Test-Path -LiteralPath $settingsBackupPath) {
@@ -87,5 +87,5 @@ elseif (Test-Path -LiteralPath (Join-Path $x64TempRoot "appsettings.Development.
 }
 
 Write-Host "Agent publish variants completed successfully."
-Write-Host "x64: $(Join-Path $publishRoot 'RemoteDesktop.Agent.x64.exe')"
+Write-Host "x64: $(Join-Path $publishRoot 'RemoteDesktop.Agent.exe')"
 Write-Host "x86: $(Join-Path $publishRoot 'RemoteDesktop.Agent.x86.exe')"

@@ -4,6 +4,7 @@
 
 - 修正 `RemoteDesktop.Agent.exe` 在 Windows 7 上啟動時跳出 `無法找到輸入點 LocateXStateFeature (KERNEL32.dll)` 的相容性問題；Agent 專案已改回 `net6.0-windows`，正式 publish 版也改成 `win7-x64 self-contained`，讓 Win7 仍可直接啟動，同時保留與現有 `net8` Host / Server 的通訊相容性。
 - 再補 `RemoteDesktop.Agent` 的雙架構交付：現在會在同一個 `deploy/publish/Agent` 目錄同時輸出 `RemoteDesktop.Agent.x64.exe` 與 `RemoteDesktop.Agent.x86.exe`，分別對應 64 位元與 32 位元 Windows；`Start-Agent.cmd` 也會依目前作業系統位元數自動挑選正確執行檔。
+- 依最新交付需求調整 Agent 雙架構檔名：`deploy/publish/Agent` 內的 64 位元版本固定為 `RemoteDesktop.Agent.exe`，32 位元維持 `RemoteDesktop.Agent.x86.exe`；`Start-Agent.cmd` 與 publish 腳本已同步更新。
 - 修正 Host 主控台 GridView 複製欄位值時偶發的 `Current thread must be set to STA` 例外；現在 `已連線裝置` 與 `在線紀錄` 會改用自訂的 STA 剪貼簿寫入流程處理 `Ctrl + C`，只複製目前選中的單格內容。
 - 調整 `RemoteDesktopAgentPresenceLogs` 寫入策略：同一台裝置只會在真正從離線轉為上線時新增一筆 presence log；若仍屬同一次在線期間內的重連或重新註冊，現在會沿用未關閉的既有紀錄並更新 `LastSeenAt`、IP、版本與主機資訊，不再反覆新增多筆「在線中」紀錄。
 - 再調整 `RemoteDesktopAgentPresenceLogs` 合併規則：同一台裝置若離線原因 `DisconnectReason` 與上一筆已關閉紀錄相同，現在會更新既有紀錄而不是新增新筆數；只有離線原因改變時才保留新的在線歷史，降低 SQL 與主控台在線紀錄表的成長速度。

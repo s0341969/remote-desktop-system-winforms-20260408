@@ -3,6 +3,7 @@
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
 - [ ] 為 `RemoteDesktop.Agent` 補 Windows 7 實機 smoke test 與相容性 release checklist；目前已回退到 `net6.0-windows / win7-x64` 避開 `LocateXStateFeature`，但仍需要固定驗證 Win7 / Win10 / Win11 三組 publish 啟動結果
 - [ ] 為 Agent 雙架構交付補實機驗證與交付手冊，確認 `RemoteDesktop.Agent.x64.exe` / `RemoteDesktop.Agent.x86.exe` 在 32/64 位元 Windows 上都能正確啟動、連線與自動沿用同一份 `appsettings.json`
+- [ ] 盤點 Agent 雙架構檔名策略是否要再標準化；目前 64 位元檔名固定為 `RemoteDesktop.Agent.exe`、32 位元為 `RemoteDesktop.Agent.x86.exe`，後續若再擴充 ARM 或其他平台需先決定一致命名規格
 - [ ] 若後續要把版本策略從「每次 build 自動產生新版本」升級成「每次正式發版才遞增」，評估是否要再補正式的 release/version manifest 與 commit tag 對照
 - [ ] 為版本字串解析補 publish EXE 實機測試，覆蓋單檔 self-contained、不同 Windows 版本與缺版本資源 fallback，確認不會再影響 Agent `hello` 註冊
 - [ ] 為中央 `SqlServer` 模式補欄位長度相容升級的自動化測試，覆蓋舊 schema + 新 Agent 版本字串 / 較長主機名稱寫入情境，避免再回歸成 SQL 截斷

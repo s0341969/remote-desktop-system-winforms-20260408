@@ -23,7 +23,7 @@
   - Host 的單檔 `win-x64 self-contained` 發佈版。
 - `deploy/publish/Agent`
   - Agent 的雙版本 self-contained 發佈版。
-  - `RemoteDesktop.Agent.x64.exe` 給 `Win7/Win10/Win11 64-bit`。
+  - `RemoteDesktop.Agent.exe` 給 `Win7/Win10/Win11 64-bit`。
   - `RemoteDesktop.Agent.x86.exe` 給 `Win7/Win10 32-bit`。
 - `deploy/publish/Server`
   - Server 的單檔 `win-x64 self-contained` 發佈版。
@@ -140,7 +140,7 @@
 - `Deploy-App.ps1` 現在會在 `deploy/release/current` 產生 `release-manifest.json` 與 `release-summary.txt`，交付包可直接追蹤對應 commit、產生時間與 Host/Agent/Server 封裝大小。
 - `deploy/scripts/Verify-Central-Release.ps1` 可直接驗證 release 套件是否完整，並啟動 publish 版 `RemoteDesktop.Server.exe` 檢查 `/healthz`。
 - 修正 Host 啟動時 `CentralServerUrl` 的驗證邏輯：現在允許空值或空字串，只有真的填了內容時才要求為合法的完整 `http/https/ftp` URL，避免現場未設定中央模式時直接因 DataAnnotation 驗證失敗而無法啟動。
-- `Deploy-App.ps1` 現在會將 Host / Agent / Server 全部發布為單檔 self-contained EXE；其中 Host / Server 為 `win-x64`，Agent 會在同一個 `deploy/publish/Agent` 目錄同時輸出 `RemoteDesktop.Agent.x64.exe` 與 `RemoteDesktop.Agent.x86.exe`，保留外部 `appsettings.json` 與資料腳本方便現場設定。
+- `Deploy-App.ps1` 現在會將 Host / Agent / Server 全部發布為單檔 self-contained EXE；其中 Host / Server 為 `win-x64`，Agent 會在同一個 `deploy/publish/Agent` 目錄同時輸出 `RemoteDesktop.Agent.exe` 與 `RemoteDesktop.Agent.x86.exe`，保留外部 `appsettings.json` 與資料腳本方便現場設定。
 - `RemoteDesktop.Server` 已實測可獨立啟動、可回 `/healthz`，並能接受 Agent `hello-ack` / `heartbeat` 協定。
 - Agent 現在使用較完整的 Win32 輸入注入路徑，鍵盤改用 scan code，滑鼠移動改用絕對座標 `SendInput`，並在未提權時於 Agent 狀態中主動提示高權限視窗可能拒絕接收輸入。
 - Agent 發佈版現在帶有 `highestAvailable` manifest，讓系統可在有權限時直接提升，改善高權限應用程式無法操控的情況。
@@ -171,7 +171,7 @@
 ### Publish 版
 
 - Host：`deploy/publish/Host/RemoteDesktop.Host.exe`
-- Agent x64：`deploy/publish/Agent/RemoteDesktop.Agent.x64.exe`
+- Agent x64：`deploy/publish/Agent/RemoteDesktop.Agent.exe`
 - Agent x86：`deploy/publish/Agent/RemoteDesktop.Agent.x86.exe`
 - Server：`deploy/publish/Server/RemoteDesktop.Server.exe`
 - Host 預設 `ControlServer:PersistenceMode = Memory`，可直接啟動不連資料庫。
