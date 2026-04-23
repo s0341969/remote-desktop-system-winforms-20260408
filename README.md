@@ -28,6 +28,9 @@
   - 需連同同目錄的 `.dll` 與 `.config` 一起部署，不再是 self-contained 單檔。
 - `deploy/publish/Server`
   - Server 的單檔 `win-x64 self-contained` 發佈版。
+- `deploy/publish`
+  - 現在改為本機交付輸出目錄，不再納入 git 版本控管。
+  - 正式交付請透過 `deploy/scripts` 重新產生，或以 release zip / 檔案分享方式配送，不直接提交大型 EXE 到 repository。
 - `deploy/scripts`
   - 發佈、清理與整包交付腳本。
 - `tests/RemoteDesktop.SmokeTests`
