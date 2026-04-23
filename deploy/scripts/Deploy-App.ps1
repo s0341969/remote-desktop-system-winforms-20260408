@@ -132,8 +132,8 @@ try {
             -OutputRelativePath "deploy\publish\Agent" `
             -ExecutableName "RemoteDesktop.Agent.exe" `
             -Configuration $Configuration `
-            -Framework "net8.0-windows" `
-            -RuntimeIdentifier "win-x64" `
+            -Framework "net6.0-windows" `
+            -RuntimeIdentifier "win7-x64" `
             -SelfContained:$true `
             -PublishSingleFile:$true `
             -EnableCompressionInSingleFile:$true `
