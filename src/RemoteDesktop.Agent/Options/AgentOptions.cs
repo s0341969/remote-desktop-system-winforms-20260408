@@ -34,7 +34,7 @@ public sealed class AgentOptions
     public int MaxFrameWidth { get; init; } = 1600;
 
     [Range(1, 60)]
-    public int ReconnectDelaySeconds { get; init; } = 5;
+    public int ReconnectDelaySeconds { get; init; } = 60;
 
     [Range(15, 300)]
     public int HeartbeatIntervalSeconds { get; init; } = 60;
