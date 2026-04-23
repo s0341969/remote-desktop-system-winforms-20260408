@@ -35,4 +35,7 @@ public sealed class AgentSettingsDocument
 
     [Range(1, 60)]
     public int ReconnectDelaySeconds { get; set; } = 5;
+
+    [Range(15, 300)]
+    public int HeartbeatIntervalSeconds { get; set; } = 60;
 }

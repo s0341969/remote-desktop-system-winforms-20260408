@@ -16,6 +16,7 @@ partial class AgentSettingsForm
     private NumericUpDown numJpegQuality;
     private NumericUpDown numMaxFrameWidth;
     private NumericUpDown numReconnectDelay;
+    private NumericUpDown numHeartbeatInterval;
     private FlowLayoutPanel panelButtons;
     private Button btnSave;
     private Button btnCancel;
@@ -45,6 +46,7 @@ partial class AgentSettingsForm
         numJpegQuality = new NumericUpDown();
         numMaxFrameWidth = new NumericUpDown();
         numReconnectDelay = new NumericUpDown();
+        numHeartbeatInterval = new NumericUpDown();
         panelButtons = new FlowLayoutPanel();
         btnSave = new Button();
         btnCancel = new Button();
@@ -55,6 +57,7 @@ partial class AgentSettingsForm
         ((System.ComponentModel.ISupportInitialize)numJpegQuality).BeginInit();
         ((System.ComponentModel.ISupportInitialize)numMaxFrameWidth).BeginInit();
         ((System.ComponentModel.ISupportInitialize)numReconnectDelay).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)numHeartbeatInterval).BeginInit();
         panelButtons.SuspendLayout();
         SuspendLayout();
         // layoutRoot
@@ -71,7 +74,7 @@ partial class AgentSettingsForm
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
         layoutRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 60F));
-        layoutRoot.Size = new Size(700, 620);
+        layoutRoot.Size = new Size(700, 672);
         // lblTitle
         lblTitle.AutoSize = true;
         lblTitle.Font = new Font("Microsoft JhengHei UI", 15F, FontStyle.Bold, GraphicsUnit.Point);
@@ -102,14 +105,16 @@ partial class AgentSettingsForm
         layoutFields.Controls.Add(numMaxFrameWidth, 1, 7);
         layoutFields.Controls.Add(new Label { AutoSize = true, Text = "重連延遲秒數\r\nReconnect delay", Anchor = AnchorStyles.Left }, 0, 8);
         layoutFields.Controls.Add(numReconnectDelay, 1, 8);
+        layoutFields.Controls.Add(new Label { AutoSize = true, Text = "心跳間隔秒數\r\nHeartbeat interval", Anchor = AnchorStyles.Left }, 0, 9);
+        layoutFields.Controls.Add(numHeartbeatInterval, 1, 9);
         layoutFields.Dock = DockStyle.Fill;
         layoutFields.Location = new Point(19, 79);
-        layoutFields.RowCount = 9;
-        for (var i = 0; i < 9; i++)
+        layoutFields.RowCount = 10;
+        for (var i = 0; i < 10; i++)
         {
             layoutFields.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
         }
-        layoutFields.Size = new Size(662, 421);
+        layoutFields.Size = new Size(662, 473);
         // txtServerUrl
         txtServerUrl.Dock = DockStyle.Fill;
         txtServerUrl.Name = "txtServerUrl";
@@ -147,12 +152,17 @@ partial class AgentSettingsForm
         numReconnectDelay.Minimum = 1;
         numReconnectDelay.Name = "numReconnectDelay";
         numReconnectDelay.Value = 1;
+        // numHeartbeatInterval
+        numHeartbeatInterval.Maximum = 300;
+        numHeartbeatInterval.Minimum = 15;
+        numHeartbeatInterval.Name = "numHeartbeatInterval";
+        numHeartbeatInterval.Value = 60;
         // panelButtons
         panelButtons.Controls.Add(btnSave);
         panelButtons.Controls.Add(btnCancel);
         panelButtons.Dock = DockStyle.Fill;
         panelButtons.FlowDirection = FlowDirection.RightToLeft;
-        panelButtons.Location = new Point(19, 547);
+        panelButtons.Location = new Point(19, 599);
         panelButtons.Name = "panelButtons";
         panelButtons.Size = new Size(662, 54);
         // btnSave
@@ -177,9 +187,9 @@ partial class AgentSettingsForm
         CancelButton = btnCancel;
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(700, 620);
+        ClientSize = new Size(700, 672);
         Controls.Add(layoutRoot);
-        MinimumSize = new Size(700, 620);
+        MinimumSize = new Size(700, 672);
         Name = "AgentSettingsForm";
         StartPosition = FormStartPosition.CenterParent;
         Text = "Agent 設定 / Agent Settings";
@@ -191,6 +201,7 @@ partial class AgentSettingsForm
         ((System.ComponentModel.ISupportInitialize)numJpegQuality).EndInit();
         ((System.ComponentModel.ISupportInitialize)numMaxFrameWidth).EndInit();
         ((System.ComponentModel.ISupportInitialize)numReconnectDelay).EndInit();
+        ((System.ComponentModel.ISupportInitialize)numHeartbeatInterval).EndInit();
         panelButtons.ResumeLayout(false);
         ResumeLayout(false);
     }

@@ -33,6 +33,6 @@ public sealed class HostSettingsDto
 
     public bool RequireHttpsRedirect { get; init; }
 
-    [Range(15, 300)]
-    public int AgentHeartbeatTimeoutSeconds { get; init; } = 45;
+    [Range(60, 600)]
+    public int AgentHeartbeatTimeoutSeconds { get; init; } = 180;
 }

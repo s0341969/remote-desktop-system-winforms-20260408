@@ -2,6 +2,7 @@
 
 ## 2026-04-20
 
+- 調整 Agent 與 Host/Server 的 heartbeat 預設策略：新增 `Agent:HeartbeatIntervalSeconds` 並將預設值改為 `60` 秒；對應的 `ControlServer:AgentHeartbeatTimeoutSeconds` 預設改為 `180` 秒，降低大量 Agent 在線時的固定 heartbeat 封包量，同時避免 timeout 設定仍停留在舊值而誤判離線。
 - 修正 `RemoteDesktop.Agent.exe` 在 Windows 7 上啟動時仍會跳出 `LocateXStateFeature` / `GetEnabledXStateFeatures` 缺入口的相容性問題；Agent 最終改為 `net48`，避開 .NET Core / .NET 6+ 在部分 Win7 上啟動前就失敗的 native runtime 相依。
 - 調整 `RemoteDesktop.Agent` 發佈方式：現在 `deploy/publish/Agent` 會輸出 `RemoteDesktop.Agent.exe`（64 位元）與 `RemoteDesktop.Agent.x86.exe`（32 位元），並附帶相依 `.dll` / `.config`；`Start-Agent.cmd` 仍會依作業系統位元數自動挑選正確執行檔。
 - 修正 Host 主控台 GridView 複製欄位值時偶發的 `Current thread must be set to STA` 例外；現在 `已連線裝置` 與 `在線紀錄` 會改用自訂的 STA 剪貼簿寫入流程處理 `Ctrl + C`，只複製目前選中的單格內容。

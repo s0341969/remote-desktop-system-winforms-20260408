@@ -36,6 +36,7 @@ public partial class AgentSettingsForm : Form
         numJpegQuality.Value = Net48Compat.Clamp((decimal)document.JpegQuality, numJpegQuality.Minimum, numJpegQuality.Maximum);
         numMaxFrameWidth.Value = Net48Compat.Clamp(document.MaxFrameWidth, (int)numMaxFrameWidth.Minimum, (int)numMaxFrameWidth.Maximum);
         numReconnectDelay.Value = Net48Compat.Clamp(document.ReconnectDelaySeconds, (int)numReconnectDelay.Minimum, (int)numReconnectDelay.Maximum);
+        numHeartbeatInterval.Value = Net48Compat.Clamp(document.HeartbeatIntervalSeconds, (int)numHeartbeatInterval.Minimum, (int)numHeartbeatInterval.Maximum);
         lblStatus.Text = AgentUiText.Bi("裝置 ID 與裝置名稱會固定使用本機主機名稱；儲存後會更新 appsettings.json，重新啟動後生效。", "Device ID and device name are fixed to the local machine name. Saving updates appsettings.json and takes effect after restart.");
     }
 
@@ -63,7 +64,8 @@ public partial class AgentSettingsForm : Form
                 CaptureFramesPerSecond = (int)numCaptureFps.Value,
                 JpegQuality = (long)numJpegQuality.Value,
                 MaxFrameWidth = (int)numMaxFrameWidth.Value,
-                ReconnectDelaySeconds = (int)numReconnectDelay.Value
+                ReconnectDelaySeconds = (int)numReconnectDelay.Value,
+                HeartbeatIntervalSeconds = (int)numHeartbeatInterval.Value
             };
 
             await _settingsStore.SaveAsync(document, CancellationToken.None);

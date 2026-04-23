@@ -44,7 +44,8 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
             CaptureFramesPerSecond = _options.Value.CaptureFramesPerSecond,
             JpegQuality = _options.Value.JpegQuality,
             MaxFrameWidth = _options.Value.MaxFrameWidth,
-            ReconnectDelaySeconds = _options.Value.ReconnectDelaySeconds
+            ReconnectDelaySeconds = _options.Value.ReconnectDelaySeconds,
+            HeartbeatIntervalSeconds = _options.Value.HeartbeatIntervalSeconds
         };
 
         if (!File.Exists(_settingsFilePath))
@@ -65,6 +66,7 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
             document.JpegQuality = agent["JpegQuality"]?.GetValue<long?>() ?? document.JpegQuality;
             document.MaxFrameWidth = agent["MaxFrameWidth"]?.GetValue<int?>() ?? document.MaxFrameWidth;
             document.ReconnectDelaySeconds = agent["ReconnectDelaySeconds"]?.GetValue<int?>() ?? document.ReconnectDelaySeconds;
+            document.HeartbeatIntervalSeconds = agent["HeartbeatIntervalSeconds"]?.GetValue<int?>() ?? document.HeartbeatIntervalSeconds;
         }
 
         return document;
@@ -87,6 +89,7 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
         agent["JpegQuality"] = document.JpegQuality;
         agent["MaxFrameWidth"] = document.MaxFrameWidth;
         agent["ReconnectDelaySeconds"] = document.ReconnectDelaySeconds;
+        agent["HeartbeatIntervalSeconds"] = document.HeartbeatIntervalSeconds;
         root[AgentOptions.SectionName] = agent;
 
         await WriteJsonAtomicallyAsync(root.ToJsonString(JsonOptions), cancellationToken);

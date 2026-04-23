@@ -1,6 +1,7 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 為 heartbeat 頻率與 timeout 組合補正式容量測試，至少覆蓋 `60/180`、`30/90` 與 `15/45` 三組設定，確認大量 Agent 在線時的封包量、離線偵測速度與誤判率
 - [ ] 為 `RemoteDesktop.Agent` 補 Windows 7 實機 smoke test 與相容性 release checklist；目前已改為 `net48` 避開 `LocateXStateFeature` / `GetEnabledXStateFeatures`，但仍需要固定驗證 Win7 / Win10 / Win11 三組環境的啟動與連線結果
 - [ ] 為 Agent 雙架構交付補實機驗證與交付手冊，確認 `RemoteDesktop.Agent.exe` / `RemoteDesktop.Agent.x86.exe` 在 32/64 位元 Windows 上都能正確啟動、連線，並連同相依 `.dll` / `.config` 一起正確部署
 - [ ] 盤點 Agent 雙架構檔名策略是否要再標準化；目前 64 位元檔名固定為 `RemoteDesktop.Agent.exe`、32 位元為 `RemoteDesktop.Agent.x86.exe`，後續若再擴充 ARM 或其他平台需先決定一致命名規格

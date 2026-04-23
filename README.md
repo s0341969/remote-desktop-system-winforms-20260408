@@ -65,6 +65,7 @@
 - 角色權限已調整為：`Administrator` 可開啟並完整控制 Viewer，且可使用上傳/下載；`Operator` 也可開啟並控制 Viewer、可同步剪貼簿與執行既有遠端控制操作，但不可使用上傳/下載檔案；`Viewer` 仍維持只能開啟 Viewer 觀看；只有 `Administrator` 可管理使用者、設定、稽核與裝置授權。
 - 新增 inventory 匯出功能，可將單一裝置的目前盤點與變更歷史輸出成 `CSV` 或 `Excel (.xlsx)`；匯出目的地視窗現在改走獨立 STA 對話框執行緒，實際寫檔也會在背景執行，避免「裝置詳細資訊」視窗在匯出時整個卡住。
 - Agent 現在會依 `Agent:InventoryRefreshMinutes` 定期重新盤點，預設每 `360` 分鐘重新收集一次；只有 CPU、記憶體、磁碟、OS、Office 或最後更新摘要真的改變時，Host / Server 才會留下變更歷史，單純盤點時間 `CollectedAt` 更新不再新增歷史。
+- Agent 的 heartbeat 間隔現在已獨立成 `Agent:HeartbeatIntervalSeconds`，預設為 `60` 秒；對應的 Host / Server `ControlServer:AgentHeartbeatTimeoutSeconds` 預設同步調整為 `180` 秒，降低大量 Agent 在線時的週期性 heartbeat 封包數，同時保留足夠的斷線容忍時間避免誤判離線。
 - Agent 的畫面擷取現在若遇到 Windows Server / RDP session 切換造成的互動桌面暫時不可用，會保留 WebSocket 連線並持續重試，不再因 `CopyFromScreen` 類型的擷取例外讓 Agent 整條連線中斷、主控台反覆在線/離線跳動。
 - Agent 現在也會把「整張幾乎全黑的 frame」視為互動桌面不可用，而不是照常送到 Viewer；Viewer 若持續收不到有效畫面，會改顯示桌面不可擷取的明確狀態，不再只剩一整片黑畫面。
 - Agent 新增 `Agent:AutoRecoverInteractiveSessionOnWindowsServer`，預設為 `true`；當 Windows Server 的微軟遠端桌面關閉後導致互動桌面不可擷取時，Agent 會嘗試使用 `tscon` 將目前 session 切回 console，讓 Viewer 有機會自動恢復畫面，不必一直保持 mstsc 視窗開啟。

@@ -143,11 +143,11 @@ partial class HostSettingsForm
         txtSharedAccessKey.Name = "txtSharedAccessKey";
         txtSharedAccessKey.PasswordChar = '*';
         // numHeartbeatTimeout
-        numHeartbeatTimeout.Maximum = 300;
-        numHeartbeatTimeout.Minimum = 15;
+        numHeartbeatTimeout.Maximum = 600;
+        numHeartbeatTimeout.Minimum = 60;
         numHeartbeatTimeout.Name = "numHeartbeatTimeout";
         numHeartbeatTimeout.Size = new Size(130, 23);
-        numHeartbeatTimeout.Value = 15;
+        numHeartbeatTimeout.Value = 180;
         // chkRequireHttpsRedirect
         chkRequireHttpsRedirect.AutoSize = true;
         chkRequireHttpsRedirect.Name = "chkRequireHttpsRedirect";

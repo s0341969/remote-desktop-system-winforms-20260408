@@ -30,8 +30,8 @@ public sealed class ControlServerOptions
 
     public bool RequireHttpsRedirect { get; init; }
 
-    [Range(15, 300)]
-    public int AgentHeartbeatTimeoutSeconds { get; init; } = 45;
+    [Range(60, 600)]
+    public int AgentHeartbeatTimeoutSeconds { get; init; } = 180;
 
     [Required]
     public string PersistenceMode { get; init; } = PersistenceModeMemory;

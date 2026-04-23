@@ -273,7 +273,7 @@ public sealed class RemoteAgentService : BackgroundService
 
     private async Task HeartbeatLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_options.HeartbeatIntervalSeconds));
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             var heartbeat = JsonSerializer.Serialize(new AgentHeartbeatMessage
