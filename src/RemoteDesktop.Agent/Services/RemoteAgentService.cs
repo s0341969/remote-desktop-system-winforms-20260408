@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RemoteDesktop.Agent.Compatibility;
 using RemoteDesktop.Agent.Models;
 using RemoteDesktop.Agent.Options;
 
@@ -132,7 +133,7 @@ public sealed class RemoteAgentService : BackgroundService
             }
 
             var json = Encoding.UTF8.GetString(message.Payload);
-            if (json.Contains("\"hello-ack\"", StringComparison.Ordinal))
+            if (json.IndexOf("\"hello-ack\"", StringComparison.Ordinal) >= 0)
             {
                 continue;
             }
@@ -232,7 +233,7 @@ public sealed class RemoteAgentService : BackgroundService
             var truncated = false;
             if (text.Length > maxClipboardCharacters)
             {
-                text = text[..maxClipboardCharacters];
+                text = text.Substring(0, maxClipboardCharacters);
                 truncated = true;
             }
 
@@ -287,7 +288,7 @@ public sealed class RemoteAgentService : BackgroundService
 
     private async Task CaptureLoopAsync(ClientWebSocket socket, SemaphoreSlim sendLock, CancellationToken cancellationToken)
     {
-        var delayMs = Math.Clamp(1000 / Math.Max(_options.CaptureFramesPerSecond, 1), 40, 1000);
+        var delayMs = Net48Compat.Clamp(1000 / Math.Max(_options.CaptureFramesPerSecond, 1), 40, 1000);
         var captureUnavailable = false;
         while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
@@ -335,7 +336,7 @@ public sealed class RemoteAgentService : BackgroundService
             await sendLock.WaitAsync(cancellationToken);
             try
             {
-                await socket.SendAsync(frame.Payload, WebSocketMessageType.Binary, true, cancellationToken);
+                await socket.SendAsync(new ArraySegment<byte>(frame.Payload), WebSocketMessageType.Binary, true, cancellationToken);
                 _runtimeState.MarkFrameSent();
             }
             finally
@@ -385,7 +386,7 @@ public sealed class RemoteAgentService : BackgroundService
         await sendLock.WaitAsync(cancellationToken);
         try
         {
-            await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+            await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellationToken);
         }
         finally
         {

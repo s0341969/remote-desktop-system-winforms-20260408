@@ -1,7 +1,6 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Runtime.Versioning;
 using System.Windows.Forms;
 using Microsoft.Extensions.Options;
 using RemoteDesktop.Agent.Models;
@@ -9,7 +8,6 @@ using RemoteDesktop.Agent.Options;
 
 namespace RemoteDesktop.Agent.Services;
 
-[SupportedOSPlatform("windows")]
 public sealed class DesktopCaptureService
 {
     private static readonly ImageCodecInfo JpegCodec = ImageCodecInfo.GetImageEncoders()

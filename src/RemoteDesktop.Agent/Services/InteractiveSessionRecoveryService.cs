@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Win32;
+using RemoteDesktop.Agent.Compatibility;
 using RemoteDesktop.Agent.Options;
 
 namespace RemoteDesktop.Agent.Services;
@@ -86,7 +87,7 @@ public sealed class InteractiveSessionRecoveryService
             timeoutCts.CancelAfter(AttemptTimeout);
             try
             {
-                await process.WaitForExitAsync(timeoutCts.Token);
+                await process.WaitForExitAsyncCompat(timeoutCts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

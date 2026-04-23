@@ -1,4 +1,5 @@
 using System.Text.Json;
+using RemoteDesktop.Agent.Compatibility;
 
 namespace RemoteDesktop.Agent.Services;
 
@@ -31,7 +32,7 @@ public sealed class FileTransferTraceService
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            await File.AppendAllTextAsync(_logPath, json, cancellationToken);
+            await Net48Compat.AppendAllTextAsync(_logPath, json, cancellationToken);
         }
         finally
         {

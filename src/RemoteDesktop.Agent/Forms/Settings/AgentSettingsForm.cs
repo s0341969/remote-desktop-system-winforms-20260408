@@ -1,5 +1,6 @@
 using RemoteDesktop.Agent.Services.Settings;
 using RemoteDesktop.Agent.Services;
+using RemoteDesktop.Agent.Compatibility;
 
 namespace RemoteDesktop.Agent.Forms.Settings;
 
@@ -31,10 +32,10 @@ public partial class AgentSettingsForm : Form
         txtDeviceName.ReadOnly = true;
         txtSharedAccessKey.Text = document.SharedAccessKey;
         txtFileTransferDirectory.Text = document.FileTransferDirectory;
-        numCaptureFps.Value = Math.Clamp(document.CaptureFramesPerSecond, (int)numCaptureFps.Minimum, (int)numCaptureFps.Maximum);
-        numJpegQuality.Value = Math.Clamp((decimal)document.JpegQuality, numJpegQuality.Minimum, numJpegQuality.Maximum);
-        numMaxFrameWidth.Value = Math.Clamp(document.MaxFrameWidth, (int)numMaxFrameWidth.Minimum, (int)numMaxFrameWidth.Maximum);
-        numReconnectDelay.Value = Math.Clamp(document.ReconnectDelaySeconds, (int)numReconnectDelay.Minimum, (int)numReconnectDelay.Maximum);
+        numCaptureFps.Value = Net48Compat.Clamp(document.CaptureFramesPerSecond, (int)numCaptureFps.Minimum, (int)numCaptureFps.Maximum);
+        numJpegQuality.Value = Net48Compat.Clamp((decimal)document.JpegQuality, numJpegQuality.Minimum, numJpegQuality.Maximum);
+        numMaxFrameWidth.Value = Net48Compat.Clamp(document.MaxFrameWidth, (int)numMaxFrameWidth.Minimum, (int)numMaxFrameWidth.Maximum);
+        numReconnectDelay.Value = Net48Compat.Clamp(document.ReconnectDelaySeconds, (int)numReconnectDelay.Minimum, (int)numReconnectDelay.Maximum);
         lblStatus.Text = AgentUiText.Bi("裝置 ID 與裝置名稱會固定使用本機主機名稱；儲存後會更新 appsettings.json，重新啟動後生效。", "Device ID and device name are fixed to the local machine name. Saving updates appsettings.json and takes effect after restart.");
     }
 

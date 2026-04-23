@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using RemoteDesktop.Agent.Compatibility;
 
 namespace RemoteDesktop.Agent.Services;
 
@@ -92,7 +93,7 @@ public sealed class ClipboardSyncService : IDisposable
             }
         }, cancellationToken);
 
-        return completionSource.Task.WaitAsync(cancellationToken);
+        return Net48Compat.WaitAsync(completionSource.Task, cancellationToken);
     }
 
     private static T ExecuteClipboardOperation<T>(Func<T> workItem)

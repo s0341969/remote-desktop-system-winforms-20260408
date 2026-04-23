@@ -24,7 +24,7 @@ internal static class AppBuildInfo
 
     private static string CreateDisplay()
     {
-        var processPath = Environment.ProcessPath;
+        var processPath = GetProcessPath();
         var builtAt = !string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath)
             ? File.GetLastWriteTime(processPath)
             : DateTime.Now;
@@ -49,7 +49,7 @@ internal static class AppBuildInfo
 
         try
         {
-            var processPath = Environment.ProcessPath;
+            var processPath = GetProcessPath();
             if (!string.IsNullOrWhiteSpace(processPath) && File.Exists(processPath))
             {
                 var productVersion = FileVersionInfo.GetVersionInfo(processPath).ProductVersion;
@@ -70,6 +70,18 @@ internal static class AppBuildInfo
         catch
         {
             return "1.0.0";
+        }
+    }
+
+    private static string? GetProcessPath()
+    {
+        try
+        {
+            return Process.GetCurrentProcess().MainModule?.FileName;
+        }
+        catch
+        {
+            return Assembly.GetEntryAssembly()?.Location;
         }
     }
 }

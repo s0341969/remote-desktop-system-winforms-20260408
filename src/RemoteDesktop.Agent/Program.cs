@@ -14,28 +14,30 @@ internal static class Program
     [STAThread]
     private static async Task Main(string[] args)
     {
-        ApplicationConfiguration.Initialize();
+        InitializeWindowsFormsApplication();
 
-        var builder = Host.CreateApplicationBuilder(args);
+        var builder = Host.CreateDefaultBuilder(args)
+            .ConfigureServices((context, services) =>
+            {
+                services
+                    .AddOptions<AgentOptions>()
+                    .Bind(context.Configuration.GetSection(AgentOptions.SectionName))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
 
-        builder.Services
-            .AddOptions<AgentOptions>()
-            .Bind(builder.Configuration.GetSection(AgentOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        builder.Services.AddSingleton<AgentRuntimeState>();
-        builder.Services.AddSingleton<AgentInventoryService>();
-        builder.Services.AddSingleton<DesktopCaptureService>();
-        builder.Services.AddSingleton<InteractiveSessionRecoveryService>();
-        builder.Services.AddSingleton<ClipboardSyncService>();
-        builder.Services.AddSingleton<InputInjectionService>();
-        builder.Services.AddSingleton<FileTransferTraceService>();
-        builder.Services.AddSingleton<FileTransferService>();
-        builder.Services.AddSingleton<IAgentSettingsStore, AgentSettingsStore>();
-        builder.Services.AddSingleton<AgentMainFormFactory>();
-        builder.Services.AddSingleton<AgentSettingsFormFactory>();
-        builder.Services.AddHostedService<RemoteAgentService>();
+                services.AddSingleton<AgentRuntimeState>();
+                services.AddSingleton<AgentInventoryService>();
+                services.AddSingleton<DesktopCaptureService>();
+                services.AddSingleton<InteractiveSessionRecoveryService>();
+                services.AddSingleton<ClipboardSyncService>();
+                services.AddSingleton<InputInjectionService>();
+                services.AddSingleton<FileTransferTraceService>();
+                services.AddSingleton<FileTransferService>();
+                services.AddSingleton<IAgentSettingsStore, AgentSettingsStore>();
+                services.AddSingleton<AgentMainFormFactory>();
+                services.AddSingleton<AgentSettingsFormFactory>();
+                services.AddHostedService<RemoteAgentService>();
+            });
 
         using var host = builder.Build();
 
@@ -59,5 +61,11 @@ internal static class Program
         {
             await host.StopAsync();
         }
+    }
+
+    private static void InitializeWindowsFormsApplication()
+    {
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
     }
 }

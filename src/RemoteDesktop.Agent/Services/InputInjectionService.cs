@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Extensions.Logging;
+using RemoteDesktop.Agent.Compatibility;
 using RemoteDesktop.Agent.Models;
 
 namespace RemoteDesktop.Agent.Services;
@@ -139,8 +140,8 @@ public sealed class InputInjectionService
     private static void MovePointer(double x, double y)
     {
         var bounds = SystemInformation.VirtualScreen;
-        var absoluteX = bounds.Left + (int)Math.Round(Math.Clamp(x, 0d, 1d) * Math.Max(bounds.Width - 1, 1));
-        var absoluteY = bounds.Top + (int)Math.Round(Math.Clamp(y, 0d, 1d) * Math.Max(bounds.Height - 1, 1));
+        var absoluteX = bounds.Left + (int)Math.Round(Net48Compat.Clamp(x, 0d, 1d) * Math.Max(bounds.Width - 1, 1));
+        var absoluteY = bounds.Top + (int)Math.Round(Net48Compat.Clamp(y, 0d, 1d) * Math.Max(bounds.Height - 1, 1));
 
         var normalizedX = NormalizeAbsoluteCoordinate(absoluteX, bounds.Left, bounds.Width);
         var normalizedY = NormalizeAbsoluteCoordinate(absoluteY, bounds.Top, bounds.Height);

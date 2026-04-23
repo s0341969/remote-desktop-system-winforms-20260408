@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RemoteDesktop.Agent.Compatibility;
 using RemoteDesktop.Agent.Models;
 using RemoteDesktop.Agent.Options;
 
@@ -121,7 +122,7 @@ public sealed class FileTransferService
             var session = new UploadSession(uploadId, originalFileName, Path.GetFileName(targetPath), targetPath, tempPath, command.FileSize, stream);
             if (!_uploads.TryAdd(uploadId, session))
             {
-                await stream.DisposeAsync();
+                await Net48Compat.DisposeAsyncCompat(stream);
                 File.Delete(tempPath);
                 await PublishFailedAsync(uploadId, originalFileName, command.FileSize, AgentUiText.Bi("此上傳 ID 已被使用。", "The upload id is already in use."), publishStatusAsync, cancellationToken);
                 return;
@@ -178,7 +179,7 @@ public sealed class FileTransferService
                 throw new InvalidOperationException(AgentUiText.Bi("檔案分塊大小無效。", "The file chunk size is invalid."));
             }
 
-            await session.Stream.WriteAsync(chunk, cancellationToken);
+            await session.Stream.WriteAsync(chunk, 0, chunk.Length, cancellationToken);
             session.BytesTransferred += chunk.Length;
             session.NextSequenceNumber++;
 
@@ -237,8 +238,8 @@ public sealed class FileTransferService
             }
 
             await session.Stream.FlushAsync(cancellationToken);
-            await session.Stream.DisposeAsync();
-            File.Move(session.TempPath, session.TargetPath, overwrite: false);
+            await Net48Compat.DisposeAsyncCompat(session.Stream);
+            File.Move(session.TempPath, session.TargetPath);
             await LogAsync("agent-upload-saved", "Saved uploaded file to disk.", new
             {
                 uploadId = session.UploadId,
@@ -315,7 +316,7 @@ public sealed class FileTransferService
                 throw new FileNotFoundException(AgentUiText.Bi("指定的下載檔案不存在。", "The requested download file does not exist."), filePath);
             }
 
-            await using var stream = OpenDownloadReadStream(fileInfo);
+            using var stream = OpenDownloadReadStream(fileInfo);
             var fileSize = stream.Length;
             await publishStatusAsync(new AgentFileTransferStatusMessage
             {
@@ -337,7 +338,7 @@ public sealed class FileTransferService
 
             while (true)
             {
-                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, MaxDownloadChunkBytes), cancellationToken);
+                var bytesRead = await stream.ReadAsync(buffer, 0, MaxDownloadChunkBytes, cancellationToken);
                 if (bytesRead <= 0)
                 {
                     break;
@@ -654,7 +655,7 @@ public sealed class FileTransferService
     {
         try
         {
-            await session.Stream.DisposeAsync();
+            await Net48Compat.DisposeAsyncCompat(session.Stream);
         }
         catch
         {
@@ -768,7 +769,7 @@ public sealed class FileTransferService
         }
 
         var fileName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        return !string.IsNullOrWhiteSpace(fileName) && fileName.Contains('.', StringComparison.Ordinal);
+        return !string.IsNullOrWhiteSpace(fileName) && fileName.IndexOf('.') >= 0;
     }
 
     private static bool IsPathWithin(string candidatePath, string parentPath)

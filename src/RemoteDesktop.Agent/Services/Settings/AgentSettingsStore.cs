@@ -101,7 +101,7 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
 
         try
         {
-            var json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
+            var json = await ReadAllTextAsync(_settingsFilePath, cancellationToken);
             return JsonNode.Parse(json) as JsonObject;
         }
         catch (JsonException exception)
@@ -117,8 +117,8 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
         var tempFilePath = $"{_settingsFilePath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            await File.WriteAllTextAsync(tempFilePath, json, Encoding.UTF8, cancellationToken);
-            File.Move(tempFilePath, _settingsFilePath, overwrite: true);
+            await WriteAllTextAsync(tempFilePath, json, cancellationToken);
+            ReplaceFile(tempFilePath, _settingsFilePath);
         }
         finally
         {
@@ -137,5 +137,37 @@ public sealed class AgentSettingsStore : IAgentSettingsStore
         {
             throw new ValidationException(validationResults[0].ErrorMessage);
         }
+    }
+
+    private static async Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        using (cancellationToken.Register(() => stream.Dispose()))
+        {
+            return await reader.ReadToEndAsync();
+        }
+    }
+
+    private static async Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var writer = new StreamWriter(stream, Encoding.UTF8);
+        using (cancellationToken.Register(() => stream.Dispose()))
+        {
+            await writer.WriteAsync(content);
+            await writer.FlushAsync();
+            stream.Flush(true);
+        }
+    }
+
+    private static void ReplaceFile(string sourcePath, string destinationPath)
+    {
+        if (File.Exists(destinationPath))
+        {
+            File.Delete(destinationPath);
+        }
+
+        File.Move(sourcePath, destinationPath);
     }
 }

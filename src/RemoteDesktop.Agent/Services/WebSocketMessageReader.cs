@@ -13,13 +13,13 @@ internal static class WebSocketMessageReader
         {
             while (true)
             {
-                var result = await socket.ReceiveAsync(buffer, cancellationToken);
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    return new WebSocketMessage(WebSocketMessageType.Close, []);
+                    return new WebSocketMessage(WebSocketMessageType.Close, Array.Empty<byte>());
                 }
 
-                await stream.WriteAsync(buffer.AsMemory(0, result.Count), cancellationToken);
+                await stream.WriteAsync(buffer, 0, result.Count, cancellationToken);
                 if (result.EndOfMessage)
                 {
                     return new WebSocketMessage(result.MessageType, stream.ToArray());
