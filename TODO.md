@@ -1,6 +1,7 @@
 # TODO
 
 - [ ] 將 Host 管理帳號與 `SharedAccessKey` 改為安全儲存，避免明文留在 `appsettings.json`
+- [ ] 盤點中央模式主控台後續是否要補「自動刷新開關 / 刷新間隔秒數」設定；目前已改成啟動先抓一次、後續僅手動重新整理
 - [ ] 盤點正式交付流程是否要補 GitHub Release / 內網套件站 / zip manifest，避免 `deploy/publish` 持續隨版控成長後再度碰到大型檔案管理問題
 - [ ] 為中央模式 Host 設定 fallback 補 UI 自動化測試，覆蓋「中央 Server 離線仍可開設定、提示本機 fallback、儲存只寫本機」情境
 - [ ] 為 heartbeat 頻率與 timeout 組合補正式容量測試，至少覆蓋 `60/180`、`30/90` 與 `15/45` 三組設定，確認大量 Agent 在線時的封包量、離線偵測速度與誤判率

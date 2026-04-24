@@ -106,20 +106,27 @@ public partial class MainForm : Form
         btnRevokeDevice.Visible = _signedInUser?.CanManageDeviceAuthorization == true;
         btnUsers.Visible = _signedInUser?.CanManageUsers == true;
 
-        if (_dashboardDataSource is not null && !_dashboardUpdateSubscriptionAttached)
-        {
-            _dashboardDataSource.DashboardUpdated += DashboardDataSource_DashboardUpdated;
-            _dashboardUpdateSubscriptionAttached = true;
-        }
-
         if (_dashboardDataSource is not null)
         {
-            _refreshTimer.Interval = _dashboardDataSource.SupportsRealtimeUpdates ? 30000 : 5000;
-            await _dashboardDataSource.StartAsync(CancellationToken.None);
+            var useManualRefreshOnly = _dashboardDataSource.SupportsRealtimeUpdates;
+            if (!useManualRefreshOnly && !_dashboardUpdateSubscriptionAttached)
+            {
+                _dashboardDataSource.DashboardUpdated += DashboardDataSource_DashboardUpdated;
+                _dashboardUpdateSubscriptionAttached = true;
+            }
+
+            if (!useManualRefreshOnly)
+            {
+                _refreshTimer.Interval = 5000;
+                await _dashboardDataSource.StartAsync(CancellationToken.None);
+            }
         }
 
         await RefreshDashboardAsync(showErrorDialog: true, isUserInitiated: true);
-        _refreshTimer.Start();
+        if (_dashboardDataSource is not null && !_dashboardDataSource.SupportsRealtimeUpdates)
+        {
+            _refreshTimer.Start();
+        }
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
