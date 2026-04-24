@@ -2,6 +2,7 @@
 
 ## 2026-04-20
 
+- 調整交付策略：`deploy/publish` 改回納入 git 版本控管，保留 Host / Agent / Server 發佈成果隨原始碼一起提交；但執行期產生的 `logs`、`users.json` 與 `audit-log.ndjson` 仍維持忽略，避免將現場資料寫回 repository。
 - 調整交付策略：`deploy/publish` 現在視為本機 publish 輸出，不再納入 git 版本控管，避免 `RemoteDesktop.Host.exe` 等 self-contained 單檔發佈物超過 GitHub 大檔限制而阻斷一般原始碼提交。
 - 修正中央模式下 Host 設定視窗的可用性：當 `RemoteDesktop.Server` 未啟動或暫時無法連線時，設定視窗不再整個失敗，而是自動 fallback 到本機 `appsettings.json`；此時仍可修改 `CentralServerUrl` 或本機模式設定，儲存會只寫回本機，不會嘗試同步中央 Server。
 - 調整 Agent 預設自動重連策略：`Agent:ReconnectDelaySeconds` 預設由 `5` 秒改為 `60` 秒，降低大量 Agent 在 Server 維護、網路抖動或交換器瞬斷後同時高頻重連造成的集中 reconnect burst。
