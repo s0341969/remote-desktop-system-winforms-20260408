@@ -3,6 +3,7 @@
 ## 2026-04-20
 
 - 調整交付策略：`deploy/publish` 現在視為本機 publish 輸出，不再納入 git 版本控管，避免 `RemoteDesktop.Host.exe` 等 self-contained 單檔發佈物超過 GitHub 大檔限制而阻斷一般原始碼提交。
+- 修正中央模式下 Host 設定視窗的可用性：當 `RemoteDesktop.Server` 未啟動或暫時無法連線時，設定視窗不再整個失敗，而是自動 fallback 到本機 `appsettings.json`；此時仍可修改 `CentralServerUrl` 或本機模式設定，儲存會只寫回本機，不會嘗試同步中央 Server。
 - 調整 Agent 預設自動重連策略：`Agent:ReconnectDelaySeconds` 預設由 `5` 秒改為 `60` 秒，降低大量 Agent 在 Server 維護、網路抖動或交換器瞬斷後同時高頻重連造成的集中 reconnect burst。
 - 調整 Agent 與 Host/Server 的 heartbeat 預設策略：新增 `Agent:HeartbeatIntervalSeconds` 並將預設值改為 `60` 秒；對應的 `ControlServer:AgentHeartbeatTimeoutSeconds` 預設改為 `180` 秒，降低大量 Agent 在線時的固定 heartbeat 封包量，同時避免 timeout 設定仍停留在舊值而誤判離線。
 - 修正 `RemoteDesktop.Agent.exe` 在 Windows 7 上啟動時仍會跳出 `LocateXStateFeature` / `GetEnabledXStateFeatures` 缺入口的相容性問題；Agent 最終改為 `net48`，避開 .NET Core / .NET 6+ 在部分 Win7 上啟動前就失敗的 native runtime 相依。

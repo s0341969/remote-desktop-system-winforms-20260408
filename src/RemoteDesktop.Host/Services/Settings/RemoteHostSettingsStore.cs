@@ -18,6 +18,7 @@ public sealed class RemoteHostSettingsStore : IHostSettingsStore, IDisposable
     };
 
     private readonly HttpClient _httpClient;
+    private readonly HostSettingsStore _localSettingsStore;
     private readonly CentralConsoleSessionState _sessionState;
     private readonly string _settingsFilePath;
     private readonly ControlServerOptions _options;
@@ -25,9 +26,11 @@ public sealed class RemoteHostSettingsStore : IHostSettingsStore, IDisposable
 
     public RemoteHostSettingsStore(
         IHostEnvironment environment,
+        HostSettingsStore localSettingsStore,
         IOptions<ControlServerOptions> options,
         CentralConsoleSessionState sessionState)
     {
+        _localSettingsStore = localSettingsStore;
         _options = options.Value;
         _sessionState = sessionState;
         _settingsFilePath = Path.Combine(environment.ContentRootPath, "appsettings.json");
@@ -41,53 +44,80 @@ public sealed class RemoteHostSettingsStore : IHostSettingsStore, IDisposable
 
     public async Task<HostSettingsDocument> LoadAsync(CancellationToken cancellationToken)
     {
-        using var request = CreateAuthorizedRequest(HttpMethod.Get, "/api/settings/host");
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var dto = await response.Content.ReadFromJsonAsync<HostSettingsDto>(cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("Central server did not return host settings.");
-
-        return new HostSettingsDocument
+        try
         {
-            EnableDatabase = dto.EnableDatabase,
-            RemoteDesktopDbConnectionString = dto.RemoteDesktopDbConnectionString,
-            ServerUrl = dto.ServerUrl,
-            CentralServerUrl = _options.CentralServerUrl,
-            ConsoleName = dto.ConsoleName,
-            AdminUserName = dto.AdminUserName,
-            AdminPassword = dto.AdminPassword,
-            SharedAccessKey = dto.SharedAccessKey,
-            RequireHttpsRedirect = dto.RequireHttpsRedirect,
-            AgentHeartbeatTimeoutSeconds = dto.AgentHeartbeatTimeoutSeconds
-        };
+            using var request = CreateAuthorizedRequest(HttpMethod.Get, "/api/settings/host");
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var dto = await response.Content.ReadFromJsonAsync<HostSettingsDto>(cancellationToken: cancellationToken)
+                ?? throw new InvalidOperationException("Central server did not return host settings.");
+
+            return new HostSettingsDocument
+            {
+                IsCentralSettingsAvailable = true,
+                IsLocalFallbackMode = false,
+                EnableDatabase = dto.EnableDatabase,
+                RemoteDesktopDbConnectionString = dto.RemoteDesktopDbConnectionString,
+                ServerUrl = dto.ServerUrl,
+                CentralServerUrl = _options.CentralServerUrl,
+                ConsoleName = dto.ConsoleName,
+                AdminUserName = dto.AdminUserName,
+                AdminPassword = dto.AdminPassword,
+                SharedAccessKey = dto.SharedAccessKey,
+                RequireHttpsRedirect = dto.RequireHttpsRedirect,
+                AgentHeartbeatTimeoutSeconds = dto.AgentHeartbeatTimeoutSeconds
+            };
+        }
+        catch (Exception exception) when (IsCentralServerUnavailable(exception, cancellationToken))
+        {
+            var localDocument = await _localSettingsStore.LoadAsync(cancellationToken);
+            localDocument.IsCentralSettingsAvailable = false;
+            localDocument.IsLocalFallbackMode = true;
+            localDocument.SettingsStatusMessage =
+                "目前無法連線到中央 Server，設定畫面已改用本機 appsettings.json。此時儲存只會更新本機設定，不會同步到中央 Server。";
+            return localDocument;
+        }
     }
 
     public async Task SaveAsync(HostSettingsDocument document, CancellationToken cancellationToken)
     {
         Validate(document);
-        using var request = CreateAuthorizedRequest(HttpMethod.Post, "/api/settings/host");
-        request.Content = JsonContent.Create(new HostSettingsDto
+        if (document.IsLocalFallbackMode || !document.IsCentralSettingsAvailable)
         {
-            EnableDatabase = document.EnableDatabase,
-            RemoteDesktopDbConnectionString = document.RemoteDesktopDbConnectionString,
-            ServerUrl = document.ServerUrl,
-            ConsoleName = document.ConsoleName,
-            AdminUserName = document.AdminUserName,
-            AdminPassword = document.AdminPassword,
-            SharedAccessKey = document.SharedAccessKey,
-            RequireHttpsRedirect = document.RequireHttpsRedirect,
-            AgentHeartbeatTimeoutSeconds = document.AgentHeartbeatTimeoutSeconds
-        });
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.BadRequest)
-        {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new ValidationException(message);
+            await _localSettingsStore.SaveAsync(document, cancellationToken);
+            return;
         }
 
-        response.EnsureSuccessStatusCode();
-        await SaveLocalCentralServerUrlAsync(document.CentralServerUrl, cancellationToken);
+        try
+        {
+            using var request = CreateAuthorizedRequest(HttpMethod.Post, "/api/settings/host");
+            request.Content = JsonContent.Create(new HostSettingsDto
+            {
+                EnableDatabase = document.EnableDatabase,
+                RemoteDesktopDbConnectionString = document.RemoteDesktopDbConnectionString,
+                ServerUrl = document.ServerUrl,
+                ConsoleName = document.ConsoleName,
+                AdminUserName = document.AdminUserName,
+                AdminPassword = document.AdminPassword,
+                SharedAccessKey = document.SharedAccessKey,
+                RequireHttpsRedirect = document.RequireHttpsRedirect,
+                AgentHeartbeatTimeoutSeconds = document.AgentHeartbeatTimeoutSeconds
+            });
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var message = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new ValidationException(message);
+            }
+
+            response.EnsureSuccessStatusCode();
+            await SaveLocalCentralServerUrlAsync(document.CentralServerUrl, cancellationToken);
+        }
+        catch (Exception exception) when (IsCentralServerUnavailable(exception, cancellationToken))
+        {
+            await _localSettingsStore.SaveAsync(document, cancellationToken);
+        }
     }
 
     public void Dispose()
@@ -180,5 +210,23 @@ public sealed class RemoteHostSettingsStore : IHostSettingsStore, IDisposable
         {
             throw new ValidationException(validationResults[0].ErrorMessage);
         }
+    }
+
+    private static bool IsCentralServerUnavailable(Exception exception, CancellationToken cancellationToken)
+    {
+        if (exception is ValidationException)
+        {
+            return false;
+        }
+
+        if (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+
+        return exception is HttpRequestException
+            or TaskCanceledException
+            or IOException
+            or InvalidOperationException;
     }
 }

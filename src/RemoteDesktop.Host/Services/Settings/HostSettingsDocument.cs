@@ -4,6 +4,12 @@ namespace RemoteDesktop.Host.Services.Settings;
 
 public sealed class HostSettingsDocument
 {
+    public bool IsCentralSettingsAvailable { get; set; } = true;
+
+    public bool IsLocalFallbackMode { get; set; }
+
+    public string? SettingsStatusMessage { get; set; }
+
     public bool EnableDatabase { get; set; }
 
     public string RemoteDesktopDbConnectionString { get; set; } = "Server=(localdb)\\MSSQLLocalDB;Database=RemoteDesktopControl;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True;";

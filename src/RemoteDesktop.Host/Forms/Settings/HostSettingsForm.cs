@@ -10,6 +10,7 @@ public partial class HostSettingsForm : Form
     private IAuditService? _auditService;
     private AuthenticatedUserSession? _currentUser;
     private bool _showResultDialogs;
+    private bool _isLocalFallbackMode;
 
     public HostSettingsForm()
         : this(true)
@@ -39,7 +40,9 @@ public partial class HostSettingsForm : Form
         txtSharedAccessKey.Text = document.SharedAccessKey;
         chkRequireHttpsRedirect.Checked = document.RequireHttpsRedirect;
         numHeartbeatTimeout.Value = Math.Clamp(document.AgentHeartbeatTimeoutSeconds, (int)numHeartbeatTimeout.Minimum, (int)numHeartbeatTimeout.Maximum);
-        lblStatus.Text = HostUiText.Bi("編輯設定並儲存後會更新 appsettings.json；儲存後需要重新啟動。", "Edit settings and save to update appsettings.json. A restart is required after saving.");
+        _isLocalFallbackMode = document.IsLocalFallbackMode;
+        lblStatus.Text = document.SettingsStatusMessage
+            ?? HostUiText.Bi("編輯設定並儲存後會更新 appsettings.json；儲存後需要重新啟動。", "Edit settings and save to update appsettings.json. A restart is required after saving.");
         UpdateDatabaseInputState();
     }
 
@@ -80,14 +83,24 @@ public partial class HostSettingsForm : Form
                     "host-settings",
                     document.ConsoleName,
                     true,
-                    "Host 設定已儲存。 / Host settings were saved.",
+                    _isLocalFallbackMode
+                        ? "中央 Server 離線時已改為本機儲存 Host 設定。 / Host settings were saved locally because the central server was unavailable."
+                        : "Host 設定已儲存。 / Host settings were saved.",
                     CancellationToken.None);
             }
 
-            lblStatus.Text = HostUiText.Bi("設定已儲存，請重新啟動 Host 套用新設定。", "Settings saved successfully. Restart Host to apply the new configuration.");
+            lblStatus.Text = _isLocalFallbackMode
+                ? HostUiText.Bi("中央 Server 目前無法連線，設定已先儲存到本機 appsettings.json；請重新啟動 Host 套用。", "Central server is currently unavailable. Settings were saved to the local appsettings.json. Restart Host to apply them.")
+                : HostUiText.Bi("設定已儲存，請重新啟動 Host 套用新設定。", "Settings saved successfully. Restart Host to apply the new configuration.");
             if (_showResultDialogs)
             {
-                MessageBox.Show(HostUiText.Bi("Host 設定已儲存，請重新啟動 Host 套用新設定。", "Host settings were saved successfully. Restart Host to apply the new configuration."), HostUiText.Window("Host 設定", "Host Settings"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(
+                    _isLocalFallbackMode
+                        ? HostUiText.Bi("中央 Server 目前無法連線，設定已先儲存到本機 appsettings.json；請重新啟動 Host 套用。", "Central server is currently unavailable. Settings were saved to the local appsettings.json. Restart Host to apply them.")
+                        : HostUiText.Bi("Host 設定已儲存，請重新啟動 Host 套用新設定。", "Host settings were saved successfully. Restart Host to apply the new configuration."),
+                    HostUiText.Window("Host 設定", "Host Settings"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
 
             if (Modal)
